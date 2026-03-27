@@ -1,0 +1,5 @@
+set( NUKEXC_INTEGRATORXX_REPOSITORY https://github.com/wavefunction91/IntegratorXX.git )
+set( NUKEXC_INTEGRATORXX_REVISION   1369be58d7a3235dac36d75dd964fef058830622 )
+
+set( NUKEXC_HIGHFIVE_REPOSITORY https://github.com/highfive-devs/HighFive.git )
+set( NUKEXC_HIGHFIVE_REVISION 805f0e13d09b47c4b01d40682621904aa3b31bb8 )
