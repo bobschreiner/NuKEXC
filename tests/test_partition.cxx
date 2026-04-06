@@ -213,7 +213,7 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
   exec_space stream;
   partition_becke(stream, atom_centers, quadrature_points, weights);
 
-#if 1
+#if 0
   // Compute distance from atom centers
   std::cout << "Test is after becke" << std::endl;
   for (int i = 0; i < natoms; ++i) {
