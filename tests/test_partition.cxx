@@ -192,13 +192,13 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
   Kokkos::View<double **> weights("weights", natoms, npts);
 
   // Place Atoms semi-randomly
+  //
   for (int i = 0; i < natoms; ++i) {
     atom_centers(i, 0) = i;
     atom_centers(i, 1) = i % 2;
     atom_centers(i, 2) = i % 3;
 
     for (int j = 0; j < 10; ++j) {
-
       for (int k = 0; k < 10; ++k) {
         quadrature_points(i, j * 10 + k, 0) = 0;
         quadrature_points(i, j * 10 + k, 1) = j / 10.;
