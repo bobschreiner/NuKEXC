@@ -2737,7 +2737,7 @@ Molecule make_ubiquitin() {
   return mol;
 }
 
-BasisSet<double> make_631Gd(const Molecule &mol, SphericalType sph) {
+GTOBasisSet<double> make_631Gd(const Molecule &mol, SphericalType sph) {
 
   std::string basis_path = "input/6-31g-star.gaussian";
   return parse_basis(mol, basis_path, sph);

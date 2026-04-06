@@ -1,4 +1,4 @@
-find_package( IntegratorXX QUIET )
+find_package( IntegratorXX CONFIG )
 if( NOT ${IntegratorXX_FOUND} )
 
   include( nukexc-dep-versions )

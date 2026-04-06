@@ -56,15 +56,14 @@ using PrimSize = int;
 using AngularMomentum = int;
 using SphericalType = int;
 
+// Base class for all types of Shells
 template <typename F> class alignas(256) Shell {
 
 public:
   using prim_array = std::array<F, detail::shell_nprim_max>;
   using cart_array = std::array<double, 3>;
 
-private:
-  prim_array alpha_;
-  prim_array coeff_;
+protected:
   cart_array O_;
 
   PrimSize nprim_;
@@ -76,71 +75,16 @@ private:
 
   // double _pad_; // Pad to be a multiple of 16
 
-  // Shamelessly adapted from GAUXC which adapted from Libint...
-  void normalize() {
+  virtual void normalize() {}
 
-    assert(l_ <= 15);
-
-    constexpr auto sqrt_Pi_cubed = F{5.56832799683170784528481798212};
-
-    const auto two_to_l = std::pow(2, l_);
-    const auto df_term = two_to_l / sqrt_Pi_cubed / detail::df_Kminus1[2 * l_];
-
-    for (int i = 0; i < nprim_; ++i) {
-      assert(alpha_[i] >= 0.);
-      if (alpha_[i] != 0.) {
-        const auto two_alpha = 2 * alpha_[i];
-        const auto two_alpha_to_am32 =
-            std::pow(two_alpha, l_ + 1) * std::sqrt(two_alpha);
-        const auto normalization_factor =
-            std::sqrt(df_term * two_alpha_to_am32);
-
-        coeff_[i] *= normalization_factor;
-      }
-    }
-
-    double norm{0};
-    for (int i = 0; i < nprim_; ++i) {
-      for (int j = 0; j <= i; ++j) {
-        const auto gamma = alpha_[i] + alpha_[j];
-        const auto gamma_to_am32 = std::pow(gamma, l_ + 1) * std::sqrt(gamma);
-        norm += (i == j ? 1 : 2) * coeff_[i] * coeff_[j] /
-                (df_term * gamma_to_am32);
-      }
-    }
-
-    auto normalization_factor = 1. / std::sqrt(norm);
-    for (int i = 0; i < nprim_; ++i) {
-      coeff_[i] *= normalization_factor;
-    }
-  }
-
-  void compute_shell_cutoff() {
-
-#if 0
-    // Cutoff radius according to Eq.20 in J. Chem. Theory Comput. 2011, 7,
-    // 3097-3104
-    auto cutFunc = [tol = shell_tolerance_](double alpha) -> double {
-      const double log_tol = -std::log(tol);
-      const double log_alph = std::log(alpha);
-      return std::sqrt((log_tol + 0.5 * log_alph) / alpha);
-    };
-
-    cutoff_radius_ = cutFunc(
-        *std::max_element(alpha_.begin(), alpha_.begin() + nprim_,
-                          [&](F x, F y) { return cutFunc(x) < cutFunc(y); }));
-#else
-    cutoff_radius_ = util::gau_rad_cutoff(l_, nprim_, alpha_.data(),
-                                          coeff_.data(), shell_tolerance_);
-#endif
-  }
+  virtual void compute_shell_cutoff() { cutoff_radius_ = 0; }
 
 public:
-  Shell() : nprim_(0), l_(0), pure_(false) {};
+  Shell() : nprim_{0}, l_{0}, pure_{false} {};
 
-  Shell(PrimSize nprim, AngularMomentum l, SphericalType pure, prim_array alpha,
-        prim_array coeff, cart_array O, bool _normalize = true)
-      : alpha_(alpha), coeff_(coeff), O_(O), nprim_(nprim), l_(l), pure_(pure) {
+  Shell(PrimSize nprim, AngularMomentum l, SphericalType pure, cart_array O,
+        bool _normalize = true)
+      : O_(O), nprim_(nprim), l_(l), pure_(pure) {
 
     if (_normalize) {
       normalize();
@@ -163,11 +107,7 @@ public:
   Shell &operator=(const Shell &) = default;
   Shell &operator=(Shell &&) noexcept = default;
 
-  const F *alpha_data() const { return detail::contiguous_data(alpha_); }
-  inline const F *coeff_data() const { return detail::contiguous_data(coeff_); }
   inline const double *O_data() const { return detail::contiguous_data(O_); }
-  inline F *alpha_data() { return detail::contiguous_data(alpha_); }
-  inline F *coeff_data() { return detail::contiguous_data(coeff_); }
   inline double *O_data() { return detail::contiguous_data(O_); }
 
   inline double cutoff_radius() const { return cutoff_radius_; }
@@ -178,24 +118,22 @@ public:
   inline const int &nprim() const { return nprim_; }
   inline const int &l() const { return l_; }
   inline const int &pure() const { return pure_; }
-  inline const prim_array &alpha() const { return alpha_; }
-  inline const prim_array &coeff() const { return coeff_; }
   inline const cart_array &O() const { return O_; }
 
   inline int &nprim() { return nprim_; }
   inline int &l() { return l_; }
   inline int &pure() { return pure_; }
-  inline prim_array &alpha() { return alpha_; }
-  inline prim_array &coeff() { return coeff_; }
+  inline double &cutoff_radius() { return cutoff_radius_; }
   inline cart_array &O() { return O_; }
 
   inline void set_pure(bool p) { pure_ = p; }
 
   template <typename Archive> void serialize(Archive &ar) {
-    ar(nprim_, l_, pure_, alpha_, coeff_, O_, cutoff_radius_, shell_tolerance_);
+    ar(nprim_, l_, pure_, O_, cutoff_radius_, shell_tolerance_);
   }
 
-  bool operator==(const Shell &other) const {
+  // TODO: improve this function
+  virtual bool operator==(const Shell &other) const {
     if (other.nprim_ != nprim_)
       return false;
     if (other.l_ != l_)
@@ -205,7 +143,121 @@ public:
     if (other.O_ != O_)
       return false;
 
-    for (auto i = 0; i < nprim_; ++i) {
+    return true;
+  }
+};
+
+// Specialized GTO Shell class
+template <typename F> class alignas(256) GTOShell : public Shell<F> {
+
+public:
+  using prim_array = std::array<F, detail::shell_nprim_max>;
+  using cart_array = std::array<double, 3>;
+
+private:
+  prim_array alpha_;
+  prim_array coeff_;
+
+  // double _pad_; // Pad to be a multiple of 16
+
+  // Shamelessly adapted from GAUXC which adapted from Libint...
+protected:
+  void normalize() {
+
+    assert(l_ <= 15);
+
+    constexpr auto sqrt_Pi_cubed = F{5.56832799683170784528481798212};
+
+    const auto two_to_l = std::pow(2, this->l_);
+    const auto df_term =
+        two_to_l / sqrt_Pi_cubed / detail::df_Kminus1[2 * this->l_];
+
+    for (int i = 0; i < this->nprim_; ++i) {
+      assert(alpha_[i] >= 0.);
+      if (alpha_[i] != 0.) {
+        const auto two_alpha = 2 * alpha_[i];
+        const auto two_alpha_to_am32 =
+            std::pow(two_alpha, this->l_ + 1) * std::sqrt(two_alpha);
+        const auto normalization_factor =
+            std::sqrt(df_term * two_alpha_to_am32);
+
+        coeff_[i] *= normalization_factor;
+      }
+    }
+
+    double norm{0};
+    for (int i = 0; i < this->nprim_; ++i) {
+      for (int j = 0; j <= i; ++j) {
+        const auto gamma = alpha_[i] + alpha_[j];
+        const auto gamma_to_am32 =
+            std::pow(gamma, this->l_ + 1) * std::sqrt(gamma);
+        norm += (i == j ? 1 : 2) * coeff_[i] * coeff_[j] /
+                (df_term * gamma_to_am32);
+      }
+    }
+
+    auto normalization_factor = 1. / std::sqrt(norm);
+    for (int i = 0; i < this->nprim_; ++i) {
+      coeff_[i] *= normalization_factor;
+    }
+  }
+
+  void compute_shell_cutoff() {
+    this->cutoff_radius_ =
+        util::gau_rad_cutoff(this->l_, this->nprim_, alpha_.data(),
+                             coeff_.data(), this->shell_tolerance_);
+  }
+
+public:
+  GTOShell() : Shell<F>() {};
+
+  GTOShell(PrimSize nprim, AngularMomentum l, SphericalType pure,
+           prim_array alpha, prim_array coeff, cart_array O,
+           bool _normalize = true)
+      : Shell<F>(nprim, l, pure, O, _normalize), alpha_(alpha), coeff_(coeff) {
+
+    if (_normalize) {
+      normalize();
+    }
+    compute_shell_cutoff();
+  }
+
+  ~GTOShell() noexcept = default;
+
+  GTOShell(const GTOShell &) = default;
+  GTOShell(GTOShell &&) noexcept = default;
+
+  GTOShell &operator=(const GTOShell &) = default;
+  GTOShell &operator=(GTOShell &&) noexcept = default;
+
+  const F *alpha_data() const { return detail::contiguous_data(alpha_); }
+  inline const F *coeff_data() const { return detail::contiguous_data(coeff_); }
+  inline F *alpha_data() { return detail::contiguous_data(alpha_); }
+  inline F *coeff_data() { return detail::contiguous_data(coeff_); }
+
+  inline const prim_array &alpha() const { return alpha_; }
+  inline const prim_array &coeff() const { return coeff_; }
+
+  inline prim_array &alpha() { return alpha_; }
+  inline prim_array &coeff() { return coeff_; }
+
+  template <typename Archive> void serialize(Archive &ar) {
+    ar(this->nprim_, this->l_, this->pure_, alpha_, coeff_, this->O_,
+       this->cutoff_radius_, this->shell_tolerance_);
+  }
+
+  bool operator==(const Shell<F> &other) const { return false; };
+  bool operator==(const GTOShell &other) const {
+    if (other.nprim_ != this->nprim_)
+      return false;
+    if (other.l_ != this->l_)
+      return false;
+    if (other.pure_ != this->pure_)
+      return false;
+    if (other.O_ != this->O_)
+      return false;
+
+    for (auto i = 0; i < this->nprim_; ++i) {
       if (alpha_[i] != other.alpha_[i])
         return false;
       if (coeff_[i] != other.coeff_[i])
@@ -224,6 +276,17 @@ inline std::ostream &operator<<(std::ostream &os, const Shell<T> &sh) {
   os << " {l=" << sh.l() << ",sph=" << sh.pure() << "}";
   os << std::endl;
 
+  return os;
+}
+
+template <typename T>
+inline std::ostream &operator<<(std::ostream &os, const GTOShell<T> &sh) {
+  os << "NuKEXC::Shell:( O={" << sh.O()[0] << "," << sh.O()[1] << ","
+     << sh.O()[2] << "}" << std::endl;
+  os << "  ";
+  os << " {l=" << sh.l() << ",sph=" << sh.pure() << "}";
+  os << std::endl;
+
   for (auto i = 0ul; i < sh.nprim(); ++i) {
     os << "  " << sh.alpha()[i];
     os << " " << sh.coeff().at(i);
@@ -232,5 +295,4 @@ inline std::ostream &operator<<(std::ostream &os, const Shell<T> &sh) {
 
   return os;
 }
-
 } // namespace NuKEXC

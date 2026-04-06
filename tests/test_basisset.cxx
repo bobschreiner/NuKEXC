@@ -1,20 +1,8 @@
-/**
- * GauXC Copyright (c) 2020-2024, The Regents of the University of California,
- * through Lawrence Berkeley National Laboratory (subject to receipt of
- * any required approvals from the U.S. Dept. of Energy).
- *
- * (c) 2024-2025, Microsoft Corporation
- *
- * All rights reserved.
- *
- * See LICENSE.txt for details
- */
 #include "../src/basisset.hpp"
 #include "../src/basisset_map.hpp"
-#include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_session.hpp>
-
+#include <catch2/catch_test_macros.hpp>
 
 // #include "../basisset_map.hpp"
 #include "../src/contiguous_container.hpp"
@@ -32,23 +20,23 @@
 
 using namespace NuKEXC;
 
-auto rad_eval(const Shell<double> &sh, double r) {
+auto rad_eval(const GTOShell<double> &sh, double r) {
   return util::gau_rad_eval(sh.l(), sh.nprim(), sh.alpha_data(),
                             sh.coeff_data(), r);
 }
 
-auto check_cutoff_radius(const Shell<double> &sh, double tol) {
+auto check_cutoff_radius(const GTOShell<double> &sh, double tol) {
   double r = sh.cutoff_radius();
   auto calc_rad = util::gau_rad_cutoff(sh.l(), sh.nprim(), sh.alpha_data(),
                                        sh.coeff_data(), tol);
-  CHECK(std::abs(r-calc_rad)< 1e-10);
+  CHECK(std::abs(r - calc_rad) < 1e-10);
   CHECK(std::abs(rad_eval(sh, r)) < tol);
 }
 
-TEST_CASE("Shell", "[basisset]") {
+TEST_CASE("GTOShell", "[basisset]") {
 
-  using prim_array = Shell<double>::prim_array;
-  using cart_array = Shell<double>::cart_array;
+  using prim_array = GTOShell<double>::prim_array;
+  using cart_array = GTOShell<double>::cart_array;
 
   const cart_array center = {0., 1., 0.};
 
@@ -65,7 +53,7 @@ TEST_CASE("Shell", "[basisset]") {
 
     SECTION("S Function") {
 
-      Shell<double> sh(nprim, AngularMomentum(0), SphericalType(false), alpha,
+      GTOShell<double> sh(nprim, AngularMomentum(0), SphericalType(false), alpha,
                        coeff, center);
 
       const double ncoeff = 1. / std::sqrt(std::pow(s_int(2 * alpha[0]), 3.));
@@ -90,7 +78,7 @@ TEST_CASE("Shell", "[basisset]") {
 
     SECTION("P Function") {
 
-      Shell<double> sh(nprim, AngularMomentum(1), SphericalType(false), alpha,
+      GTOShell<double> sh(nprim, AngularMomentum(1), SphericalType(false), alpha,
                        coeff, center);
 
       const double exact_int =
@@ -109,7 +97,7 @@ TEST_CASE("Shell", "[basisset]") {
 
     SECTION("D Function") {
 
-      Shell<double> sh(nprim, AngularMomentum(2), SphericalType(false), alpha,
+      GTOShell<double> sh(nprim, AngularMomentum(2), SphericalType(false), alpha,
                        coeff, center);
 
       const double exact_int =
@@ -135,7 +123,7 @@ TEST_CASE("Shell", "[basisset]") {
     const prim_array alpha = {0.1873113696e+02, 0.2825394365e+01,
                               0.6401216923e+00};
 
-    Shell<double> sh(nprim, AngularMomentum(0), SphericalType(false), alpha,
+    GTOShell<double> sh(nprim, AngularMomentum(0), SphericalType(false), alpha,
                      coeff, center);
 
     double exact_int = 0.;
@@ -155,7 +143,7 @@ TEST_CASE("Shell", "[basisset]") {
     const prim_array alpha = {0.8};
     const prim_array coeff = {0.5};
 
-    Shell<double> sh(nprim, AngularMomentum(2), SphericalType(false), alpha,
+    GTOShell<double> sh(nprim, AngularMomentum(2), SphericalType(false), alpha,
                      coeff, center);
 
     check_cutoff_radius(sh, 1e-10);
@@ -173,7 +161,7 @@ TEST_CASE("Shell", "[basisset]") {
     const prim_array alpha = {0.8};
     const prim_array coeff = {0.5};
 
-    Shell<double> sh(nprim, AngularMomentum(2), SphericalType(true), alpha,
+    GTOShell<double> sh(nprim, AngularMomentum(2), SphericalType(true), alpha,
                      coeff, center);
 
     CHECK(sh.size() == 5);
@@ -187,19 +175,19 @@ TEST_CASE("BasisSet", "[basisset]") {
   SECTION("Spherical") { test_spherical = true; }
 
   Molecule mol = make_water();
-  BasisSet<double> basis = make_631Gd(mol, SphericalType(test_spherical));
+  GTOBasisSet<double> basis = make_631Gd(mol, SphericalType(test_spherical));
 
   SECTION("Copy Ctor") {
 
-    BasisSet<double> basis_copy(basis);
+    GTOBasisSet<double> basis_copy(basis);
     CHECK(basis_copy.nshells() == 10);
     CHECK(basis_copy.nbf() == (test_spherical ? 18 : 19));
   }
 
   SECTION("Move Ctor") {
 
-    BasisSet<double> basis_copy(basis);
-    BasisSet<double> basis_move(std::move(basis_copy));
+    GTOBasisSet<double> basis_copy(basis);
+    GTOBasisSet<double> basis_move(std::move(basis_copy));
     CHECK(basis_move.nshells() == 10);
     CHECK(basis_move.nbf() == (test_spherical ? 18 : 19));
   }
@@ -264,7 +252,7 @@ TEST_CASE("HDF5-BASISSET", "[basisset]") {
 
 }
 */
-int main(){
-	int result = Catch::Session().run();
-	return result;
+int main() {
+  int result = Catch::Session().run();
+  return result;
 }

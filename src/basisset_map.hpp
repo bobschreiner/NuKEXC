@@ -15,14 +15,14 @@ class BasisSetMap {
 
   std::vector<int> shell_sizes_;       ///< Shell sizes
   std::vector<int> shell_ls_;          ///< Shell angular momenta
-  std::vector<bool> shell_pure_;           ///< Shell purity (cart/sph)
+  std::vector<bool> shell_pure_;       ///< Shell purity (cart/sph)
   std::vector<int> shell_to_first_ao_; ///< Map from shell index to first
-                                           ///< basis function of that shell
+                                       ///< basis function of that shell
   std::vector<ao_range>
       shell_to_ao_range_; ///< Map from shell index to range of basis functions
                           ///< for that shell
   std::vector<int> shell_to_center_; ///< Map from shell index to basis
-                                         ///< center (atom in a moledule)
+                                     ///< center (atom in a moledule)
   std::vector<shell_range>
       center_to_shell_range_; ///< Map from unique basis center to range of
                               ///< shells
@@ -37,7 +37,7 @@ public:
    *  @param[in] mol   Molecule instatance upon which `basis` is defined.
    */
   template <typename F>
-  BasisSetMap(const BasisSet<F> &basis, const Molecule &mol)
+  BasisSetMap(const GTOBasisSet<F> &basis, const Molecule &mol)
       : nshells_(basis.nshells()) {
 
     shell_sizes_.resize(nshells_);

@@ -43,7 +43,7 @@ inline static auto tokenize(std::string str, std::string delim = " ") {
 }
 } // namespace detail
 
-BasisSet<double> parse_basis(const Molecule &mol, std::string fname,
+GTOBasisSet<double> parse_basis(const Molecule &mol, std::string fname,
                              SphericalType sph) {
 
   std::ifstream infile(fname);
@@ -73,7 +73,7 @@ BasisSet<double> parse_basis(const Molecule &mol, std::string fname,
     }
   }
 
-  std::map<int, BasisSet<double>> basis_shells;
+  std::map<int, GTOBasisSet<double>> basis_shells;
   for (const auto &record : basis_records) {
     if (record.size() == 0)
       continue;
@@ -87,7 +87,7 @@ BasisSet<double> parse_basis(const Molecule &mol, std::string fname,
     // std::cout << atom_symb << std::endl;
     int Z = atomic_number_map.at(atom_symb);
 
-    BasisSet<double> atom_basis;
+    GTOBasisSet<double> atom_basis;
     for (auto rec_it = record.begin() + 1; rec_it != record.end();) {
       std::string type_line = *rec_it;
       rec_it++; // Read type line
@@ -113,8 +113,8 @@ BasisSet<double> parse_basis(const Molecule &mol, std::string fname,
           coeff_secondary[i] = std::stod(prim_tokens.at(2));
       }
 
-      using prim_array = Shell<double>::prim_array;
-      using cart_array = Shell<double>::cart_array;
+      using prim_array = GTOShell<double>::prim_array;
+      using cart_array = GTOShell<double>::cart_array;
 
       prim_array alpha_arr, coeff_primary_arr, coeff_secondary_arr;
       std::copy(alpha.begin(), alpha.end(), alpha_arr.begin());
@@ -125,12 +125,12 @@ BasisSet<double> parse_basis(const Molecule &mol, std::string fname,
                   coeff_secondary_arr.begin());
 
       SphericalType sph_use = l > 1 ? sph : SphericalType(false);
-      atom_basis.emplace_back(Shell<double>(PrimSize(nprim), AngularMomentum(l),
+      atom_basis.emplace_back(GTOShell<double>(PrimSize(nprim), AngularMomentum(l),
                                             sph_use, alpha_arr,
                                             coeff_primary_arr, {0., 0., 0.}));
 
       if (gencon)
-        atom_basis.emplace_back(Shell<double>(
+        atom_basis.emplace_back(GTOShell<double>(
             PrimSize(nprim), AngularMomentum(1), SphericalType(false),
             alpha_arr, coeff_secondary_arr, {0., 0., 0.}));
     }
@@ -138,7 +138,7 @@ BasisSet<double> parse_basis(const Molecule &mol, std::string fname,
     basis_shells[Z] = atom_basis;
   }
 
-#if 1
+#if 0
   std::cout << std::scientific << std::setprecision(16);
   for( const auto& [key, value] : basis_shells ) {
     std::cout << "Basis shells for Z = " << key << std::endl;
@@ -154,10 +154,10 @@ BasisSet<double> parse_basis(const Molecule &mol, std::string fname,
   }
 #endif
 
-  BasisSet<double> basis;
+  GTOBasisSet<double> basis;
   for (auto iAt = 0; iAt < mol.size(); ++iAt) {
     const auto &atom = mol.at(iAt);
-    BasisSet<double> atom_basis = basis_shells.at(atom.Z);
+    GTOBasisSet<double> atom_basis = basis_shells.at(atom.Z);
     for (auto &sh : atom_basis)
       sh.O() = {atom.x, atom.y, atom.z};
 

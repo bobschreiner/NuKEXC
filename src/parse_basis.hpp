@@ -4,7 +4,7 @@
 
 namespace NuKEXC {
 
-BasisSet<double> parse_basis( const Molecule& mol,
+GTOBasisSet<double> parse_basis( const Molecule& mol,
                               std::string     fname,
                               SphericalType   sph    );
 
