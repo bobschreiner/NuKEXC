@@ -6,6 +6,7 @@
 
 namespace NuKEXC {
 
+KOKKOS_INLINE_FUNCTION
 double dist(const Kokkos::View<double[3]> &a,
             const Kokkos::View<double[3]> &b) {
   double dist = 0;

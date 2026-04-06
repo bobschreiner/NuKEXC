@@ -1,4 +1,4 @@
-find_package( IntegratorXX CONFIG )
+find_package( IntegratorXX QUIET)
 if( NOT ${IntegratorXX_FOUND} )
 
   include( nukexc-dep-versions )
@@ -10,7 +10,7 @@ if( NOT ${IntegratorXX_FOUND} )
   set( INTEGRATORXX_ENABLE_TESTS OFF CACHE BOOL "" )
   FetchContent_Declare(
     integratorxx
-    GIT_REPOSITORY ${NUKEXC_NTEGRATORXX_REPOSITORY} 
+    GIT_REPOSITORY ${NUKEXC_INTEGRATORXX_REPOSITORY} 
     GIT_TAG        ${NUKEXC_INTEGRATORXX_REVISION} 
   )
 
