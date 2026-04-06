@@ -170,7 +170,7 @@ TEST_CASE("GTOShell", "[basisset]") {
 
 TEST_CASE("BasisSet", "[basisset]") {
 
-  bool test_spherical = false;
+  bool test_spherical = true;
   SECTION("Cartesian") { test_spherical = false; }
   SECTION("Spherical") { test_spherical = true; }
 
