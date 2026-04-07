@@ -7,39 +7,41 @@
 namespace NuKEXC {
 
 KOKKOS_INLINE_FUNCTION
-double dist(const Kokkos::View<double[3], Layout, ExecSpace> &a,
-            const Kokkos::View<double[3], Layout, ExecSpace> &b) {
+double dist(const Kokkos::View<double *, Kokkos::LayoutStride> &a,
+            const Kokkos::View<double *, Kokkos::LayoutStride> &b) {
   double dist = 0;
-  for (int i = 0; i < 3; ++i) {
-    dist += std::pow(a[i] - b[i], 2);
+  for (int i = 0; i < a.extent(0); ++i) {
+    dist += std::pow(a(i) - b(i), 2);
   }
   dist = std::sqrt(dist);
   return dist;
 }
 
-void partition_becke(ExecSpace stream,
-                     const Kokkos::View<double *[3], Layout, ExecSpace> &atom_centers,
-                     const Kokkos::View<double **[3], Layout, ExecSpace> &quadrature_points,
-                     Kokkos::View<double **, Layout, ExecSpace> &weights) {
+void partition_becke(
+    ExecSpace stream,
+    const Kokkos::View<double *[3], Layout, ExecSpace> &atom_centers,
+    const Kokkos::View<double **[3], Layout, ExecSpace> &quadrature_points,
+    Kokkos::View<double **, Layout, ExecSpace> &weights) {
 
   size_t natoms = atom_centers.extent(0);
   assert(natoms = quadrature_points.extent(0));
   size_t nquad_points_per_atom = quadrature_points.extent(1);
 
-  Kokkos::View<double **, Layout, ExecSpace> R("Distance between atoms (R)", natoms, natoms);
-  Kokkos::View<double ****, Layout, ExecSpace> mu("mu", natoms, nquad_points_per_atom, natoms,
-                               natoms);
+  Kokkos::View<double **, Layout, ExecSpace> R("Distance between atoms (R)",
+                                               natoms, natoms);
+  Kokkos::View<double ****, Layout, ExecSpace> mu(
+      "mu", natoms, nquad_points_per_atom, natoms, natoms);
   Kokkos::View<double ****, Layout, ExecSpace> partition_polynomials(
       "partition polynomials", natoms, nquad_points_per_atom, natoms, natoms);
 
-  Kokkos::View<double ***, Layout, ExecSpace> partition_weights("partition weights", natoms,
-                                             nquad_points_per_atom, natoms);
+  Kokkos::View<double ***, Layout, ExecSpace> partition_weights(
+      "partition weights", natoms, nquad_points_per_atom, natoms);
 
   // Range policy for atomic distance calculations
   Kokkos::MDRangePolicy range_p2(stream, {0, 0}, {natoms, natoms});
   // Range policy for Voronoi polynomials
-  Kokkos::MDRangePolicy range_p4(stream,
-      {0, 0, 0, 0}, {natoms, nquad_points_per_atom, natoms, natoms});
+  Kokkos::MDRangePolicy range_p4(
+      stream, {0, 0, 0, 0}, {natoms, nquad_points_per_atom, natoms, natoms});
 
   // Range policy for reduction to compute atomic weights
   Kokkos::MDRangePolicy range_p3(stream, {0, 0, 0},
@@ -49,23 +51,28 @@ void partition_becke(ExecSpace stream,
                                           {natoms, nquad_points_per_atom});
 
   // Computes the atomic distances and stroes them in R_ij
+  std::cout << "Before atomic distances" << std::endl;
   Kokkos::parallel_for(
       "Compute atomic distances", range_p2,
       KOKKOS_LAMBDA(const int &i, const int &j) {
-        auto subView_i = Kokkos::subview(atom_centers, i, Kokkos::ALL);
-        auto subView_j = Kokkos::subview(atom_centers, j, Kokkos::ALL);
+        auto subView_i = Kokkos::subview(atom_centers, i, Kokkos::ALL());
+        auto subView_j = Kokkos::subview(atom_centers, j, Kokkos::ALL());
+        std::cout << "Before dist" << std::endl;
         R(i, j) = dist(subView_i, subView_j);
+        std::cout << "After dist" << std::endl;
       });
 
   // Computes the partition polynomials and stores them in partition_polynomials
+
+  std::cout << "Before polynomial" << std::endl;
   Kokkos::parallel_for(
       "Compute polynomials", range_p4,
       KOKKOS_LAMBDA(const int &p, const int &g, const int &i, const int &j) {
         if (i != j) {
           auto subView_g =
-              Kokkos::subview(quadrature_points, p, g, Kokkos::ALL);
-          auto subView_i = Kokkos::subview(atom_centers, i, Kokkos::ALL);
-          auto subView_j = Kokkos::subview(atom_centers, j, Kokkos::ALL);
+              Kokkos::subview(quadrature_points, p, g, Kokkos::ALL());
+          auto subView_i = Kokkos::subview(atom_centers, i, Kokkos::ALL());
+          auto subView_j = Kokkos::subview(atom_centers, j, Kokkos::ALL());
 
           double r_i = dist(subView_g, subView_i);
           double r_j = dist(subView_g, subView_j);
@@ -94,6 +101,7 @@ void partition_becke(ExecSpace stream,
       });
 
   // Computes the partition weights
+  std::cout << "Before weights" << std::endl;
   Kokkos::parallel_for(
       "Compute weights", range_p3,
       KOKKOS_LAMBDA(const int p, const int g, const int i) {

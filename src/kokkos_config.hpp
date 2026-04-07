@@ -15,6 +15,6 @@ using MemSpace = Kokkos::OpenMP;
 // using MemSpace = Kokkos::CudaUVMSpace;
 // using MemSpace = Kokkos::HIPSpace;
 
-// using Layout = Kokkos::LayoutLeft;
-using Layout = Kokkos::LayoutRight;
+using Layout = Kokkos::LayoutLeft;
+//using Layout = Kokkos::LayoutRight;
 } // namespace NuKEXC
