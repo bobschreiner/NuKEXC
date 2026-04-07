@@ -7,8 +7,8 @@
 namespace NuKEXC {
 
 KOKKOS_INLINE_FUNCTION
-double dist(const Kokkos::View<double[3], exec_space> &a,
-            const Kokkos::View<double[3], exec_space> &b) {
+double dist(const Kokkos::View<double[3]> &a,
+            const Kokkos::View<double[3]> &b) {
   double dist = 0;
   for (int i = 0; i < 3; ++i) {
     dist += std::pow(a[i] - b[i], 2);
@@ -18,21 +18,21 @@ double dist(const Kokkos::View<double[3], exec_space> &a,
 }
 
 void partition_becke(exec_space stream,
-                     const Kokkos::View<double *[3], exec_space> &atom_centers,
-                     const Kokkos::View<double **[3], exec_space> &quadrature_points,
-                     Kokkos::View<double **, exec_space> &weights) {
+                     const Kokkos::View<double *[3]> &atom_centers,
+                     const Kokkos::View<double **[3]> &quadrature_points,
+                     Kokkos::View<double **> &weights) {
 
   size_t natoms = atom_centers.extent(0);
   assert(natoms = quadrature_points.extent(0));
   size_t nquad_points_per_atom = quadrature_points.extent(1);
 
-  Kokkos::View<double **, exec_space> R("Distance between atoms (R)", natoms, natoms);
-  Kokkos::View<double ****, exec_space> mu("mu", natoms, nquad_points_per_atom, natoms,
+  Kokkos::View<double **> R("Distance between atoms (R)", natoms, natoms);
+  Kokkos::View<double ****> mu("mu", natoms, nquad_points_per_atom, natoms,
                                natoms);
-  Kokkos::View<double ****, exec_space> partition_polynomials(
+  Kokkos::View<double ****> partition_polynomials(
       "partition polynomials", natoms, nquad_points_per_atom, natoms, natoms);
 
-  Kokkos::View<double ***, exec_space> partition_weights("partition weights", natoms,
+  Kokkos::View<double ***> partition_weights("partition weights", natoms,
                                              nquad_points_per_atom, natoms);
 
   // Range policy for atomic distance calculations

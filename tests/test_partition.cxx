@@ -81,19 +81,16 @@ TEST_CASE("H20", "[h20_weights]") {
   int natoms = mol.natoms();
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3], exec_space> atom_centers_device("atom centers",
-                                                            natoms);
-  Kokkos::View<double **[3], exec_space> quadrature_points_device(
-      "quadrature_points", natoms, npts);
-  Kokkos::View<double **, exec_space> weights_device("weights", natoms, npts);
+  Kokkos::View<double *[3]> atom_centers_device("atom centers", natoms);
+  Kokkos::View<double **[3]> quadrature_points_device("quadrature_points",
+                                                      natoms, npts);
+  Kokkos::View<double **> weights_device("weights", natoms, npts);
 
   // Create all the Kokkos Mirror Views on Execution device
-  Kokkos::View<double *[3], exec_space>::host_mirror_type atom_centers_h =
-      Kokkos::create_mirror_view(atom_centers_device);
-  Kokkos::View<double **[3], exec_space>::host_mirror_type quadrature_points_h =
+  auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
+  auto quadrature_points_h =
       Kokkos::create_mirror_view(quadrature_points_device);
-  Kokkos::View<double **, exec_space>::host_mirror_type weights_h =
-      Kokkos::create_mirror_view(weights_device);
+  auto weights_h = Kokkos::create_mirror_view(weights_device);
 
   for (int i = 0; i < natoms; ++i) {
     atom_centers_h(i, 0) = mol[i].x;
@@ -147,19 +144,16 @@ TEST_CASE("one-half", "[weights_one_half]") {
   int npts = 10 * 10;
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3], exec_space> atom_centers_device("atom centers",
-                                                            natoms);
-  Kokkos::View<double **[3], exec_space> quadrature_points_device(
-      "quadrature_points", natoms, npts);
-  Kokkos::View<double **, exec_space> weights_device("weights", natoms, npts);
+  Kokkos::View<double *[3]> atom_centers_device("atom centers", natoms);
+  Kokkos::View<double **[3]> quadrature_points_device("quadrature_points",
+                                                      natoms, npts);
+  Kokkos::View<double **> weights_device("weights", natoms, npts);
 
   // Create all the Kokkos Mirror Views on Execution device
-  Kokkos::View<double *[3], exec_space>::host_mirror_type atom_centers_h =
-      Kokkos::create_mirror_view(atom_centers_device);
-  Kokkos::View<double **[3], exec_space>::host_mirror_type quadrature_points_h =
+  auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
+  auto quadrature_points_h =
       Kokkos::create_mirror_view(quadrature_points_device);
-  Kokkos::View<double **, exec_space>::host_mirror_type weights_h =
-      Kokkos::create_mirror_view(weights_device);
+  auto weights_h = Kokkos::create_mirror_view(weights_device);
 
   for (int i = 0; i < natoms; ++i) {
     atom_centers_h(i, 0) = (2 * i - 1);
@@ -220,22 +214,18 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
   int npts = 10 * 10;
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3], exec_space> atom_centers_device("atom centers",
-                                                            natoms);
-  Kokkos::View<double **[3], exec_space> quadrature_points_device(
-      "quadrature_points", natoms, npts);
-  Kokkos::View<double **, exec_space> weights_device("weights", natoms, npts);
+  Kokkos::View<double *[3]> atom_centers_device("atom centers", natoms);
+  Kokkos::View<double **[3]> quadrature_points_device("quadrature_points",
+                                                      natoms, npts);
+  Kokkos::View<double **> weights_device("weights", natoms, npts);
 
   // Create all the Kokkos Mirror Views on Execution device
-  Kokkos::View<double *[3], exec_space>::host_mirror_type atom_centers_h =
-      Kokkos::create_mirror_view(atom_centers_device);
-  Kokkos::View<double **[3], exec_space>::host_mirror_type quadrature_points_h =
+  auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
+  auto quadrature_points_h =
       Kokkos::create_mirror_view(quadrature_points_device);
-  Kokkos::View<double **, exec_space>::host_mirror_type weights_h =
-      Kokkos::create_mirror_view(weights_device);
+  auto weights_h = Kokkos::create_mirror_view(weights_device);
 
   // Place Atoms semi-randomly
-  //
   for (int i = 0; i < natoms; ++i) {
     atom_centers_h(i, 0) = i;
     atom_centers_h(i, 1) = i % 2;
