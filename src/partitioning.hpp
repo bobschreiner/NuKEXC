@@ -7,8 +7,8 @@
 namespace NuKEXC {
 
 KOKKOS_INLINE_FUNCTION
-double dist(const Kokkos::View<double[3]> &a,
-            const Kokkos::View<double[3]> &b) {
+double dist(const Kokkos::View<double[3], exec_space> &a,
+            const Kokkos::View<double[3], exec_space> &b) {
   double dist = 0;
   for (int i = 0; i < 3; ++i) {
     dist += std::pow(a[i] - b[i], 2);
@@ -27,26 +27,26 @@ void partition_becke(exec_space stream,
   assert(natoms = quadrature_points.extent(0));
   size_t nquad_points_per_atom = quadrature_points.extent(1);
 
-  Kokkos::View<double **> R("Distance between atoms (R)", natoms, natoms);
-  Kokkos::View<double ****> mu("mu", natoms, nquad_points_per_atom, natoms,
+  Kokkos::View<double **, exec_space> R("Distance between atoms (R)", natoms, natoms);
+  Kokkos::View<double ****, exec_space> mu("mu", natoms, nquad_points_per_atom, natoms,
                                natoms);
-  Kokkos::View<double ****> partition_polynomials(
+  Kokkos::View<double ****, exec_space> partition_polynomials(
       "partition polynomials", natoms, nquad_points_per_atom, natoms, natoms);
 
-  Kokkos::View<double ***> partition_weights("partition weights", natoms,
+  Kokkos::View<double ***, exec_space> partition_weights("partition weights", natoms,
                                              nquad_points_per_atom, natoms);
 
   // Range policy for atomic distance calculations
-  Kokkos::MDRangePolicy range_p2({0, 0}, {natoms, natoms});
+  Kokkos::MDRangePolicy range_p2(stream, {0, 0}, {natoms, natoms});
   // Range policy for Voronoi polynomials
-  Kokkos::MDRangePolicy range_p4(
+  Kokkos::MDRangePolicy range_p4(stream,
       {0, 0, 0, 0}, {natoms, nquad_points_per_atom, natoms, natoms});
 
   // Range policy for reduction to compute atomic weights
-  Kokkos::MDRangePolicy range_p3({0, 0, 0},
+  Kokkos::MDRangePolicy range_p3(stream, {0, 0, 0},
                                  {natoms, nquad_points_per_atom, natoms});
 
-  Kokkos::MDRangePolicy range_quad_points({0, 0},
+  Kokkos::MDRangePolicy range_quad_points(stream, {0, 0},
                                           {natoms, nquad_points_per_atom});
   Kokkos::parallel_for(
       "Compute atomic distances", range_p2,
