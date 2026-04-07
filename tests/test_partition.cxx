@@ -81,18 +81,17 @@ TEST_CASE("H20", "[h20_weights]") {
   int natoms = mol.natoms();
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3], host_space> atom_centers_h("atom centers", natoms);
-  Kokkos::View<double **[3], host_space> quadrature_points_h(
+  Kokkos::View<double *[3], exec_space> atom_centers_device("atom centers",
+                                                            natoms);
+  Kokkos::View<double **[3], exec_space> quadrature_points_device(
       "quadrature_points", natoms, npts);
-  Kokkos::View<double **, host_space> weights_h("weights", natoms, npts);
+  Kokkos::View<double **, exec_space> weights_device("weights", natoms, npts);
 
   // Create all the Kokkos Mirror Views on Execution device
-  Kokkos::View<double *[3], exec_space> atom_centers_device =
-      Kokkos::create_mirror_view(atom_centers_h);
-  Kokkos::View<double **[3], exec_space> quadrature_points_device =
-      Kokkos::create_mirror_view(quadrature_points_h);
-  Kokkos::View<double **, exec_space> weights_device =
-      Kokkos::create_mirror_view(weights_h);
+  auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
+  auto quadrature_points_h =
+      Kokkos::create_mirror_view(quadrature_points_device);
+  auto weights_h = Kokkos::create_mirror_view(weights_device);
 
   for (int i = 0; i < natoms; ++i) {
     atom_centers_h(i, 0) = mol[i].x;
@@ -109,7 +108,6 @@ TEST_CASE("H20", "[h20_weights]") {
     }
   }
 
- 
   // Copy the views from host device to the execution device
   Kokkos::deep_copy(atom_centers_device, atom_centers_h);
   Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
@@ -146,19 +144,18 @@ TEST_CASE("one-half", "[weights_one_half]") {
   int natoms = 2;
   int npts = 10 * 10;
 
-  Kokkos::View<double *[3]> atom_centers_h("atom centers", natoms);
-  Kokkos::View<double **[3]> quadrature_points_h("quadrature_points", natoms,
-                                               npts);
-  Kokkos::View<double **> weights_h("weights", natoms, npts);
+  // Create all the Kokkos Views on host device
+  Kokkos::View<double *[3], exec_space> atom_centers_device("atom centers",
+                                                            natoms);
+  Kokkos::View<double **[3], exec_space> quadrature_points_device(
+      "quadrature_points", natoms, npts);
+  Kokkos::View<double **, exec_space> weights_device("weights", natoms, npts);
 
   // Create all the Kokkos Mirror Views on Execution device
-  Kokkos::View<double *[3], exec_space> atom_centers_device =
-      Kokkos::create_mirror_view(atom_centers_h);
-  Kokkos::View<double **[3], exec_space> quadrature_points_device =
-      Kokkos::create_mirror_view(quadrature_points_h);
-  Kokkos::View<double **, exec_space> weights_device =
-      Kokkos::create_mirror_view(weights_h);
-
+  auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
+  auto quadrature_points_h =
+      Kokkos::create_mirror_view(quadrature_points_device);
+  auto weights_h = Kokkos::create_mirror_view(weights_device);
 
   for (int i = 0; i < natoms; ++i) {
     atom_centers_h(i, 0) = (2 * i - 1);
@@ -182,10 +179,10 @@ TEST_CASE("one-half", "[weights_one_half]") {
   Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
   Kokkos::deep_copy(weights_device, weights_h);
 
-
   // Compute the adjusted weights
   exec_space stream;
-  partition_becke(stream, atom_centers_device, quadrature_points_device, weights_device);
+  partition_becke(stream, atom_centers_device, quadrature_points_device,
+                  weights_device);
 
 #if 0
   // Compute distance from atom centers
@@ -218,19 +215,18 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
   int natoms = 10;
   int npts = 10 * 10;
 
-  Kokkos::View<double *[3]> atom_centers_h("atom centers", natoms);
-  Kokkos::View<double **[3]> quadrature_points_h("quadrature_points", natoms,
-                                               npts);
-  Kokkos::View<double **> weights_h("weights", natoms, npts);
+  // Create all the Kokkos Views on host device
+  Kokkos::View<double *[3], exec_space> atom_centers_device("atom centers",
+                                                            natoms);
+  Kokkos::View<double **[3], exec_space> quadrature_points_device(
+      "quadrature_points", natoms, npts);
+  Kokkos::View<double **, exec_space> weights_device("weights", natoms, npts);
 
   // Create all the Kokkos Mirror Views on Execution device
-  Kokkos::View<double *[3], exec_space> atom_centers_device =
-      Kokkos::create_mirror_view(atom_centers_h);
-  Kokkos::View<double **[3], exec_space> quadrature_points_device =
-      Kokkos::create_mirror_view(quadrature_points_h);
-  Kokkos::View<double **, exec_space> weights_device =
-      Kokkos::create_mirror_view(weights_h);
-
+  auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
+  auto quadrature_points_h =
+      Kokkos::create_mirror_view(quadrature_points_device);
+  auto weights_h = Kokkos::create_mirror_view(weights_device);
 
   // Place Atoms semi-randomly
   //
@@ -255,10 +251,10 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
   Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
   Kokkos::deep_copy(weights_device, weights_h);
 
-
   // Compute the adjusted weights
   exec_space stream;
-  partition_becke(stream, atom_centers_device, quadrature_points_device, weights_device);
+  partition_becke(stream, atom_centers_device, quadrature_points_device,
+                  weights_device);
 
 #if 0
   // Compute distance from atom centers
@@ -280,7 +276,7 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
             << weights.extent(1) << std::endl;
 #endif
 
-  // Copy weights back to the host device 
+  // Copy weights back to the host device
   Kokkos::deep_copy(weights_h, weights_device);
 
   for (int j = 0; j < npts; ++j) {
