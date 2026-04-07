@@ -17,10 +17,11 @@ double dist(const Kokkos::View<double[3]> &a,
   return dist;
 }
 
+KOKKOS_FUNCTION
 void partition_becke(exec_space stream,
-                     const Kokkos::View<double *[3]> &atom_centers,
-                     const Kokkos::View<double **[3]> &quadrature_points,
-                     Kokkos::View<double **> &weights) {
+                     const Kokkos::View<double *[3], exec_space> &atom_centers,
+                     const Kokkos::View<double **[3], exec_space> &quadrature_points,
+                     Kokkos::View<double **, exec_space> &weights) {
 
   size_t natoms = atom_centers.extent(0);
   assert(natoms = quadrature_points.extent(0));
