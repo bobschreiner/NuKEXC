@@ -184,6 +184,8 @@ TEST_CASE("one-half", "[weights_one_half]") {
   partition_becke(stream, atom_centers_device, quadrature_points_device,
                   weights_device);
 
+  // Copy weights back to the host device
+  Kokkos::deep_copy(weights_h, weights_device);
 #if 0
   // Compute distance from atom centers
   std::cout << "Test is after becke" << std::endl;
