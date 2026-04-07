@@ -17,7 +17,6 @@ double dist(const Kokkos::View<double[3], exec_space> &a,
   return dist;
 }
 
-KOKKOS_FUNCTION
 void partition_becke(exec_space stream,
                      const Kokkos::View<double *[3], exec_space> &atom_centers,
                      const Kokkos::View<double **[3], exec_space> &quadrature_points,
@@ -48,6 +47,8 @@ void partition_becke(exec_space stream,
 
   Kokkos::MDRangePolicy range_quad_points(stream, {0, 0},
                                           {natoms, nquad_points_per_atom});
+
+  // Computes the atomic distances and stroes them in R_ij
   Kokkos::parallel_for(
       "Compute atomic distances", range_p2,
       KOKKOS_LAMBDA(const int &i, const int &j) {
@@ -56,6 +57,7 @@ void partition_becke(exec_space stream,
         R(i, j) = dist(subView_i, subView_j);
       });
 
+  // Computes the partition polynomials and stores them in partition_polynomials
   Kokkos::parallel_for(
       "Compute polynomials", range_p4,
       KOKKOS_LAMBDA(const int &p, const int &g, const int &i, const int &j) {
@@ -91,6 +93,7 @@ void partition_becke(exec_space stream,
         }
       });
 
+  // Computes the partition weights
   Kokkos::parallel_for(
       "Compute weights", range_p3,
       KOKKOS_LAMBDA(const int p, const int g, const int i) {
@@ -100,6 +103,7 @@ void partition_becke(exec_space stream,
             partition_weights(p, g, i) *= partition_polynomials(p, g, i, j);
       });
 
+  // Normalize the weights and update the weights paramter
   Kokkos::parallel_for(
       "Normalized weights", range_quad_points,
       KOKKOS_LAMBDA(const int &p, const int &g) {
