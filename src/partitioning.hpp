@@ -7,8 +7,8 @@
 namespace NuKEXC {
 
 KOKKOS_INLINE_FUNCTION
-double dist(const Kokkos::View<double[3]> &a,
-            const Kokkos::View<double[3]> &b) {
+double dist(const Kokkos::View<double[3], Layout, ExecSpace> &a,
+            const Kokkos::View<double[3], Layout, ExecSpace> &b) {
   double dist = 0;
   for (int i = 0; i < 3; ++i) {
     dist += std::pow(a[i] - b[i], 2);
@@ -17,22 +17,22 @@ double dist(const Kokkos::View<double[3]> &a,
   return dist;
 }
 
-void partition_becke(exec_space stream,
-                     const Kokkos::View<double *[3]> &atom_centers,
-                     const Kokkos::View<double **[3]> &quadrature_points,
-                     Kokkos::View<double **> &weights) {
+void partition_becke(ExecSpace stream,
+                     const Kokkos::View<double *[3], Layout, ExecSpace> &atom_centers,
+                     const Kokkos::View<double **[3], Layout, ExecSpace> &quadrature_points,
+                     Kokkos::View<double **, Layout, ExecSpace> &weights) {
 
   size_t natoms = atom_centers.extent(0);
   assert(natoms = quadrature_points.extent(0));
   size_t nquad_points_per_atom = quadrature_points.extent(1);
 
-  Kokkos::View<double **> R("Distance between atoms (R)", natoms, natoms);
-  Kokkos::View<double ****> mu("mu", natoms, nquad_points_per_atom, natoms,
+  Kokkos::View<double **, Layout, ExecSpace> R("Distance between atoms (R)", natoms, natoms);
+  Kokkos::View<double ****, Layout, ExecSpace> mu("mu", natoms, nquad_points_per_atom, natoms,
                                natoms);
-  Kokkos::View<double ****> partition_polynomials(
+  Kokkos::View<double ****, Layout, ExecSpace> partition_polynomials(
       "partition polynomials", natoms, nquad_points_per_atom, natoms, natoms);
 
-  Kokkos::View<double ***> partition_weights("partition weights", natoms,
+  Kokkos::View<double ***, Layout, ExecSpace> partition_weights("partition weights", natoms,
                                              nquad_points_per_atom, natoms);
 
   // Range policy for atomic distance calculations

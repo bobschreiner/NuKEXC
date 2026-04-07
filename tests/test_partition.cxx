@@ -81,10 +81,12 @@ TEST_CASE("H20", "[h20_weights]") {
   int natoms = mol.natoms();
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3]> atom_centers_device("atom centers", natoms);
-  Kokkos::View<double **[3]> quadrature_points_device("quadrature_points",
-                                                      natoms, npts);
-  Kokkos::View<double **> weights_device("weights", natoms, npts);
+  Kokkos::View<double *[3], Layout, ExecSpace> atom_centers_device(
+      "atom centers", natoms);
+  Kokkos::View<double **[3], Layout, ExecSpace> quadrature_points_device(
+      "quadrature_points", natoms, npts);
+  Kokkos::View<double **, Layout, ExecSpace> weights_device("weights", natoms,
+                                                            npts);
 
   // Create all the Kokkos Mirror Views on Execution device
   auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
@@ -113,10 +115,10 @@ TEST_CASE("H20", "[h20_weights]") {
   Kokkos::deep_copy(weights_device, weights_h);
 
   // Compute the adjusted weights
-  exec_space stream;
+  ExecSpace stream;
   partition_becke(stream, atom_centers_device, quadrature_points_device,
                   weights_device);
-
+}
 #if 0
   // Compute distance from atom centers
   std::cout << "Test is after becke" << std::endl;
@@ -135,7 +137,6 @@ TEST_CASE("H20", "[h20_weights]") {
   }
   std::cout << "Weights have dimension " << weights.extent(0) << " "
             << weights.extent(1) << std::endl;
-#endif
 }
 
 TEST_CASE("one-half", "[weights_one_half]") {
@@ -284,6 +285,8 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
     REQUIRE_THAT(sum_weights, Catch::Matchers::WithinAbs(1.0, 1e-10));
   }
 }
+
+#endif
 
 int main() {
 
