@@ -1,5 +1,5 @@
 #include <Kokkos_Core.hpp>
-#include <iostream>
+// #include <iostream>
 #include <string_view>
 
 #include <catch2/catch_all.hpp>
@@ -77,7 +77,7 @@ TEST_CASE("H20", "[h20_weights]") {
   const auto npts = sph->npts();
 
   // Generate water
-  Molecule mol = make_taxol();
+  Molecule mol = make_water();
   int natoms = mol.natoms();
 
   // Create all the Kokkos Views on host device
@@ -146,10 +146,12 @@ TEST_CASE("one-half", "[weights_one_half]") {
   int npts = 10 * 10;
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3], Layout, ExecSpace> atom_centers_device("atom centers", natoms);
-  Kokkos::View<double **[3], Layout, ExecSpace> quadrature_points_device("quadrature_points",
-                                                      natoms, npts);
-  Kokkos::View<double **, Layout, ExecSpace> weights_device("weights", natoms, npts);
+  Kokkos::View<double *[3], Layout, ExecSpace> atom_centers_device(
+      "atom centers", natoms);
+  Kokkos::View<double **[3], Layout, ExecSpace> quadrature_points_device(
+      "quadrature_points", natoms, npts);
+  Kokkos::View<double **, Layout, ExecSpace> weights_device("weights", natoms,
+                                                            npts);
 
   // Create all the Kokkos Mirror Views on Execution device
   auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
@@ -218,10 +220,12 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
   int npts = 10 * 10;
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3], Layout, ExecSpace> atom_centers_device("atom centers", natoms);
-  Kokkos::View<double **[3], Layout, ExecSpace> quadrature_points_device("quadrature_points",
-                                                      natoms, npts);
-  Kokkos::View<double **, Layout, ExecSpace> weights_device("weights", natoms, npts);
+  Kokkos::View<double *[3], Layout, ExecSpace> atom_centers_device(
+      "atom centers", natoms);
+  Kokkos::View<double **[3], Layout, ExecSpace> quadrature_points_device(
+      "quadrature_points", natoms, npts);
+  Kokkos::View<double **, Layout, ExecSpace> weights_device("weights", natoms,
+                                                            npts);
 
   // Create all the Kokkos Mirror Views on Execution device
   auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
@@ -288,7 +292,6 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
     REQUIRE_THAT(sum_weights, Catch::Matchers::WithinAbs(1.0, 1e-10));
   }
 }
-
 
 int main() {
 

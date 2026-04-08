@@ -19,28 +19,6 @@
 
 using namespace NuKEXC;
 
-// Source - https://stackoverflow.com/a/20170989
-// Posted by Howard Hinnant, modified by community. See post 'Timeline' for
-// change history Retrieved 2026-04-02, License - CC BY-SA 4.0
-
-template <class T> constexpr std::string_view type_name() {
-  using namespace std;
-#ifdef __clang__
-  string_view p = __PRETTY_FUNCTION__;
-  return string_view(p.data() + 34, p.size() - 34 - 1);
-#elif defined(__GNUC__)
-  string_view p = __PRETTY_FUNCTION__;
-#if __cplusplus < 201402
-  return string_view(p.data() + 36, p.size() - 36 - 1);
-#else
-  return string_view(p.data() + 49, p.find(';', 49) - 49);
-#endif
-#elif defined(_MSC_VER)
-  string_view p = __FUNCSIG__;
-  return string_view(p.data() + 84, p.size() - 84 - 7);
-#endif
-}
-
 using bk_type = IntegratorXX::Becke<double, double>;
 using mk_type = IntegratorXX::MuraKnowles<double, double>;
 using mhl_type = IntegratorXX::MurrayHandyLaming<double, double>;
@@ -91,8 +69,7 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
   molecule_names.push_back("taxol");
   molecule_names.push_back("ubiquitin");
 
-  for (int mol_ind = 0; mol_ind < molecule_names.size();
-       ++mol_ind) {
+  for (int mol_ind = 0; mol_ind < molecule_names.size(); ++mol_ind) {
     SECTION(molecule_names[mol_ind]) {
       // Generate water
       Molecule mol = molecules[mol_ind];
@@ -142,7 +119,8 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
       partition_becke(stream, atom_centers_device, quadrature_points_device,
                       weights_device);
       double time = timer.seconds();
-      std::cout << "Partitioning " << molecule_names[mol_ind] << " took " <<  time << " seconds" << std::endl;
+      std::cout << "Partitioning " << molecule_names[mol_ind] << " took "
+                << time << " seconds" << std::endl;
     }
   }
 }
