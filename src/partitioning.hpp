@@ -35,6 +35,8 @@ inline double compute_p(const double x) {
   return (1.5 * x) - (0.5 * std::pow(x, 3));
 }
 
+
+KOKKOS_INLINE_FUNCTION
 inline double compute_f(const double x) { return 0.5 * (1.0 - x); }
 
 void partition_becke(
