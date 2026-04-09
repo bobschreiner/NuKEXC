@@ -116,28 +116,8 @@ TEST_CASE("H20", "[h20_weights]") {
 
   // Compute the adjusted weights
   ExecSpace stream;
-  partition_becke(stream, atom_centers_device, quadrature_points_device,
-                  weights_device);
-
-#if 0
-  // Compute distance from atom centers
-  std::cout << "Test is after becke" << std::endl;
-  for (int i = 0; i < natoms; ++i) {
-    std::cout << "Atom center : (" << atom_centers(i, 0) << " "
-              << atom_centers(i, 1) << " " << atom_centers(i, 2) << ")"
-              << std::endl;
-
-    for (int j = 0; j < npts; ++j) {
-      std::cout << "Quadrature point : (" << quadrature_points(i, j, 0) << " "
-                << quadrature_points(i, j, 1) << " "
-                << quadrature_points(i, j, 2) << ")" << std::endl;
-      std::cout << "Weight : " << weights(i, j) << std::endl;
-    }
-    std::cout << std::endl;
-  }
-  std::cout << "Weights have dimension " << weights.extent(0) << " "
-            << weights.extent(1) << std::endl;
-#endif
+  partition_becke_alt(stream, atom_centers_device, quadrature_points_device,
+                      weights_device);
 }
 
 TEST_CASE("one-half", "[weights_one_half]") {
@@ -183,30 +163,12 @@ TEST_CASE("one-half", "[weights_one_half]") {
 
   // Compute the adjusted weights
   ExecSpace stream;
-  partition_becke(stream, atom_centers_device, quadrature_points_device,
-                  weights_device);
+  partition_becke_alt(stream, atom_centers_device, quadrature_points_device,
+                      weights_device);
 
   // Copy weights back to the host device
   Kokkos::deep_copy(weights_h, weights_device);
-#if 0
-  // Compute distance from atom centers
-  std::cout << "Test is after becke" << std::endl;
-  for (int i = 0; i < natoms; ++i) {
-    std::cout << "Atom center : (" << atom_centers(i, 0) << " "
-              << atom_centers(i, 1) << " " << atom_centers(i, 2) << ")"
-              << std::endl;
 
-    for (int j = 0; j < npts; ++j) {
-      std::cout << "Quadrature point : (" << quadrature_points(i, j, 0) << " "
-                << quadrature_points(i, j, 1) << " "
-                << quadrature_points(i, j, 2) << ")" << std::endl;
-      std::cout << "Weight : " << weights(i, j) << std::endl;
-    }
-    std::cout << std::endl;
-  }
-  std::cout << "Weights have dimension " << weights.extent(0) << " "
-            << weights.extent(1) << std::endl;
-#endif
   for (int i = 0; i < natoms; ++i) {
     for (int j = 0; j < npts; ++j) {
       REQUIRE_THAT(weights_h(i, j), Catch::Matchers::WithinAbs(0.5, 1e-15));
@@ -257,28 +219,8 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
 
   // Compute the adjusted weights
   ExecSpace stream;
-  partition_becke(stream, atom_centers_device, quadrature_points_device,
-                  weights_device);
-
-#if 0
-  // Compute distance from atom centers
-  std::cout << "Test is after becke" << std::endl;
-  for (int i = 0; i < natoms; ++i) {
-    std::cout << "Atom center : (" << atom_centers(i, 0) << " "
-              << atom_centers(i, 1) << " " << atom_centers(i, 2) << ")"
-              << std::endl;
-
-    for (int j = 0; j < npts; ++j) {
-      std::cout << "Quadrature point : (" << quadrature_points(i, j, 0) << " "
-                << quadrature_points(i, j, 1) << " "
-                << quadrature_points(i, j, 2) << ")" << std::endl;
-      std::cout << "Weight : " << weights(i, j) << std::endl;
-    }
-    std::cout << std::endl;
-  }
-  std::cout << "Weights have dimension " << weights.extent(0) << " "
-            << weights.extent(1) << std::endl;
-#endif
+  partition_becke_alt(stream, atom_centers_device, quadrature_points_device,
+                      weights_device);
 
   // Copy weights back to the host device
   Kokkos::deep_copy(weights_h, weights_device);

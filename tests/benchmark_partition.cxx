@@ -29,8 +29,6 @@ using de_type = IntegratorXX::Delley<double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 using wo_type = IntegratorXX::Womersley<double>;
 
-using molecule_types = std::tuple<Molecule>;
-
 TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
 
   using namespace IntegratorXX;
@@ -40,6 +38,23 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
   using angular_traits = quadrature_traits<angular_type>;
 
   using spherical_type = SphericalQuadrature<radial_type, angular_type>;
+
+  std::vector<std::string> molecule_names;
+  std::vector<Molecule> molecules;
+
+  molecules.push_back(make_water());
+  molecules.push_back(make_benzene());
+  molecules.push_back(make_taxol());
+
+  molecule_names.push_back("water");
+  molecule_names.push_back("benzene");
+  molecule_names.push_back("taxol");
+
+  // Need a more memory efficient algorithm to run ubiquitin
+  // Currently need 2TiB to for mu alone
+  molecules.push_back(make_ubiquitin());
+
+  molecule_names.push_back("ubiquitin");
 
   size_t nrad = 10;
   size_t nang = angular_traits::npts_by_algebraic_order(
@@ -55,19 +70,6 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
   auto sph = SphericalGridFactory::generate_grid(unp);
 
   const auto npts = sph->npts();
-
-  std::vector<std::string> molecule_names;
-  std::vector<Molecule> molecules;
-
-  molecules.push_back(make_water());
-  molecules.push_back(make_benzene());
-  molecules.push_back(make_taxol());
-  molecules.push_back(make_ubiquitin());
-
-  molecule_names.push_back("water");
-  molecule_names.push_back("benzene");
-  molecule_names.push_back("taxol");
-  molecule_names.push_back("ubiquitin");
 
   for (int mol_ind = 0; mol_ind < molecule_names.size(); ++mol_ind) {
     SECTION(molecule_names[mol_ind]) {
@@ -116,11 +118,22 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
       ExecSpace stream;
 
       Kokkos::Timer timer;
-      partition_becke(stream, atom_centers_device, quadrature_points_device,
-                      weights_device);
-      double time = timer.seconds();
-      std::cout << "Partitioning " << molecule_names[mol_ind] << " took "
-                << time << " seconds" << std::endl;
+      double time;
+      if (molecule_names[mol_ind] != "ubiquitin") {
+        partition_becke(stream, atom_centers_device, quadrature_points_device,
+                        weights_device);
+        time = timer.seconds();
+        std::cout << "Partitioning " << molecule_names[mol_ind] << " took "
+                  << time << " seconds" << std::endl;
+      }
+      timer.reset();
+
+      partition_becke_alt(stream, atom_centers_device, quadrature_points_device,
+                          weights_device);
+      time = timer.seconds();
+      std::cout << "Alternative partitioning with precomputing "
+                << molecule_names[mol_ind] << " took " << time << " seconds"
+                << std::endl;
     }
   }
 }

@@ -5,15 +5,17 @@
 namespace NuKEXC {
 // using ExecSpace = Kokkos::Serial;
 // using ExecSpace = Kokkos::Threads;
-using ExecSpace = Kokkos::OpenMP;
+// using ExecSpace = Kokkos::OpenMP;
 // using ExecSpace = Kokkos::Cuda;
 // using ExecSpace = Kokkos::HIP;
+using ExecSpace = Kokkos::DefaultExecutionSpace;
 
 // using MemSpace = Kokkos::HostSpace;
-using MemSpace = Kokkos::OpenMP;
+// using MemSpace = Kokkos::OpenMP;
 // using MemSpace = Kokkos::CudaSpace;
 // using MemSpace = Kokkos::CudaUVMSpace;
 // using MemSpace = Kokkos::HIPSpace;
+using MemSpace = ExecSpace::memory_space;
 
 //using Layout = Kokkos::LayoutLeft;
 using Layout = Kokkos::LayoutRight;
