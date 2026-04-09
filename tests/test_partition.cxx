@@ -116,7 +116,7 @@ TEST_CASE("H20", "[h20_weights]") {
 
   // Compute the adjusted weights
   ExecSpace stream;
-  partition_becke_alt(stream, atom_centers_device, quadrature_points_device,
+  partition_becke_team(stream, atom_centers_device, quadrature_points_device,
                       weights_device);
 }
 
@@ -163,7 +163,7 @@ TEST_CASE("one-half", "[weights_one_half]") {
 
   // Compute the adjusted weights
   ExecSpace stream;
-  partition_becke_alt(stream, atom_centers_device, quadrature_points_device,
+  partition_becke_team(stream, atom_centers_device, quadrature_points_device,
                       weights_device);
 
   // Copy weights back to the host device
@@ -219,7 +219,7 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
 
   // Compute the adjusted weights
   ExecSpace stream;
-  partition_becke_alt(stream, atom_centers_device, quadrature_points_device,
+  partition_becke_team(stream, atom_centers_device, quadrature_points_device,
                       weights_device);
 
   // Copy weights back to the host device

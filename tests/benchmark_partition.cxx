@@ -1,11 +1,11 @@
-#include <Kokkos_Core.hpp>
+#include <iomanip>
 #include <iostream>
 #include <string_view>
 
 #include <catch2/catch_all.hpp>
-#include <integratorxx/composite_quadratures/pruned_spherical_quadrature.hpp>
 
 #include "../src/molecule.hpp"
+#include "../src/partitioning.hpp"
 
 #include <integratorxx/composite_quadratures/pruned_spherical_quadrature.hpp>
 #include <integratorxx/composite_quadratures/spherical_quadrature.hpp>
@@ -14,8 +14,8 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
-#include "../src/partitioning.hpp"
 #include "standards.hpp"
+#include <Kokkos_Core.hpp>
 
 using namespace NuKEXC;
 
@@ -50,11 +50,10 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
   molecule_names.push_back("benzene");
   molecule_names.push_back("taxol");
 
-  // Need a more memory efficient algorithm to run ubiquitin
-  // Currently need 2TiB to for mu alone
+#ifdef KOKKOS_ENABLE_HIP
   molecules.push_back(make_ubiquitin());
-
   molecule_names.push_back("ubiquitin");
+#endif
 
   size_t nrad = 10;
   size_t nang = angular_traits::npts_by_algebraic_order(
@@ -119,20 +118,21 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
 
       Kokkos::Timer timer;
       double time;
-      if (molecule_names[mol_ind] != "ubiquitin") {
-        partition_becke(stream, atom_centers_device, quadrature_points_device,
-                        weights_device);
-        time = timer.seconds();
-        std::cout << "Partitioning " << molecule_names[mol_ind] << " took "
-                  << time << " seconds" << std::endl;
-      }
+      partition_becke(stream, atom_centers_device, quadrature_points_device,
+                      weights_device);
+      time = timer.seconds();
+
+      std::cout << std::setw(50) << "Partitioning " << std::setw(15)
+                << molecule_names[mol_ind] << " took " << std::setw(15)
+                << std::setprecision(10) << time << " seconds" << std::endl;
       timer.reset();
 
-      partition_becke_alt(stream, atom_centers_device, quadrature_points_device,
-                          weights_device);
+      partition_becke_team(stream, atom_centers_device,
+                           quadrature_points_device, weights_device);
       time = timer.seconds();
-      std::cout << "Alternative partitioning with precomputing "
-                << molecule_names[mol_ind] << " took " << time << " seconds"
+      std::cout << std::setw(50) << "Partitioning using thread teams "
+                << std::setw(15) << molecule_names[mol_ind] << " took "
+                << std::setw(15) << std::setprecision(10) << time << " seconds"
                 << std::endl;
     }
   }
