@@ -17,6 +17,7 @@ double dist(const Kokkos::View<double *, Kokkos::LayoutStride> &a,
   return dist;
 }
 
+KOKKOS_INLINE_FUNCTION
 inline double compute_mu(const double r_i, const double r_j,
                          const double R_ij) {
   double mu = (r_i - r_j) / R_ij;
@@ -29,6 +30,7 @@ inline double compute_mu(const double r_i, const double r_j,
   return mu;
 }
 
+KOKKOS_INLINE_FUNCTION
 inline double compute_p(const double x) {
   return (1.5 * x) - (0.5 * std::pow(x, 3));
 }
