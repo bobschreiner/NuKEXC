@@ -114,11 +114,10 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
       Kokkos::deep_copy(weights_device, weights_h);
 
       // Compute the adjusted weights
-      ExecSpace stream;
 
       Kokkos::Timer timer;
       double time;
-      partition_becke(stream, atom_centers_device, quadrature_points_device,
+      partition_becke(atom_centers_device, quadrature_points_device,
                       weights_device);
       time = timer.seconds();
 
@@ -127,7 +126,7 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
                 << std::setprecision(10) << time << " seconds" << std::endl;
       timer.reset();
 
-      partition_becke_team(stream, atom_centers_device,
+      partition_becke_team(atom_centers_device,
                            quadrature_points_device, weights_device);
       time = timer.seconds();
       std::cout << std::setw(50) << "Partitioning using thread teams "

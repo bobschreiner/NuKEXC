@@ -36,7 +36,6 @@ KOKKOS_INLINE_FUNCTION
 double compute_f(const double x) { return 0.5 * (1.0 - x); }
 
 void partition_becke(
-    ExecSpace stream,
     const Kokkos::View<double *[3], Layout, ExecSpace> &atom_centers,
     const Kokkos::View<double **[3], Layout, ExecSpace> &quadrature_points,
     Kokkos::View<double **, Layout, ExecSpace> &weights) {
@@ -49,12 +48,13 @@ void partition_becke(
 
   Kokkos::View<double ***> r("r", natoms, nquad_points_per_atom, natoms);
 
-  Kokkos::MDRangePolicy range_quad_points(stream, {0, 0},
+  Kokkos::MDRangePolicy range_quad_points({0, 0},
                                           {natoms, nquad_points_per_atom});
   Kokkos::MDRangePolicy range_quad_points_natoms(
-      stream, {0, 0, 0}, {natoms, nquad_points_per_atom, natoms});
+     {0, 0, 0}, {natoms, nquad_points_per_atom, natoms});
+  
 
-  Kokkos::MDRangePolicy range_natoms_natoms(stream, {0, 0}, {natoms, natoms});
+  Kokkos::MDRangePolicy range_natoms_natoms( {0, 0}, {natoms, natoms});
 
   // Computes the atomic distances and stroes them in R_ij
   Kokkos::parallel_for(
@@ -103,7 +103,6 @@ using TeamPolicy = Kokkos::TeamPolicy<ExecSpace>;
 using MemberType = typename TeamPolicy::member_type;
 
 void partition_becke_team(
-    ExecSpace stream,
     const Kokkos::View<double *[3], Layout, ExecSpace> &atom_centers,
     const Kokkos::View<double **[3], Layout, ExecSpace> &quadrature_points,
     Kokkos::View<double **, Layout, ExecSpace> &weights) {
@@ -112,10 +111,12 @@ void partition_becke_team(
   size_t nquad_points_per_atom = quadrature_points.extent(1);
 
   Kokkos::View<double **, Layout, ExecSpace> R_ij("R_ij", natoms, natoms);
+
   Kokkos::parallel_for(
       "Precompute R_ij",
-      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>(stream, {0, 0},
+      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>({0, 0},
                                                         {natoms, natoms}),
+
       KOKKOS_LAMBDA(const int i, const int j) {
         if (i != j) {
           double d2 = 0;
@@ -132,8 +133,9 @@ void partition_becke_team(
           natoms);
 
   // Set the policy to use that amount "PerThread"
-  auto policy = TeamPolicy(stream, natoms, Kokkos::AUTO)
-                    .set_scratch_size(0, Kokkos::PerThread(bytes_per_thread));
+  ExecSpace streams[natoms];
+  auto policy = TeamPolicy(natoms, Kokkos::AUTO)
+                    .set_scratch_size(1, Kokkos::PerThread(bytes_per_thread));
 
   Kokkos::parallel_for(
       "Becke Team Parallel", policy,
@@ -147,9 +149,9 @@ void partition_becke_team(
 
         // Parallelize over the quadrature points 'g' within the team
         Kokkos::parallel_for(
-            Kokkos::TeamVectorRange(team_member, nquad_points_per_atom),
+            Kokkos::TeamThreadRange(team_member, nquad_points_per_atom),
             [&](const size_t g) {
-              // Cache distances for this point g to all atoms i
+              // Cache distances for quadrature point g to all atoms i
               for (size_t i = 0; i < natoms; ++i) {
                 double d2 = 0;
                 for (int k = 0; k < 3; ++k) {
