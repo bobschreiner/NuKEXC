@@ -155,7 +155,7 @@ void partition_becke_team(
             [&](const size_t g) {
               // Cache distances for quadrature point g to all atoms i
               Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, natoms),
-                                   [=](const size_t i) {
+                                   [&](const size_t i) {
                                      double d2 = 0;
                                      for (int k = 0; k < 3; ++k) {
                                        double d = quadrature_points(p, g, k) -
@@ -165,12 +165,11 @@ void partition_becke_team(
                                      r_cache(i) = sqrt(d2);
                                    });
 
-	      // Wait until the distances r_i and r_j are loaded into cache
-	      team_member.team_barrier();
+              // Wait until the distances r_i and r_j are loaded into cache
+              team_member.team_barrier();
 
-              double w_p = 0.0;
+              double w_p;
               double normalization = 0.0;
-
               for (size_t i = 0; i < natoms; ++i) {
                 double w_i = 1.0;
                 for (size_t j = 0; j < natoms; ++j) {
@@ -181,7 +180,6 @@ void partition_becke_team(
                   double poly = compute_p(compute_p(compute_p(mu)));
                   w_i *= 0.5 * (1.0 - compute_f(poly));
                 }
-
                 if (i == p)
                   w_p = w_i;
                 normalization += w_i;
