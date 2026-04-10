@@ -1,21 +1,13 @@
 #pragma once
 
 #include "kokkos_config.hpp"
+#include "nukexc_utils.hpp"
 
 // #include <iostream>
 
 namespace NuKEXC {
 
-KOKKOS_INLINE_FUNCTION
-double dist(const Kokkos::View<double *, Kokkos::LayoutStride> &a,
-            const Kokkos::View<double *, Kokkos::LayoutStride> &b) {
-  double dist = 0;
-  for (int i = 0; i < a.extent(0); ++i) {
-    dist += std::pow(a(i) - b(i), 2);
-  }
-  dist = std::sqrt(dist);
-  return dist;
-}
+
 
 KOKKOS_INLINE_FUNCTION
 double compute_mu(const double r_i, const double r_j, const double R_ij) {
@@ -61,7 +53,7 @@ void partition_becke(
       KOKKOS_LAMBDA(const int &i, const int &j) {
         auto subView_i = Kokkos::subview(atom_centers, i, Kokkos::ALL());
         auto subView_j = Kokkos::subview(atom_centers, j, Kokkos::ALL());
-        R(i, j) = dist(subView_i, subView_j);
+        R(i, j) = utils::rad_dist(subView_i, subView_j);
       });
 
   // Computes the atomic distances and stroes them in R_ij
@@ -71,7 +63,7 @@ void partition_becke(
         auto subView_pg =
             Kokkos::subview(quadrature_points, p, g, Kokkos::ALL());
         auto subView_i = Kokkos::subview(atom_centers, i, Kokkos::ALL());
-        r(p, g, i) = dist(subView_pg, subView_i);
+        r(p, g, i) = utils::rad_dist(subView_pg, subView_i);
       });
 
   Kokkos::parallel_for(

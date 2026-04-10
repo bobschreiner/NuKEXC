@@ -128,6 +128,8 @@ public:
 
   inline void set_pure(bool p) { pure_ = p; }
 
+  virtual inline int get_type() { return 0; }
+
   template <typename Archive> void serialize(Archive &ar) {
     ar(nprim_, l_, pure_, O_, cutoff_radius_, shell_tolerance_);
   }
@@ -240,6 +242,8 @@ public:
 
   inline prim_array &alpha() { return alpha_; }
   inline prim_array &coeff() { return coeff_; }
+
+  virtual inline int get_type() { return 2; }
 
   template <typename Archive> void serialize(Archive &ar) {
     ar(this->nprim_, this->l_, this->pure_, alpha_, coeff_, this->O_,
