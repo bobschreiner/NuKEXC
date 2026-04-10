@@ -51,10 +51,9 @@ void partition_becke(
   Kokkos::MDRangePolicy range_quad_points({0, 0},
                                           {natoms, nquad_points_per_atom});
   Kokkos::MDRangePolicy range_quad_points_natoms(
-     {0, 0, 0}, {natoms, nquad_points_per_atom, natoms});
-  
+      {0, 0, 0}, {natoms, nquad_points_per_atom, natoms});
 
-  Kokkos::MDRangePolicy range_natoms_natoms( {0, 0}, {natoms, natoms});
+  Kokkos::MDRangePolicy range_natoms_natoms({0, 0}, {natoms, natoms});
 
   // Computes the atomic distances and stroes them in R_ij
   Kokkos::parallel_for(
@@ -132,10 +131,13 @@ void partition_becke_team(
       Kokkos::View<double *, ExecSpace::scratch_memory_space>::shmem_size(
           natoms);
 
+  // Use L1 cache for large molecules, L0 cache of small molecules
+  int cache_level = natoms > 100 ? 1 : 0;
+
   // Set the policy to use that amount "PerThread"
-  ExecSpace streams[natoms];
-  auto policy = TeamPolicy(natoms, Kokkos::AUTO)
-                    .set_scratch_size(1, Kokkos::PerThread(bytes_per_thread));
+  auto policy =
+      TeamPolicy(natoms, Kokkos::AUTO)
+          .set_scratch_size(cache_level, Kokkos::PerThread(bytes_per_thread));
 
   Kokkos::parallel_for(
       "Becke Team Parallel", policy,
@@ -145,21 +147,26 @@ void partition_becke_team(
         // Scratch memory for distance caching per thread
         Kokkos::View<double *, ExecSpace::scratch_memory_space,
                      Kokkos::MemoryUnmanaged>
-            r_cache(team_member.thread_scratch(0), natoms);
+            r_cache(team_member.thread_scratch(cache_level), natoms);
 
         // Parallelize over the quadrature points 'g' within the team
         Kokkos::parallel_for(
             Kokkos::TeamThreadRange(team_member, nquad_points_per_atom),
             [&](const size_t g) {
               // Cache distances for quadrature point g to all atoms i
-              for (size_t i = 0; i < natoms; ++i) {
-                double d2 = 0;
-                for (int k = 0; k < 3; ++k) {
-                  double d = quadrature_points(p, g, k) - atom_centers(i, k);
-                  d2 += d * d;
-                }
-                r_cache(i) = sqrt(d2);
-              }
+              Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, natoms),
+                                   [=](const size_t i) {
+                                     double d2 = 0;
+                                     for (int k = 0; k < 3; ++k) {
+                                       double d = quadrature_points(p, g, k) -
+                                                  atom_centers(i, k);
+                                       d2 += d * d;
+                                     }
+                                     r_cache(i) = sqrt(d2);
+                                   });
+
+	      // Wait until the distances r_i and r_j are loaded into cache
+	      team_member.team_barrier();
 
               double w_p = 0.0;
               double normalization = 0.0;
