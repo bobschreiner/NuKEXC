@@ -101,7 +101,9 @@ void partition_becke_team(
   size_t natoms = atom_centers.extent(0);
   size_t nquad_points_per_atom = quadrature_points.extent(1);
 
-  Kokkos::View<double **, Layout, ExecSpace, Kokkos::MemoryTraits<Kokkos::RandomAccess>> R_ij("R_ij", natoms, natoms);
+  Kokkos::View<double **, Layout, ExecSpace,
+               Kokkos::MemoryTraits<Kokkos::RandomAccess>>
+      R_ij("R_ij", natoms, natoms);
 
   Kokkos::parallel_for(
       "Precompute R_ij",
@@ -146,16 +148,13 @@ void partition_becke_team(
             Kokkos::TeamThreadRange(team_member, nquad_points_per_atom),
             [&](const size_t g) {
               // Cache distances for quadrature point g to all atoms i
-              Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, natoms),
-                                   [&](const size_t i) {
-                                     double d2 = 0;
-                                     for (int k = 0; k < 3; ++k) {
-                                       double d = quadrature_points(p, g, k) -
-                                                  atom_centers(i, k);
-                                       d2 += d * d;
-                                     }
-                                     r_cache(i) = sqrt(d2);
-                                   });
+              for (size_t i = 0; i < natoms; ++i) {
+                auto subView_pg =
+                    Kokkos::subview(quadrature_points, p, g, Kokkos::ALL());
+                auto subView_i =
+                    Kokkos::subview(atom_centers, i, Kokkos::ALL());
+                r_cache(i) = utils::rad_dist(subView_pg, subView_i);
+              }
 
               double w_p;
               double normalization = 0.0;
