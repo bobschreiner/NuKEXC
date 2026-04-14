@@ -123,14 +123,14 @@ void partition_becke_team(
 
   size_t bytes_per_thread =
       Kokkos::View<double *, ExecSpace::scratch_memory_space>::shmem_size(
-          natoms*nquad_points_per_atom);
+          natoms);
 
   // Use L1 cache for large molecules, L0 cache of small molecules
   int cache_level = natoms > 100 ? 1 : 0;
 
   // Set the policy to use that amount "PerThread"
   auto policy =
-      TeamPolicy(natoms, Kokkos::AUTO, 32)
+      TeamPolicy(natoms, Kokkos::AUTO)
           .set_scratch_size(cache_level, Kokkos::PerThread(bytes_per_thread));
 
   Kokkos::parallel_for(
@@ -139,25 +139,22 @@ void partition_becke_team(
         size_t p = team_member.league_rank(); // Each team handles one atom p
 
         // Scratch memory for distance caching per thread
-        Kokkos::View<double **, ExecSpace::scratch_memory_space,
+        Kokkos::View<double *, ExecSpace::scratch_memory_space,
                      Kokkos::MemoryUnmanaged>
-            r_cache(team_member.team_scratch(cache_level), natoms,
-                    nquad_points_per_atom);
+            r_cache(team_member.thread_scratch(cache_level), natoms);
 
         // Parallelize over the quadrature points 'g' within the team
         Kokkos::parallel_for(
             Kokkos::TeamThreadRange(team_member, nquad_points_per_atom),
             [&](const size_t g) {
               // Cache distances for quadrature point g to all atoms i
-              Kokkos::parallel_for(
-                  Kokkos::TeamVectorRange(team_member, natoms),
-                  [&](const size_t i) {
-                    auto subView_pg =
-                        Kokkos::subview(quadrature_points, p, g, Kokkos::ALL());
-                    auto subView_i =
-                        Kokkos::subview(atom_centers, i, Kokkos::ALL());
-                    r_cache(i, g) = utils::rad_dist(subView_pg, subView_i);
-                  });
+              for (size_t i = 0; i < natoms; ++i) {
+                auto subView_pg =
+                    Kokkos::subview(quadrature_points, p, g, Kokkos::ALL());
+                auto subView_i =
+                    Kokkos::subview(atom_centers, i, Kokkos::ALL());
+                r_cache(i) = utils::rad_dist(subView_pg, subView_i);
+              }
 
               double w_p;
               double normalization = 0.0;
@@ -167,7 +164,7 @@ void partition_becke_team(
                   if (i == j)
                     continue;
 
-                  double mu = (r_cache(i,g) - r_cache(j,g)) / R_ij(i, j);
+                  double mu = (r_cache(i) - r_cache(j)) / R_ij(i, j);
                   double poly = compute_p(compute_p(compute_p(mu)));
                   w_i *= 0.5 * (1.0 - compute_f(poly));
                 }
