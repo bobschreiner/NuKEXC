@@ -102,7 +102,8 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
   NuKEXC::detail::compute_prefactors_for_spherical_harmonics(l_max,
                                                              pre_factors);
 
-  auto pre_factors_h = Kokkos::create_mirror_view(quadrature_points_device);
+  auto pre_factors_h = Kokkos::create_mirror_view(pre_factors);
+  Kokkos::deep_copy(pre_factors_h, pre_factors);
   ///////////////////////////////////////////////////////////////////////////
 
   for (int i = 0; i < npts; ++i) {
