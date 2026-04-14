@@ -101,7 +101,7 @@ void partition_becke_team(
   size_t natoms = atom_centers.extent(0);
   size_t nquad_points_per_atom = quadrature_points.extent(1);
 
-  Kokkos::View<double **, Layout, ExecSpace> R_ij("R_ij", natoms, natoms);
+  Kokkos::View<double **, Layout, ExecSpace, Kokkos::MemoryTraits<Kokkos::RandomAccess>> R_ij("R_ij", natoms, natoms);
 
   Kokkos::parallel_for(
       "Precompute R_ij",
@@ -156,9 +156,6 @@ void partition_becke_team(
                                      }
                                      r_cache(i) = sqrt(d2);
                                    });
-
-              // Wait until the distances r_i and r_j are loaded into cache
-              team_member.team_barrier();
 
               double w_p;
               double normalization = 0.0;
