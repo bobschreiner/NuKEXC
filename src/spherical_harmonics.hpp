@@ -17,19 +17,6 @@ long int double_factorial(long int n) {
     return double_factorial(n - 2) * n;
 }
 
-KOKKOS_INLINE_FUNCTION void compute_prefactors_for_spherical_harmonics(
-    const int l_max, Kokkos::View<double **> &pre_factors) {
-
-  for (int l = 0; l < l_max + 1; ++l) {
-    pre_factors(l, 0) = Kokkos::sqrt((2. * l + 1.) / (4 * M_PI));
-    for (int m = 1; m < l + 1; ++m) {
-      pre_factors(l, m) = Kokkos::sqrt(
-          ((2 * l + 1) / (4 * M_PI)) *
-          (Kokkos::tgammal(l - m + 1) / Kokkos::tgammal(l + m + 1)));
-    }
-  }
-}
-
 KOKKOS_INLINE_FUNCTION
 double assoc_legendre(const int l, const int m, const double x) {
 
@@ -66,7 +53,7 @@ double assoc_legendre(const int l, const int m, const double x) {
 
 KOKKOS_INLINE_FUNCTION
 double real_spherical_harmonic(const int l, const int m, const double theta,
-                               const double phi, double harmonic_pre_factor) {
+                               const double phi) {
 
   double sin_cos_term;
   double sqrt2 = Kokkos::sqrt(2.);
@@ -80,21 +67,24 @@ double real_spherical_harmonic(const int l, const int m, const double theta,
     sin_cos_term = sqrt2 * Kokkos::cos(abs_m * phi);
   }
 
-  double harmonic = harmonic_pre_factor * sin_cos_term *
-                    assoc_legendre(l, abs_m, Kokkos::cos(theta));
+  double pre_factor =
+      Kokkos::sqrt(((2 * l + 1) / (4 * M_PI)) *
+                   (Kokkos::tgammal(l - m + 1) / Kokkos::tgammal(l + m + 1)));
+
+  double harmonic =
+      pre_factor * sin_cos_term * assoc_legendre(l, abs_m, Kokkos::cos(theta));
   return harmonic;
 }
 
 KOKKOS_INLINE_FUNCTION
 double real_spherical_harmonic_cart(const int l, const int m, const double x,
-                                    const double y, const double z,
-                                    double harmonic_pre_factor) {
+                                    const double y, const double z) {
 
   const double r = Kokkos::sqrt(x * x + y * y + z * z);
   const double theta = Kokkos::acos(z / r);
   const double phi = Kokkos::atan2(y, x);
 
-  return real_spherical_harmonic(l, m, theta, phi, harmonic_pre_factor);
+  return real_spherical_harmonic(l, m, theta, phi);
 }
 } // namespace detail
 } // namespace NuKEXC

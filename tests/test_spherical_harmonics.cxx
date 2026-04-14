@@ -97,13 +97,6 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
     return 0.25 * ((x * x - y * y) / (r * r)) * std::sqrt(15. / (M_PI));
   };
 
-  int l_max = 7;
-  Kokkos::View<double **> pre_factors("pre_factors", l_max + 1, l_max + 1);
-  NuKEXC::detail::compute_prefactors_for_spherical_harmonics(l_max,
-                                                             pre_factors);
-
-  auto pre_factors_h = Kokkos::create_mirror_view(pre_factors);
-  Kokkos::deep_copy(pre_factors_h, pre_factors);
   ///////////////////////////////////////////////////////////////////////////
 
   for (int i = 0; i < npts; ++i) {
@@ -112,7 +105,7 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
 
     double harmonic = NuKEXC::detail::real_spherical_harmonic_cart(
         0, 0, quadrature_points_device(i, 0), quadrature_points_device(i, 1),
-        quadrature_points_device(i, 2), pre_factors_h(0, 0));
+        quadrature_points_device(i, 2));
     REQUIRE_THAT(harmonic, Catch::Matchers::WithinAbs(ref, 1e-15));
   }
   for (int i = 0; i < npts; ++i) {
@@ -121,7 +114,7 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
 
     double harmonic = NuKEXC::detail::real_spherical_harmonic_cart(
         1, 0, quadrature_points_device(i, 0), quadrature_points_device(i, 1),
-        quadrature_points_device(i, 2), pre_factors_h(1, 0));
+        quadrature_points_device(i, 2));
     REQUIRE_THAT(harmonic, Catch::Matchers::WithinAbs(ref, 1e-15));
   }
   for (int i = 0; i < npts; ++i) {
@@ -130,7 +123,7 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
 
     double harmonic = NuKEXC::detail::real_spherical_harmonic_cart(
         1, 1, quadrature_points_device(i, 0), quadrature_points_device(i, 1),
-        quadrature_points_device(i, 2), pre_factors_h(1, 1));
+        quadrature_points_device(i, 2));
     REQUIRE_THAT(harmonic, Catch::Matchers::WithinAbs(ref, 1e-15));
   }
   for (int i = 0; i < npts; ++i) {
@@ -139,7 +132,7 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
 
     double harmonic = NuKEXC::detail::real_spherical_harmonic_cart(
         1, -1, quadrature_points_device(i, 0), quadrature_points_device(i, 1),
-        quadrature_points_device(i, 2), pre_factors_h(1, 1));
+        quadrature_points_device(i, 2));
     REQUIRE_THAT(harmonic, Catch::Matchers::WithinAbs(ref, 1e-15));
   }
 
@@ -149,7 +142,7 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
 
     double harmonic = NuKEXC::detail::real_spherical_harmonic_cart(
         2, -2, quadrature_points_device(i, 0), quadrature_points_device(i, 1),
-        quadrature_points_device(i, 2), pre_factors_h(2, 2));
+        quadrature_points_device(i, 2));
     REQUIRE_THAT(harmonic, Catch::Matchers::WithinAbs(ref, 1e-15));
   }
   for (int i = 0; i < npts; ++i) {
@@ -158,7 +151,7 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
 
     double harmonic = NuKEXC::detail::real_spherical_harmonic_cart(
         2, -1, quadrature_points_device(i, 0), quadrature_points_device(i, 1),
-        quadrature_points_device(i, 2), pre_factors_h(2, 1));
+        quadrature_points_device(i, 2));
     REQUIRE_THAT(harmonic, Catch::Matchers::WithinAbs(ref, 1e-15));
   }
   for (int i = 0; i < npts; ++i) {
@@ -167,7 +160,7 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
 
     double harmonic = NuKEXC::detail::real_spherical_harmonic_cart(
         2, 0, quadrature_points_device(i, 0), quadrature_points_device(i, 1),
-        quadrature_points_device(i, 2), pre_factors_h(2, 0));
+        quadrature_points_device(i, 2));
     REQUIRE_THAT(harmonic, Catch::Matchers::WithinAbs(ref, 1e-15));
   }
   for (int i = 0; i < npts; ++i) {
@@ -176,7 +169,7 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
 
     double harmonic = NuKEXC::detail::real_spherical_harmonic_cart(
         2, 1, quadrature_points_device(i, 0), quadrature_points_device(i, 1),
-        quadrature_points_device(i, 2), pre_factors_h(2, 1));
+        quadrature_points_device(i, 2));
     REQUIRE_THAT(harmonic, Catch::Matchers::WithinAbs(ref, 1e-15));
   }
   for (int i = 0; i < npts; ++i) {
@@ -185,7 +178,7 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
 
     double harmonic = NuKEXC::detail::real_spherical_harmonic_cart(
         2, 2, quadrature_points_device(i, 0), quadrature_points_device(i, 1),
-        quadrature_points_device(i, 2), pre_factors_h(2, 2));
+        quadrature_points_device(i, 2));
     REQUIRE_THAT(harmonic, Catch::Matchers::WithinAbs(ref, 1e-15));
   }
 }
