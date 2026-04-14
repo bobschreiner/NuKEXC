@@ -3,7 +3,6 @@
 #include <string_view>
 
 #include <catch2/catch_all.hpp>
-#include <integratorxx/composite_quadratures/pruned_spherical_quadrature.hpp>
 
 #include "../src/molecule.hpp"
 

@@ -3,9 +3,12 @@
 #include "kokkos_config.hpp"
 #include "nukexc_utils.hpp"
 #include "shell.hpp"
+#include "spherical_harmonics.hpp"
 
 namespace NuKEXC {
+
 struct GeneralShellDevice {
+
   // Shared Data Buffers
   Kokkos::View<double *> all_alphas; // Exponents (Alphas for GTO/STO)
   Kokkos::View<double *> all_coeffs; // Coefficients
@@ -17,11 +20,23 @@ struct GeneralShellDevice {
   Kokkos::View<int *> n_prim;     // Number of primitives/points per shell
   Kokkos::View<int *> shell_type; // 0: GTO, 1: STO, 2: NAO, etc.
 
+  int maximal_l = 7;
+  Kokkos::View<double **> harmonic_pre_factors;
+
   GeneralShellDevice(int n_shells, int total_prims)
       : all_alphas("alphas", total_prims), all_coeffs("coeffs", total_prims),
         offsets("offsets", n_shells), O("origins", n_shells, 3),
         l("l", n_shells), n_prim("n_prim", n_shells),
-        shell_type("shell_type", n_shells) {};
+        shell_type("shell_type", n_shells) {
+
+    // Initialize the harmonic pre_factors
+    harmonic_pre_factors = Kokkos::View<double **>(
+        "Harmonic pre-factors", maximal_l+1, maximal_l + 1);
+    for (int l = 0; l < maximal_l+1; ++l) {
+      detail::compute_prefactors_for_spherical_harmonics(l,
+                                                         harmonic_pre_factors);
+    }
+  };
 };
 
 template <typename F>
@@ -82,8 +97,9 @@ void evaluate_gto_basis_shells_on_collocation_points(
         const int n = device.n_prim(i);
         const int l_val = device.l(i);
 
+        // radial part of the shell
+        // radial_part = R_l(r) = r^l * (∑_i C_i * exp(-⍺_i * r^2))
         double radial_part = 0;
-        double angular_part = 0;
 
         double r = utils::rad_dist(
             Kokkos::subview(device.O, i, Kokkos::ALL()),
@@ -96,8 +112,25 @@ void evaluate_gto_basis_shells_on_collocation_points(
 
           radial_part += coeff * Kokkos::exp(-a * r2);
         }
+        radial_part *= Kokkos::pow(r, l_val);
 
-        // TODO: Implement angular part
+        // Angular part of the shell
+        // Angular part  = Y_lm = (-1)^m * sqrt{[(2l+1)/4π] * [(l-m)! / (l+m)!]}
+        // P_ml(cos(θ)) * (cos(m*ϕ) + i*sin(m*ϕ))
+        Kokkos::View<double *> angular_part("Spherical harmonic",
+                                            2 * l_val + 1);
+        for (int m_val = -l_val; m_val < l_val + 1; ++m_val) {
+          double x = collocation_points(i, 0);
+          double y = collocation_points(i, 1);
+          double z = collocation_points(i, 2);
+          double theta = Kokkos::acos(z / r);
+          double phi = Kokkos::atan2(y, x);
+
+          int m_abs = Kokkos::abs(m_val);
+          angular_part(m_val) = NuKEXC::detail::real_spherical_harmonic(
+              l_val, m_val, theta, phi,
+              device.harmonic_pre_factors(l_val, m_abs));
+        }
       });
 }
 
