@@ -147,7 +147,6 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
 
       Kokkos::parallel_for(
           "For loop", npts, KOKKOS_LAMBDA(int i) {
-
             harmonic(i) = NuKEXC::detail::real_spherical_harmonic_cart(
                 l, m, quadrature_points_device(i, 0),
                 quadrature_points_device(i, 1), quadrature_points_device(i, 2));
@@ -159,6 +158,7 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
   }
 }
 
+///////////////////////////////////////////////////////////////////////////
 int main() {
 
   Kokkos::initialize();

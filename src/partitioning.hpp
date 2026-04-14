@@ -7,8 +7,6 @@
 
 namespace NuKEXC {
 
-
-
 KOKKOS_INLINE_FUNCTION
 double compute_mu(const double r_i, const double r_j, const double R_ij) {
   double mu = (r_i - r_j) / R_ij;
@@ -56,6 +54,7 @@ void partition_becke(
         R(i, j) = utils::rad_dist(subView_i, subView_j);
       });
 
+  Kokkos::fence();
   // Computes the atomic distances and stroes them in R_ij
   Kokkos::parallel_for(
       "Compute atomic distances to quad_points", range_quad_points_natoms,
@@ -66,6 +65,7 @@ void partition_becke(
         r(p, g, i) = utils::rad_dist(subView_pg, subView_i);
       });
 
+  Kokkos::fence();
   Kokkos::parallel_for(
       "Compute weights batched", range_quad_points,
       KOKKOS_LAMBDA(const size_t p, const size_t g) {

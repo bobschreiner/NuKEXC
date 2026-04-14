@@ -3,6 +3,7 @@
 #include <string_view>
 
 #include <catch2/catch_all.hpp>
+#include <integratorxx/composite_quadratures/pruned_spherical_quadrature.hpp>
 
 #include "../src/molecule.hpp"
 
@@ -160,7 +161,7 @@ TEST_CASE("one-half", "[weights_one_half]") {
   Kokkos::deep_copy(weights_device, weights_h);
 
   // Compute the adjusted weights
-  partition_becke_team(atom_centers_device, quadrature_points_device,
+  partition_becke(atom_centers_device, quadrature_points_device,
                       weights_device);
 
   // Copy weights back to the host device
