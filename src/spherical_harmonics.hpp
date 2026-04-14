@@ -7,11 +7,8 @@ namespace detail {
 
 KOKKOS_INLINE_FUNCTION
 long int double_factorial(long int n) {
-  if (n == 0 || n == 1)
+  if (n == 0 || n == -1)
     return 1;
-
-  else if (n == 2)
-    return 2;
 
   else
     return double_factorial(n - 2) * n;
@@ -25,9 +22,8 @@ double assoc_legendre(const int l, const int m, const double x) {
 
   // Start on the diagonal: P(m,m) = (-1)^m *(2*m -1)!!  * (1-x^2)^(m/2)
   int loc_l = m;
-  int phase = Kokkos::pow(-1, m);
-  double polynomial = phase * double_factorial(2 * m - 1) *
-                      Kokkos::sqrt(Kokkos::pow(1. - (x * x), m));
+  double polynomial = Kokkos::pow(-1., m) * double_factorial(2 * m - 1) *
+                      (Kokkos::pow(1. - (x * x), m/2.));
 
   if (loc_l == l)
     return polynomial;
@@ -43,7 +39,7 @@ double assoc_legendre(const int l, const int m, const double x) {
   while (loc_l != l) {
     next_polynomial =
         ((2 * loc_l + 1) * x * polynomial - (loc_l + m) * prev_polynomial) /
-        (l - m + 1.);
+        (loc_l - m + 1.);
     prev_polynomial = polynomial;
     polynomial = next_polynomial;
     ++loc_l;
@@ -67,13 +63,14 @@ double real_spherical_harmonic(const int l, const int m, const double theta,
     sin_cos_term = sqrt2 * Kokkos::cos(abs_m * phi);
   }
 
-  double pre_factor =
-      Kokkos::sqrt(((2 * l + 1) / (4 * M_PI)) *
-                   (Kokkos::tgammal(l - m + 1) / Kokkos::tgammal(l + m + 1)));
+  double pre_factor = Kokkos::sqrt(
+      ((2 * l + 1) / (4 * M_PI)) *
+      (Kokkos::tgamma(l - abs_m + 1) / Kokkos::tgamma(l + abs_m + 1)));
 
-  double harmonic =
-      pre_factor * sin_cos_term * assoc_legendre(l, abs_m, Kokkos::cos(theta));
-  return harmonic;
+  double phase = Kokkos::pow(-1., m);
+
+  return phase * pre_factor * sin_cos_term *
+         assoc_legendre(l, abs_m, Kokkos::cos(theta));
 }
 
 KOKKOS_INLINE_FUNCTION
