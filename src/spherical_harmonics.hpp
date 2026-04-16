@@ -1,3 +1,23 @@
+/*
+ *    NuKEXC Numerical Kokkos Enhanced Exchange Correlation Integrator 
+ *    Copyright (C) 2026 Bob Schreiner 
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ *
+ */
+
 #pragma once
 
 #include "kokkos_config.hpp"
@@ -23,7 +43,7 @@ double assoc_legendre(const int l, const int m, const double x) {
   // Start on the diagonal: P(m,m) = (-1)^m *(2*m -1)!!  * (1-x^2)^(m/2)
   int loc_l = m;
   double polynomial = Kokkos::pow(-1., m) * double_factorial(2 * m - 1) *
-                      (Kokkos::pow(1. - (x * x), m/2.));
+                      (Kokkos::pow(1. - (x * x), m / 2.));
 
   if (loc_l == l)
     return polynomial;

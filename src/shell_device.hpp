@@ -1,3 +1,24 @@
+/*
+ *    NuKEXC Numerical Kokkos Enhanced Exchange Correlation Integrator 
+ *    Copyright (C) 2026 Bob Schreiner 
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ *
+ */
+
+
 #pragma once
 
 #include "kokkos_config.hpp"
@@ -14,9 +35,9 @@ struct STOShellDevice {
   Kokkos::View<int *> m_;
   Kokkos::View<double *> coeff_;
   Kokkos::View<double *> alpha_;
-  Kokkos::View<double *> O_;
+  Kokkos::View<double *[3]> O_;
 
-  size_t nbf() { return coeff_.extent(0); };
+  size_t nbf() const { return coeff_.extent(0); };
 };
 
 void evaluate_sto_basis_shells_on_collocation_points(
