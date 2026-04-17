@@ -40,7 +40,7 @@ Molecule make_taxol() {
 }
 Molecule make_ubiquitin() {
   Molecule mol;
-  read_xyz("input/ubiqtuitin.xyz", mol);
+  read_xyz("input/ubiquitin.xyz", mol);
   return mol;
 }
 
