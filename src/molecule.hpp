@@ -20,15 +20,16 @@
 #pragma once
 
 #include "kokkos_config.hpp"
+#include <decl/Kokkos_Declare_OPENMP.hpp>
 #include <vector>
 
 namespace NuKEXC {
 
 struct Molecule {
 
-  Kokkos::View<double *[3]>
+  Kokkos::View<double *[3], Kokkos::HostSpace>
       atom_centers;           // Atom centers in cartesian coordinates (bohr)
-  Kokkos::View<unsigned *> Z; // atomic numbers
+  Kokkos::View<unsigned *, Kokkos::HostSpace> Z; // atomic numbers
   unsigned natoms;            // number of atoms in the molecule
 
   /**
@@ -42,8 +43,8 @@ struct Molecule {
   Molecule(unsigned int natoms_) {
     // Initialize datastructures
     natoms = natoms_;
-    atom_centers = Kokkos::View<double *[3]>("Atom centers", natoms);
-    Z = Kokkos::View<unsigned *>("Atomic numbers ", natoms);
+    atom_centers = Kokkos::View<double *[3], Kokkos::HostSpace>("Atom centers", natoms);
+    Z = Kokkos::View<unsigned *, Kokkos::HostSpace>("Atomic numbers ", natoms);
   }
 
   /**
@@ -54,8 +55,8 @@ struct Molecule {
 
     // Initialize datastructures
     natoms = Z_v.size();
-    atom_centers = Kokkos::View<double *[3]>("Atom centers", natoms);
-    Z = Kokkos::View<unsigned *>("Atomic numbers ", natoms);
+    atom_centers = Kokkos::View<double *[3], Kokkos::HostSpace>("Atom centers", natoms);
+    Z = Kokkos::View<unsigned *, Kokkos::HostSpace>("Atomic numbers ", natoms);
 
     // Fill Kokkos::View with data
     for (size_t i = 0; i < natoms; ++i) {
