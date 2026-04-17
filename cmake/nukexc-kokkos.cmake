@@ -4,6 +4,13 @@ if(Kokkos_FOUND)
 	
     message(STATUS "Found Kokkos: ${Kokkos_DIR} (version \"${Kokkos_VERSION}\")")
 
+    # Check if OpenMP is one of the enabled backends
+    if(Kokkos_ENABLE_OPENMP)
+        message(STATUS "Kokkos has OpenMP enabled. Finding OpenMP...")
+        find_package(OpenMP REQUIRED)
+        target_link_libraries(nukexc PUBLIC OpenMP::OpenMP_CXX)
+    endif()
+
 else()
 
     message(STATUS "Kokkos not found externally. Fetching via FetchContent.")

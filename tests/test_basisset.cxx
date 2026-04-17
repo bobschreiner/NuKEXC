@@ -18,14 +18,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 // #include "../basisset_map.hpp"
-#include "../src/contiguous_container.hpp"
 #include "../src/molecule.hpp"
 // #include <gauxc/external/hdf5.hpp>
 
 #include "standards.hpp"
 
 #include <algorithm>
-#include <random>
 
 #ifdef NUKEXC_HAS_MPI
 #include <mpi.h>
@@ -66,8 +64,8 @@ TEST_CASE("GTOShell", "[basisset]") {
 
     SECTION("S Function") {
 
-      GTOShell<double> sh(nprim, AngularMomentum(0), SphericalType(false), alpha,
-                       coeff, center);
+      GTOShell<double> sh(nprim, AngularMomentum(0), SphericalType(false),
+                          alpha, coeff, center);
 
       const double ncoeff = 1. / std::sqrt(std::pow(s_int(2 * alpha[0]), 3.));
 
@@ -91,8 +89,8 @@ TEST_CASE("GTOShell", "[basisset]") {
 
     SECTION("P Function") {
 
-      GTOShell<double> sh(nprim, AngularMomentum(1), SphericalType(false), alpha,
-                       coeff, center);
+      GTOShell<double> sh(nprim, AngularMomentum(1), SphericalType(false),
+                          alpha, coeff, center);
 
       const double exact_int =
           std::pow(s_int(2 * alpha[0]), 2.) * p_int(2 * alpha[0]);
@@ -110,8 +108,8 @@ TEST_CASE("GTOShell", "[basisset]") {
 
     SECTION("D Function") {
 
-      GTOShell<double> sh(nprim, AngularMomentum(2), SphericalType(false), alpha,
-                       coeff, center);
+      GTOShell<double> sh(nprim, AngularMomentum(2), SphericalType(false),
+                          alpha, coeff, center);
 
       const double exact_int =
           std::pow(s_int(2 * alpha[0]), 2.) * d_int(2 * alpha[0]);
@@ -137,7 +135,7 @@ TEST_CASE("GTOShell", "[basisset]") {
                               0.6401216923e+00};
 
     GTOShell<double> sh(nprim, AngularMomentum(0), SphericalType(false), alpha,
-                     coeff, center);
+                        coeff, center);
 
     double exact_int = 0.;
     for (int32_t i = 0; i < 3; ++i)
@@ -157,7 +155,7 @@ TEST_CASE("GTOShell", "[basisset]") {
     const prim_array coeff = {0.5};
 
     GTOShell<double> sh(nprim, AngularMomentum(2), SphericalType(false), alpha,
-                     coeff, center);
+                        coeff, center);
 
     check_cutoff_radius(sh, 1e-10);
 
@@ -175,7 +173,7 @@ TEST_CASE("GTOShell", "[basisset]") {
     const prim_array coeff = {0.5};
 
     GTOShell<double> sh(nprim, AngularMomentum(2), SphericalType(true), alpha,
-                     coeff, center);
+                        coeff, center);
 
     CHECK(sh.size() == 5);
   }

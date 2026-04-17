@@ -94,7 +94,7 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
     SECTION(molecule_names[mol_ind]) {
       // Generate water
       Molecule mol = molecules[mol_ind];
-      int natoms = mol.natoms();
+      int natoms = mol.natoms;
 
       // Create all the Kokkos Views on host device
       Kokkos::View<double *[3], Layout, ExecSpace> atom_centers_device(
@@ -111,10 +111,6 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
       auto weights_h = Kokkos::create_mirror_view(weights_device);
 
       for (int i = 0; i < natoms; ++i) {
-        atom_centers_h(i, 0) = mol[i].x;
-        atom_centers_h(i, 1) = mol[i].y;
-        atom_centers_h(i, 2) = mol[i].z;
-
         for (int j = 0; j < npts; ++j) {
           quadrature_points_h(i, j, 0) =
               atom_centers_h(j, 0) + sph->points()[j][0];
@@ -128,6 +124,7 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
         }
       }
 
+      atom_centers_h = mol.atom_centers;
       // Copy the views from host device to the execution device
       Kokkos::deep_copy(atom_centers_device, atom_centers_h);
       Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);

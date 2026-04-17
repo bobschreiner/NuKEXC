@@ -1,6 +1,6 @@
 /*
- *    NuKEXC Numerical Kokkos Enhanced Exchange Correlation Integrator 
- *    Copyright (C) 2026 Bob Schreiner 
+ *    NuKEXC Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    Copyright (C) 2026 Bob Schreiner
  *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
@@ -17,16 +17,13 @@
  *
  *
  */
- 
+
 #include <iomanip>
 #include <iostream>
 #include <string_view>
 
 #include <catch2/catch_all.hpp>
 #include <integratorxx/composite_quadratures/pruned_spherical_quadrature.hpp>
-
-#include "../src/contiguous_container.hpp"
-#include "../src/molecule.hpp"
 
 #include <integratorxx/composite_quadratures/pruned_spherical_quadrature.hpp>
 #include <integratorxx/composite_quadratures/spherical_quadrature.hpp>
@@ -70,18 +67,19 @@ using de_type = IntegratorXX::Delley<double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 using wo_type = IntegratorXX::Womersley<double>;
 
-using sph_test_types =
-    std::tuple<std::tuple<bk_type, ah_type>, std::tuple<bk_type, de_type>,
-//               std::tuple<bk_type, ll_type>, std::tuple<bk_type, wo_type>,
+using sph_test_types = std::tuple<
+    std::tuple<bk_type, ah_type>, std::tuple<bk_type, de_type>,
+    //               std::tuple<bk_type, ll_type>, std::tuple<bk_type, wo_type>,
 
-//               std::tuple<mk_type, ah_type>, std::tuple<mk_type, de_type>,
-//               std::tuple<mk_type, ll_type>, std::tuple<mk_type, wo_type>,
+    //               std::tuple<mk_type, ah_type>, std::tuple<mk_type, de_type>,
+    //               std::tuple<mk_type, ll_type>, std::tuple<mk_type, wo_type>,
 
-//               std::tuple<mhl_type, ah_type>, std::tuple<mhl_type, de_type>,
-//               std::tuple<mhl_type, ll_type>, std::tuple<mhl_type, wo_type>,
+    //               std::tuple<mhl_type, ah_type>, std::tuple<mhl_type,
+    //               de_type>, std::tuple<mhl_type, ll_type>,
+    //               std::tuple<mhl_type, wo_type>,
 
-//               std::tuple<ta_type, ah_type>, std::tuple<ta_type, de_type>,
-               std::tuple<ta_type, ll_type>, std::tuple<ta_type, wo_type>>;
+    //               std::tuple<ta_type, ah_type>, std::tuple<ta_type, de_type>,
+    std::tuple<ta_type, ll_type>, std::tuple<ta_type, wo_type>>;
 
 TEMPLATE_LIST_TEST_CASE("Unpruned", "[sph-gen]", sph_test_types) {
 

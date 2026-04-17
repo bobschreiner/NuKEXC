@@ -1,6 +1,6 @@
 /*
- *    NuKEXC Numerical Kokkos Enhanced Exchange Correlation Integrator 
- *    Copyright (C) 2026 Bob Schreiner 
+ *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    Copyright (C) 2026 Bob Schreiner
  *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
@@ -17,7 +17,6 @@
  *
  *
  */
-
 
 #include <Kokkos_Core.hpp>
 // #include <iostream>
@@ -39,28 +38,6 @@
 #include "standards.hpp"
 
 using namespace NuKEXC;
-
-// Source - https://stackoverflow.com/a/20170989
-// Posted by Howard Hinnant, modified by community. See post 'Timeline' for
-// change history Retrieved 2026-04-02, License - CC BY-SA 4.0
-
-template <class T> constexpr std::string_view type_name() {
-  using namespace std;
-#ifdef __clang__
-  string_view p = __PRETTY_FUNCTION__;
-  return string_view(p.data() + 34, p.size() - 34 - 1);
-#elif defined(__GNUC__)
-  string_view p = __PRETTY_FUNCTION__;
-#if __cplusplus < 201402
-  return string_view(p.data() + 36, p.size() - 36 - 1);
-#else
-  return string_view(p.data() + 49, p.find(';', 49) - 49);
-#endif
-#elif defined(_MSC_VER)
-  string_view p = __FUNCSIG__;
-  return string_view(p.data() + 84, p.size() - 84 - 7);
-#endif
-}
 
 using bk_type = IntegratorXX::Becke<double, double>;
 using mk_type = IntegratorXX::MuraKnowles<double, double>;
@@ -99,7 +76,7 @@ TEST_CASE("H20", "[h20_weights]") {
 
   // Generate water
   Molecule mol = make_water();
-  int natoms = mol.natoms();
+  unsigned int natoms = mol.natoms;
 
   // Create all the Kokkos Views on host device
   Kokkos::View<double *[3], Layout, ExecSpace> atom_centers_device(
@@ -115,11 +92,8 @@ TEST_CASE("H20", "[h20_weights]") {
       Kokkos::create_mirror_view(quadrature_points_device);
   auto weights_h = Kokkos::create_mirror_view(weights_device);
 
+  atom_centers_h = mol.atom_centers;
   for (int i = 0; i < natoms; ++i) {
-    atom_centers_h(i, 0) = mol[i].x;
-    atom_centers_h(i, 1) = mol[i].y;
-    atom_centers_h(i, 2) = mol[i].z;
-
     for (int j = 0; j < npts; ++j) {
       quadrature_points_h(i, j, 0) = atom_centers_h(j, 0) + sph->points()[j][0];
       quadrature_points_h(i, j, 1) = atom_centers_h(j, 1) + sph->points()[j][1];
@@ -137,7 +111,7 @@ TEST_CASE("H20", "[h20_weights]") {
 
   // Compute the adjusted weights
   partition_becke_team(atom_centers_device, quadrature_points_device,
-                      weights_device);
+                       weights_device);
 }
 
 TEST_CASE("one-half", "[weights_one_half]") {
@@ -183,7 +157,7 @@ TEST_CASE("one-half", "[weights_one_half]") {
 
   // Compute the adjusted weights
   partition_becke_team(atom_centers_device, quadrature_points_device,
-                      weights_device);
+                       weights_device);
 
   // Copy weights back to the host device
   Kokkos::deep_copy(weights_h, weights_device);
@@ -238,7 +212,7 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
 
   // Compute the adjusted weights
   partition_becke_team(atom_centers_device, quadrature_points_device,
-                      weights_device);
+                       weights_device);
 
   // Copy weights back to the host device
   Kokkos::deep_copy(weights_h, weights_device);

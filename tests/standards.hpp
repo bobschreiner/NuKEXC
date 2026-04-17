@@ -1,17 +1,23 @@
-/**
- * GauXC Copyright (c) 2020-2024, The Regents of the University of California,
- * through Lawrence Berkeley National Laboratory (subject to receipt of
- * any required approvals from the U.S. Dept. of Energy).
+/*
+ *    NuKEXC Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    Copyright (C) 2026 Bob Schreiner
  *
- * (c) 2024-2025, Microsoft Corporation
- * (edited) 2026 Bob Schreiner
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
  *
- * All rights reserved.
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
  *
- * See https://github.com/wavefunction91/GauXC LICENSE.txt for details
+ *    You should have received a copy of the GNU General Public License
+ *    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ *
  */
 
-#include "../src/basisset.hpp"
 #include "../src/molecule.hpp"
 
 namespace NuKEXC {
@@ -20,6 +26,10 @@ Molecule make_water();
 Molecule make_benzene();
 Molecule make_ubiquitin();
 Molecule make_taxol();
-GTOBasisSet<double> make_631Gd(const Molecule &, SphericalType);
+
+void make_water(Molecule &);
+void make_benzene(Molecule &);
+void make_ubiquitin(Molecule &);
+void make_taxol(Molecule &);
 
 } // namespace NuKEXC
