@@ -13,7 +13,7 @@ target_link_libraries(test_grid Catch2::Catch2 IntegratorXX::IntegratorXX Kokkos
 target_link_libraries(test_partition Catch2::Catch2 IntegratorXX::IntegratorXX Kokkos::kokkos)
 target_link_libraries(benchmark_partition Catch2::Catch2 IntegratorXX::IntegratorXX Kokkos::kokkos)
 target_link_libraries(test_spherical_harmonics Catch2::Catch2 IntegratorXX::IntegratorXX Kokkos::kokkos)
-target_link_libraries(test_molecule Kokkos::kokkos)
+target_link_libraries(test_molecule Kokkos::kokkos Catch2::Catch2)
 
 add_custom_command(TARGET test_molecule PRE_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory

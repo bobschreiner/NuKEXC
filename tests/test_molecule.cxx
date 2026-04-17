@@ -1,5 +1,5 @@
 /*
- *    NuKEXC Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
  *    Copyright (C) 2026 Bob Schreiner
  *
  *    This program is free software: you can redistribute it and/or modify
@@ -22,17 +22,20 @@
 
 #include "../src/molecule.hpp"
 #include "../src/molecule_read.hpp"
+#include <catch2/catch_assertion_info.hpp>
+#include <catch2/catch_all.hpp>
+
+TEST_CASE("H20", "[h20_molecule]") {
+  NuKEXC::Molecule mol;
+  NuKEXC::read_xyz("input/water.xyz", mol);
+  std::cout << "Loaded " << mol.natoms << " atoms." << std::endl;
+  REQUIRE(mol.natoms == 3);
+};
 
 int main() {
   Kokkos::initialize();
   {
-    try {
-      NuKEXC::Molecule mol(3);
-      NuKEXC::read_xyz("input/water.xyz", mol);
-      std::cout << "Loaded " << mol.natoms << " atoms." << std::endl;
-    } catch (const std::exception &e) {
-      std::cerr << "Error: " << e.what() << std::endl;
-    }
+    int result = Catch::Session().run();
   }
   Kokkos::finalize();
   return 0;

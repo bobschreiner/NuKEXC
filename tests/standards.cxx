@@ -1,5 +1,5 @@
 /*
- *    NuKEXC Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
  *    Copyright (C) 2026 Bob Schreiner
  *
  *    This program is free software: you can redistribute it and/or modify
@@ -40,13 +40,13 @@ Molecule make_taxol() {
 }
 Molecule make_ubiquitin() {
   Molecule mol;
-  read_xyz("input/benzene.xyz", mol);
+  read_xyz("input/ubiqtuitin.xyz", mol);
   return mol;
 }
 
 void make_water(Molecule &mol) { read_xyz("input/water.xyz", mol); }
 void make_benzene(Molecule &mol) { read_xyz("input/benzene.xyz", mol); }
 void make_taxol(Molecule &mol) { read_xyz("input/taxol.xyz", mol); }
-void make_ubiquitin(Molecule &mol) { read_xyz("input/benzene.xyz", mol); }
+void make_ubiquitin(Molecule &mol) { read_xyz("input/ubiquitin.xyz", mol); }
 
 } // namespace NuKEXC

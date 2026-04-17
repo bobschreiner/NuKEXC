@@ -1,5 +1,5 @@
 /*
- *    NuKEXC Numerical Kokkos Enhanced Exchange Correlation Integrator 
+ *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator 
  *    Copyright (C) 2026 Bob Schreiner 
  *
  *    This program is free software: you can redistribute it and/or modify
