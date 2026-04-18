@@ -1,6 +1,6 @@
 /*
- *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator 
- *    Copyright (C) 2026 Bob Schreiner 
+ *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    Copyright (C) 2026 Bob Schreiner
  *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
@@ -20,12 +20,13 @@
 #pragma once
 
 #include "kokkos_config.hpp"
+#include <iostream>
 
 namespace NuKEXC {
 namespace detail {
 
 KOKKOS_INLINE_FUNCTION
-long int double_factorial(long int n) {
+long int double_factorial(int n) {
   if (n == 0 || n == -1)
     return 1;
 
@@ -34,8 +35,72 @@ long int double_factorial(long int n) {
 }
 
 KOKKOS_INLINE_FUNCTION
-double assoc_legendre(const int l, const int m, const double x) {
+long int factorial(int n) {
+  long int result = 1;
+  if (n == 0)
+    return 1;
+  for (int i = 1; i < n + 1; ++i) {
+    result *= i;
+  }
+  return result;
+};
 
+KOKKOS_INLINE_FUNCTION
+long int binomial(int n, int k) {
+  long int result = factorial(n) / (factorial(k) * factorial(n - k));
+  return result;
+}
+
+KOKKOS_INLINE_FUNCTION
+double poly_A(double x, double y, unsigned m) {
+  static const int cos_lookup[] = {1, 0, -1, 0};
+  double result = 0;
+  for (int p = 0; p < m + 1; ++p) {
+    result += binomial(m, p) * Kokkos::pow(x, p) * Kokkos::pow(y, m - p) *
+              cos_lookup[(m - p) % 4];
+  }
+  return result;
+}
+
+KOKKOS_INLINE_FUNCTION
+double poly_B(double x, double y, unsigned m) {
+  static const int sin_lookup[] = {0, 1, 0, -1};
+  double result = 0;
+  for (int p = 0; p < m + 1; ++p) {
+    result += binomial(m, p) * Kokkos::pow(x, p) * Kokkos::pow(y, m - p) *
+              sin_lookup[(m - p) % 4];
+  }
+  return result;
+}
+
+KOKKOS_INLINE_FUNCTION
+double poly_P(double r, double z, int l, unsigned m) {
+  static const int minus1_lookup[] = {1, -1};
+  double result = 0;
+  if (m == 0) {
+    for (int k = 0; k < (l / 2) + 1; ++k) {
+      result += minus1_lookup[k] * Kokkos::pow(2., -l) * binomial(l, k) *
+                binomial(2 * l - 2 * k, l) * Kokkos::pow(r, 2 * k) *
+                Kokkos::pow(z, l - 2 * k);
+    }
+    return result;
+  }
+  // implicit flooring of (l-m)/2 inside the for loop
+
+  for (int k = 0; k < ((l - m) / 2) + 1; ++k) {
+    result += minus1_lookup[k % 2] * Kokkos::pow(2., -l) * binomial(l, k) *
+              binomial(2 * l - 2 * k, l) *
+              (factorial((l - 2 * k) / factorial(l - 2 * k - m))) *
+              Kokkos::pow(r, 2 * k) * Kokkos::pow(z, l - 2 * k - m);
+  }
+
+  double pre_factor =
+      Kokkos::sqrt((double)factorial(l - m) / (double)factorial(l + m));
+  return pre_factor * result;
+}
+
+KOKKOS_INLINE_FUNCTION
+double assoc_legendre(const int l, const int m, const double x) {
   assert(m >= 0 && "m must be non-negative");
   assert(l >= m && "l must be larger than m");
 
@@ -69,7 +134,6 @@ double assoc_legendre(const int l, const int m, const double x) {
 KOKKOS_INLINE_FUNCTION
 double real_spherical_harmonic(const int l, const int m, const double theta,
                                const double phi) {
-
   double sin_cos_term;
   double sqrt2 = Kokkos::sqrt(2.);
   int abs_m = Kokkos::abs(m);
@@ -93,14 +157,39 @@ double real_spherical_harmonic(const int l, const int m, const double theta,
 }
 
 KOKKOS_INLINE_FUNCTION
-double real_spherical_harmonic_cart(const int l, const int m, const double x,
-                                    const double y, const double z) {
-
+double real_spherical_harmonic_sph_from_cart(const int l, const int m,
+                                             const double x, const double y,
+                                             const double z) {
   const double r = Kokkos::sqrt(x * x + y * y + z * z);
   const double theta = Kokkos::acos(z / r);
   const double phi = Kokkos::atan2(y, x);
 
   return real_spherical_harmonic(l, m, theta, phi);
 }
+
+KOKKOS_INLINE_FUNCTION
+double real_spherical_harmonic_cart(const int l, const int m, const double x,
+                                    const double y, const double z) {
+
+  const double r = Kokkos::sqrt(x * x + y * y + z * z);
+  unsigned abs_m = Kokkos::abs(m);
+
+  if (m == 0) {
+    return Kokkos::sqrt(((2 * l + 1) / (4 * M_PI))) * poly_P(r, z, l, abs_m) / Kokkos::pow(r,l);
+  }
+  double result =
+      Kokkos::sqrt(((2 * l + 1) / (2 * M_PI))) * poly_P(r, z, l, abs_m);
+
+  if (m > 0) {
+    result *= poly_A(x, y, abs_m);
+
+  } else {
+    result *= poly_B(x, y, abs_m);
+  }
+
+  result /= Kokkos::pow(r, l);
+  return result;
+}
 } // namespace detail
+
 } // namespace NuKEXC

@@ -19,7 +19,7 @@
  */
 
 #include "standards.hpp"
-#include "../src/molecule_read.hpp"
+#include "../src/molecule.hpp"
 
 namespace NuKEXC {
 

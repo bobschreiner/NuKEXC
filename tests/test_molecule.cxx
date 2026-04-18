@@ -21,7 +21,6 @@
 #include <iostream>
 
 #include "../src/molecule.hpp"
-#include "../src/molecule_read.hpp"
 #include <catch2/catch_assertion_info.hpp>
 #include <catch2/catch_all.hpp>
 

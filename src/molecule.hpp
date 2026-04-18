@@ -19,33 +19,30 @@
 
 #pragma once
 
+#include "atomic_properties.hpp"
 #include "kokkos_config.hpp"
 #include <decl/Kokkos_Declare_OPENMP.hpp>
+#include <fstream>
+#include <iostream>
+#include <set>
+#include <string>
 #include <vector>
-
+#
 namespace NuKEXC {
 
 struct Molecule {
 
   Kokkos::View<double *[3], Kokkos::HostSpace>
-      atom_centers;           // Atom centers in cartesian coordinates (bohr)
+      atom_centers; // Atom centers in cartesian coordinates (bohr)
   Kokkos::View<unsigned *, Kokkos::HostSpace> Z; // atomic numbers
-  unsigned natoms;            // number of atoms in the molecule
+  unsigned natoms; // number of atoms in the molecule
+  std::set<unsigned>
+      element_list; // contains a list of all elements present in the list
 
   /**
    * @ brief Default constructor
    */
   Molecule() = default;
-
-  /**
-   * @ brief Default constructor
-   */
-  Molecule(unsigned int natoms_) {
-    // Initialize datastructures
-    natoms = natoms_;
-    atom_centers = Kokkos::View<double *[3], Kokkos::HostSpace>("Atom centers", natoms);
-    Z = Kokkos::View<unsigned *, Kokkos::HostSpace>("Atomic numbers ", natoms);
-  }
 
   /**
    * @ brief Constructs Molecule from std::vector
@@ -55,8 +52,11 @@ struct Molecule {
 
     // Initialize datastructures
     natoms = Z_v.size();
-    atom_centers = Kokkos::View<double *[3], Kokkos::HostSpace>("Atom centers", natoms);
+    atom_centers =
+        Kokkos::View<double *[3], Kokkos::HostSpace>("Atom centers", natoms);
     Z = Kokkos::View<unsigned *, Kokkos::HostSpace>("Atomic numbers ", natoms);
+
+    element_list = std::set<unsigned>(Z_v.begin(), Z_v.end());
 
     // Fill Kokkos::View with data
     for (size_t i = 0; i < natoms; ++i) {
@@ -67,6 +67,41 @@ struct Molecule {
     }
   };
 }; // struct Molecule
+
+/**
+ * @ brief fills Molecule from file
+ */
+inline void read_xyz(const std::string &filename, Molecule &mol) {
+  std::ifstream file(filename);
+  if (!file.is_open()) {
+    throw std::runtime_error("Could not open file: " + filename);
+  }
+
+  unsigned natoms;
+  if (!(file >> natoms))
+    return;
+
+  // Skip the comment line
+  std::string dummy;
+  std::getline(file, dummy); // consume newline after natoms
+  std::getline(file, dummy); // consume comment line
+
+  std::vector<std::vector<double>> centers_v;
+  std::vector<unsigned> Z_v;
+
+  std::string symbol;
+  double x, y, z;
+  while (file >> symbol >> x >> y >> z) {
+    Z_v.push_back(detail::get_atomic_number(symbol));
+    centers_v.push_back({x * detail::ang_to_bohr, y * detail::ang_to_bohr,
+                         z * detail::ang_to_bohr});
+  }
+
+  Molecule mol_tmp(centers_v, Z_v);
+  mol.atom_centers = mol_tmp.atom_centers; // shallow copies
+  mol.Z = mol_tmp.Z;                       // shallow copies
+  mol.natoms = mol_tmp.natoms;
+}
 
 /**
  * @ brief checks if two molecules are the same

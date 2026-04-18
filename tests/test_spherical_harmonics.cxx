@@ -1,6 +1,6 @@
 /*
- *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator 
- *    Copyright (C) 2026 Bob Schreiner 
+ *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    Copyright (C) 2026 Bob Schreiner
  *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
@@ -146,38 +146,68 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
 
   ///////////////////////////////////////////////////////////////////////////
 
-  Kokkos::View<double *> harmonic("harmonic", npts);
-  auto harmonic_h = Kokkos::create_mirror_view(harmonic);
+  Kokkos::View<double *> harmonic_cart("harmonic", npts);
+  auto harmonic_cart_h = Kokkos::create_mirror_view(harmonic_cart);
+
+  Kokkos::View<double *> harmonic_sph("harmonic_sph", npts);
+  auto harmonic_sph_h = Kokkos::create_mirror_view(harmonic_cart);
 
   // helper function to keep code concise
   auto check_harmonics =
-      [&harmonic_h, &npts, &quadrature_points_h](
+      [&harmonic_cart_h, &npts, &quadrature_points_h](
           std::function<double(double, double, double)> ref_function) {
         for (int i = 0; i < npts; ++i) {
           double ref =
               ref_function(quadrature_points_h(i, 0), quadrature_points_h(i, 1),
                            quadrature_points_h(i, 2));
 
-          REQUIRE_THAT(harmonic_h(i), Catch::Matchers::WithinAbs(ref, 1e-15));
+          REQUIRE_THAT(harmonic_cart_h(i),
+                       Catch::Matchers::WithinAbs(ref, 1e-15));
         }
       };
 
   for (int l = 0; l < 3; ++l) {
     for (int m = -l; m < l + 1; ++m) {
 
+      std::cout << "Testing analytical l = " << l << " , m = " << m
+                << std::endl;
       Kokkos::parallel_for(
           "For loop", npts, KOKKOS_LAMBDA(int i) {
-            harmonic(i) = NuKEXC::detail::real_spherical_harmonic_cart(
+            harmonic_cart(i) = NuKEXC::detail::real_spherical_harmonic_cart(
                 l, m, quadrature_points_device(i, 0),
                 quadrature_points_device(i, 1), quadrature_points_device(i, 2));
           });
 
-      Kokkos::deep_copy(harmonic_h, harmonic);
+      Kokkos::deep_copy(harmonic_cart_h, harmonic_cart);
       check_harmonics(ref_function_vector[l][m]);
     }
   }
-}
 
+  for (int l = 0; l < 7; ++l) {
+    for (int m = -l; m < l + 1; ++m) {
+
+      std::cout << "Testing numerical l = " << l << " , m = " << m << std::endl;
+      Kokkos::parallel_for(
+          "For loop", npts, KOKKOS_LAMBDA(int i) {
+            harmonic_sph(i) =
+                NuKEXC::detail::real_spherical_harmonic_sph_from_cart(
+                    l, m, quadrature_points_device(i, 0),
+                    quadrature_points_device(i, 1),
+                    quadrature_points_device(i, 2));
+
+            harmonic_cart(i) = NuKEXC::detail::real_spherical_harmonic_cart(
+                l, m, quadrature_points_device(i, 0),
+                quadrature_points_device(i, 1), quadrature_points_device(i, 2));
+          });
+      Kokkos::deep_copy(harmonic_cart_h, harmonic_cart);
+      Kokkos::deep_copy(harmonic_sph_h, harmonic_sph);
+      for (int i = 0; i < npts; ++i) {
+        REQUIRE_THAT(harmonic_cart_h(i),
+                     Catch::Matchers::WithinAbs(harmonic_sph_h(i), 1e-15));
+      }
+    }
+  }
+}
 ///////////////////////////////////////////////////////////////////////////
 int main() {
 

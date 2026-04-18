@@ -29,10 +29,22 @@ namespace NuKEXC {
 namespace detail {
 
 const double ang_to_bohr = 1.8897261246;
-std::map<std::string, int> am_map = {{"S", 0}, {"P", 1}, {"D", 2}, {"F", 3},
-                                     {"G", 4}, {"H", 5}, {"I", 6}, {"J", 7}};
+static const std::map<std::string, int> am_map = {{"S", 0}, {"P", 1}, {"D", 2},
+                                                  {"F", 3}, {"G", 4}, {"H", 5},
+                                                  {"I", 6}, {"J", 7}};
 
-unsigned get_atomic_number(const std::string &symbol) {
+static const std::vector<std::string> symbols = {
+    "",   "H",  "He", "Li", "Be", "B",  "C",  "N",  "O",  "F",  "Ne", "Na",
+    "Mg", "Al", "Si", "P",  "S",  "Cl", "Ar", "K",  "Ca", "Sc", "Ti", "V",
+    "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge", "As", "Se", "Br",
+    "Kr", "Rb", "Sr", "Y",  "Zr", "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag",
+    "Cd", "In", "Sn", "Sb", "Te", "I",  "Xe", "Cs", "Ba", "La", "Ce", "Pr",
+    "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu",
+    "Hf", "Ta", "W",  "Re", "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi",
+    "Po", "At", "Rn", "Fr", "Ra", "Ac", "Th", "Pa", "U",  "Np", "Pu", "Am",
+    "Cm", "Bk", "Cf", "Es", "Fm"};
+
+inline unsigned get_atomic_number(const std::string &symbol) {
   static const std::unordered_map<std::string, unsigned> pt = {
       {"H", 1},   {"HE", 2},  {"LI", 3},  {"BE", 4},  {"B", 5},   {"C", 6},
       {"N", 7},   {"O", 8},   {"F", 9},   {"NE", 10}, {"NA", 11}, {"MG", 12},
