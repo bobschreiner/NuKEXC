@@ -95,8 +95,6 @@ TEST_CASE("H20", "[h20_weights]") {
   Kokkos::deep_copy(atom_centers_h, mol.atom_centers);
 
   for (int i = 0; i < natoms; ++i) {
-
-
     for (int j = 0; j < npts; ++j) {
       quadrature_points_h(i, j, 0) = atom_centers_h(i, 0) + sph->points()[j][0];
       quadrature_points_h(i, j, 1) = atom_centers_h(i, 1) + sph->points()[j][1];

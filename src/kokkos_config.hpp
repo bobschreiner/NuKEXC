@@ -30,7 +30,7 @@ namespace NuKEXC {
 // using ExecSpace = Kokkos::HIP;
 using ExecSpace = Kokkos::DefaultExecutionSpace;
 
-// using MemSpace = Kokkos::HostSpace;
+using HostSpace = Kokkos::HostSpace;
 // using MemSpace = Kokkos::OpenMP;
 // using MemSpace = Kokkos::CudaSpace;
 // using MemSpace = Kokkos::CudaUVMSpace;

@@ -18,26 +18,4 @@
  *
  */
 
-#include <iostream>
 
-#include "../src/molecule.hpp"
-#include "../src/molecule_read.hpp"
-
-int main() {
-  Kokkos::initialize();
-  {
-    try {
-      NuKEXC::Molecule mol(3);
-      NuKEXC::read_xyz("input/water.xyz", mol);
-      std::cout << "Loaded " << mol.natoms << " atoms." << std::endl;
-    } catch (const std::exception &e) {
-      std::cerr << "Error: " << e.what() << std::endl;
-    }
-  }
-  Kokkos::finalize();
-  return 0;
-}
-int main() {
-  int result = Catch::Session().run();
-  return result;
-}

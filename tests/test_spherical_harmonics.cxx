@@ -45,6 +45,9 @@ using ll_type = IntegratorXX::LebedevLaikov<double>;
 TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
 
   ////////////////////////////////////////////////////////////////////////
+  /*
+   * Setup the quadrature grid
+   */
 
   using radial_type = bk_type;
   using angular_type = ll_type;
@@ -81,6 +84,10 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
   Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
 
   ////////////////////////////////////////////////////////////////////////
+
+  /*
+   * Generate analytical solutions
+   */
 
   auto ref_00 = [](double x, double y, double z) -> double {
     return 0.5 * (1. / std::sqrt(M_PI));
@@ -146,6 +153,10 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
 
   ///////////////////////////////////////////////////////////////////////////
 
+  /*
+   * Compute spherical harmonics in cartesian and in spherical coordinates
+   */
+
   Kokkos::View<double *> harmonic_cart("harmonic", npts);
   auto harmonic_cart_h = Kokkos::create_mirror_view(harmonic_cart);
 
@@ -166,6 +177,11 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
         }
       };
 
+  /*
+   * Compare spherical harmonics in cartesian coordinates to analytical
+   * solutions
+   */
+
   for (int l = 0; l < 3; ++l) {
     for (int m = -l; m < l + 1; ++m) {
 
@@ -182,6 +198,11 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
       check_harmonics(ref_function_vector[l][m]);
     }
   }
+
+  /*
+   * Compare spherical harmonics in cartesian coordinates to spherical harmonics
+   * in spherical coordinates numercially
+   */
 
   for (int l = 0; l < 7; ++l) {
     for (int m = -l; m < l + 1; ++m) {
@@ -209,6 +230,7 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
   }
 }
 ///////////////////////////////////////////////////////////////////////////
+
 int main() {
 
   Kokkos::initialize();

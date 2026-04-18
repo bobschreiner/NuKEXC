@@ -1,6 +1,6 @@
 /*
- *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator 
- *    Copyright (C) 2026 Bob Schreiner 
+ *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    Copyright (C) 2026 Bob Schreiner
  *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
@@ -22,7 +22,6 @@
 
 #include "kokkos_config.hpp"
 #include "nukexc_utils.hpp"
-
 // #include <iostream>
 
 namespace NuKEXC {
@@ -75,7 +74,8 @@ void partition_becke(
       });
 
   Kokkos::fence();
-  // Computes the atomic distances and stroes them in R_ij
+  // Computes the distances from atom centers to quadrature points and stroes
+  // them in r_pij
   Kokkos::parallel_for(
       "Compute atomic distances to quad_points", range_quad_points_natoms,
       KOKKOS_LAMBDA(const int &p, const int &g, const int &i) {

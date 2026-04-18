@@ -17,8 +17,14 @@
  *
  */
 
-#pragma once
+/*
+ * The code in this file implements spherical real harmonics as presented on the
+ * following Wikipedia page
+ *
+ *  https://en.wikipedia.org/wiki/Spherical_harmonics
+ */
 
+#pragma once
 #include "kokkos_config.hpp"
 #include <iostream>
 
@@ -38,6 +44,7 @@ KOKKOS_INLINE_FUNCTION
 long int factorial(int n) {
   long int result = 1;
   if (n == 0)
+
     return 1;
   for (int i = 1; i < n + 1; ++i) {
     result *= i;
@@ -85,8 +92,8 @@ double poly_P(double r, double z, int l, unsigned m) {
     }
     return result;
   }
-  // implicit flooring of (l-m)/2 inside the for loop
 
+  // implicit flooring of (l-m)/2 inside the for loop
   for (int k = 0; k < ((l - m) / 2) + 1; ++k) {
     result += minus1_lookup[k % 2] * Kokkos::pow(2., -l) * binomial(l, k) *
               binomial(2 * l - 2 * k, l) *
@@ -131,6 +138,9 @@ double assoc_legendre(const int l, const int m, const double x) {
   return polynomial;
 }
 
+/*
+ * @brief computes real spherical harmonics from their spherical representation
+ */
 KOKKOS_INLINE_FUNCTION
 double real_spherical_harmonic(const int l, const int m, const double theta,
                                const double phi) {
@@ -156,6 +166,9 @@ double real_spherical_harmonic(const int l, const int m, const double theta,
          assoc_legendre(l, abs_m, Kokkos::cos(theta));
 }
 
+/*
+ * @brief computes real spherical harmonics from their spherical representation
+ */
 KOKKOS_INLINE_FUNCTION
 double real_spherical_harmonic_sph_from_cart(const int l, const int m,
                                              const double x, const double y,
@@ -167,6 +180,9 @@ double real_spherical_harmonic_sph_from_cart(const int l, const int m,
   return real_spherical_harmonic(l, m, theta, phi);
 }
 
+/*
+ * @brief computes real spherical harmonics from their cartesian representation
+ */
 KOKKOS_INLINE_FUNCTION
 double real_spherical_harmonic_cart(const int l, const int m, const double x,
                                     const double y, const double z) {
@@ -175,7 +191,8 @@ double real_spherical_harmonic_cart(const int l, const int m, const double x,
   unsigned abs_m = Kokkos::abs(m);
 
   if (m == 0) {
-    return Kokkos::sqrt(((2 * l + 1) / (4 * M_PI))) * poly_P(r, z, l, abs_m) / Kokkos::pow(r,l);
+    return Kokkos::sqrt(((2 * l + 1) / (4 * M_PI))) * poly_P(r, z, l, abs_m) /
+           Kokkos::pow(r, l);
   }
   double result =
       Kokkos::sqrt(((2 * l + 1) / (2 * M_PI))) * poly_P(r, z, l, abs_m);

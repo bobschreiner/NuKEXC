@@ -20,10 +20,11 @@
 
 #pragma once
 
+#include "atomic_properties.hpp"
 #include "kokkos_config.hpp"
+#include "molecule.hpp"
 #include "nukexc_utils.hpp"
 #include "spherical_harmonics.hpp"
-#include "molecule.hpp"
 
 namespace NuKEXC {
 
@@ -39,6 +40,12 @@ struct STOBasisSet {
   size_t nbf() const { return coeff_.extent(0); };
 };
 
+void create_sto_basis_from_molecule(Molecule &mol) {
+  for (unsigned element : mol.element_list) {
+  }
+};
+
+// TODO: Test this code
 void evaluate_sto_basis_shells_on_collocation_points(
     const STOBasisSet &basis_set,
     const Kokkos::View<double **> &collocation_points,
@@ -69,8 +76,7 @@ void evaluate_sto_basis_shells_on_collocation_points(
         radial_part *= Kokkos::pow(r, n_val - 1);
 
         // Angular part of the shell
-        // Angular part  = Y_lm = (-1)^m * sqrt{[(2l+1)/4π] * [(l-m)! / (l+m)!]}
-        // P_ml(cos(θ)) * (cos(m*ϕ) + i*sin(m*ϕ))
+        // https://en.wikipedia.org/wiki/Spherical_harmonics
         double x = collocation_points(j, 0);
         double y = collocation_points(j, 1);
         double z = collocation_points(j, 2);

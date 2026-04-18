@@ -36,27 +36,6 @@
 
 using namespace NuKEXC;
 
-// Source - https://stackoverflow.com/a/20170989
-// Posted by Howard Hinnant, modified by community. See post 'Timeline' for
-// change history Retrieved 2026-04-02, License - CC BY-SA 4.0
-
-template <class T> constexpr std::string_view type_name() {
-  using namespace std;
-#ifdef __clang__
-  string_view p = __PRETTY_FUNCTION__;
-  return string_view(p.data() + 34, p.size() - 34 - 1);
-#elif defined(__GNUC__)
-  string_view p = __PRETTY_FUNCTION__;
-#if __cplusplus < 201402
-  return string_view(p.data() + 36, p.size() - 36 - 1);
-#else
-  return string_view(p.data() + 49, p.find(';', 49) - 49);
-#endif
-#elif defined(_MSC_VER)
-  string_view p = __FUNCSIG__;
-  return string_view(p.data() + 84, p.size() - 84 - 7);
-#endif
-}
 using bk_type = IntegratorXX::Becke<double, double>;
 using mk_type = IntegratorXX::MuraKnowles<double, double>;
 using mhl_type = IntegratorXX::MurrayHandyLaming<double, double>;
@@ -113,12 +92,6 @@ TEMPLATE_LIST_TEST_CASE("Unpruned", "[sph-gen]", sph_test_types) {
   // Check that they're the same
   REQUIRE(sph->npts() == sph_ref.npts());
 
-  std::cout << type_name<spherical_type>() << std::endl;
-  std::cout << "---------------------------------------------------------------"
-               "----------------------------"
-            << std::endl;
-  std::cout << std::setw(20) << "x" << std::setw(20) << "y" << std::setw(20)
-            << "z" << std::setw(20) << "w" << std::endl;
   const auto npts = sph->npts();
   for (auto i = 0; i < npts; ++i) {
     auto pt = sph->points()[i];
@@ -130,8 +103,6 @@ TEMPLATE_LIST_TEST_CASE("Unpruned", "[sph-gen]", sph_test_types) {
     auto w = sph->weights()[i];
     auto w_ref = sph_ref.weights()[i];
     REQUIRE_THAT(w, Catch::Matchers::WithinAbs(w_ref, 1e-15));
-    std::cout << std::setw(20) << pt[0] << std::setw(20) << pt[1]
-              << std::setw(20) << pt[2] << std::setw(20) << w << std::endl;
   }
 }
 
