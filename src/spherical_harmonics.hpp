@@ -64,22 +64,24 @@ long int binomial(int n, int k) {
 
 KOKKOS_INLINE_FUNCTION
 double poly_A(double x, double y, unsigned m) {
-  const int cos_lookup[] = {1, 0, -1, 0};
   double result = 0;
   for (int p = 0; p < m + 1; ++p) {
-    result += binomial(m, p) * Kokkos::pow(x, p) * Kokkos::pow(y, m - p) *
-              cos_lookup[(m - p) % 4];
+    int cos_val = ((m - p) % 2 == 0) ? (((m - p) / 2) % 2 == 0 ? 1 : -1) : 0;
+    result +=
+        binomial(m, p) * Kokkos::pow(x, p) * Kokkos::pow(y, m - p) * cos_val;
   }
   return result;
 }
 
 KOKKOS_INLINE_FUNCTION
 double poly_B(double x, double y, unsigned m) {
-  const int sin_lookup[] = {0, 1, 0, -1};
+
   double result = 0;
   for (int p = 0; p < m + 1; ++p) {
-    result += binomial(m, p) * Kokkos::pow(x, p) * Kokkos::pow(y, m - p) *
-              sin_lookup[(m - p) % 4];
+    int sin_val =
+        ((m - p) % 2 != 0) ? (((m - p - 1) / 2) % 2 == 0 ? 1 : -1) : 0;
+    result +=
+        binomial(m, p) * Kokkos::pow(x, p) * Kokkos::pow(y, m - p) * sin_val;
   }
   return result;
 }
