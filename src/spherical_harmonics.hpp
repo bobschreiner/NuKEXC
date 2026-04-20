@@ -118,7 +118,9 @@ double assoc_legendre(const int l, const int m, const double x) {
 
   // Start on the diagonal: P(m,m) = (-1)^m *(2*m -1)!!  * (1-x^2)^(m/2)
   int loc_l = m;
-  double polynomial = Kokkos::pow(-1., m) * double_factorial(2 * m - 1) *
+
+  const int minus1_lookup[] = {1, -1};
+  double polynomial = minus1_lookup[m % 2] * double_factorial(2 * m - 1) *
                       (Kokkos::pow(1. - (x * x), m / 2.));
 
   if (loc_l == l)
@@ -161,9 +163,9 @@ double real_spherical_harmonic(const int l, const int m, const double theta,
     sin_cos_term = sqrt2 * Kokkos::cos(abs_m * phi);
   }
 
-  double pre_factor = Kokkos::sqrt(
-      ((2. * l + 1.) / (4 * M_PI)) *
-      (Kokkos::tgamma(l - abs_m + 1) / Kokkos::tgamma(l + abs_m + 1)));
+  double pre_factor =
+      Kokkos::sqrt(((2. * l + 1.) / (4 * M_PI)) *
+                   ((double)factorial(l - abs_m) / factorial(l + abs_m)));
 
   return pre_factor * sin_cos_term *
          assoc_legendre(l, abs_m, Kokkos::cos(theta));
