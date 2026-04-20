@@ -32,25 +32,29 @@ namespace NuKEXC {
 namespace detail {
 
 KOKKOS_INLINE_FUNCTION
-long int double_factorial(int n) {
-  if (n == 0 || n == -1)
-    return 1;
+double double_factorial(int n) {
+  if (n <= 0)
+    return 1.0;
 
-  else
-    return double_factorial(n - 2) * n;
-}
-
-KOKKOS_INLINE_FUNCTION
-long int factorial(int n) {
-  long int result = 1;
-  if (n == 0)
-
-    return 1;
-  for (int i = 1; i < n + 1; ++i) {
+  double result = 1.0;
+  for (int i = n; i > 0; i -= 2) {
     result *= i;
   }
   return result;
-};
+}
+
+KOKKOS_INLINE_FUNCTION
+double factorial(int n) {
+
+  if (n <= 0)
+    return 1.0;
+
+  double result = 1.0;
+  for (int i = 1; i <= n; ++i) {
+    result *= i;
+  }
+  return result;
+}
 
 KOKKOS_INLINE_FUNCTION
 long int binomial(int n, int k) {
@@ -71,7 +75,7 @@ double poly_A(double x, double y, unsigned m) {
 
 KOKKOS_INLINE_FUNCTION
 double poly_B(double x, double y, unsigned m) {
-  static const int sin_lookup[] = {0, 1, 0, -1};
+  const int sin_lookup[] = {0, 1, 0, -1};
   double result = 0;
   for (int p = 0; p < m + 1; ++p) {
     result += binomial(m, p) * Kokkos::pow(x, p) * Kokkos::pow(y, m - p) *
@@ -82,7 +86,7 @@ double poly_B(double x, double y, unsigned m) {
 
 KOKKOS_INLINE_FUNCTION
 double poly_P(double r, double z, int l, unsigned m) {
-  static const int minus1_lookup[] = {1, -1};
+  const int minus1_lookup[] = {1, -1};
   double result = 0;
   if (m == 0) {
     for (int k = 0; k < (l / 2) + 1; ++k) {
@@ -95,10 +99,11 @@ double poly_P(double r, double z, int l, unsigned m) {
 
   // implicit flooring of (l-m)/2 inside the for loop
   for (int k = 0; k < ((l - m) / 2) + 1; ++k) {
-    result += minus1_lookup[k % 2] * Kokkos::pow(2., -l) * binomial(l, k) *
-              binomial(2 * l - 2 * k, l) *
-              (factorial((l - 2 * k) / factorial(l - 2 * k - m))) *
-              Kokkos::pow(r, 2 * k) * Kokkos::pow(z, l - 2 * k - m);
+    result +=
+        minus1_lookup[k % 2] * Kokkos::pow(2., -l) * binomial(l, k) *
+        binomial(2 * l - 2 * k, l) *
+        (((double)factorial((l - 2 * k)) / (double)factorial(l - 2 * k - m))) *
+        Kokkos::pow(r, 2 * k) * Kokkos::pow(z, l - 2 * k - m);
   }
 
   double pre_factor =
@@ -157,7 +162,7 @@ double real_spherical_harmonic(const int l, const int m, const double theta,
   }
 
   double pre_factor = Kokkos::sqrt(
-      ((2 * l + 1) / (4 * M_PI)) *
+      ((2. * l + 1.) / (4 * M_PI)) *
       (Kokkos::tgamma(l - abs_m + 1) / Kokkos::tgamma(l + abs_m + 1)));
 
   double phase = Kokkos::pow(-1., m);
