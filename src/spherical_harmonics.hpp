@@ -165,9 +165,7 @@ double real_spherical_harmonic(const int l, const int m, const double theta,
       ((2. * l + 1.) / (4 * M_PI)) *
       (Kokkos::tgamma(l - abs_m + 1) / Kokkos::tgamma(l + abs_m + 1)));
 
-  double phase = Kokkos::pow(-1., m);
-
-  return phase * pre_factor * sin_cos_term *
+  return pre_factor * sin_cos_term *
          assoc_legendre(l, abs_m, Kokkos::cos(theta));
 }
 
