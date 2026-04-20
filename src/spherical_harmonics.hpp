@@ -88,11 +88,12 @@ double poly_B(double x, double y, unsigned m) {
 
 KOKKOS_INLINE_FUNCTION
 double poly_P(double r, double z, int l, unsigned m) {
-  const int minus1_lookup[] = {1, -1};
   double result = 0;
   if (m == 0) {
     for (int k = 0; k < (l / 2) + 1; ++k) {
-      result += minus1_lookup[k] * Kokkos::pow(2., -l) * binomial(l, k) *
+
+      double m1_pow_k = (k % 2 == 0) ? 1.0 : -1.0;
+      result += m1_pow_k * Kokkos::pow(2., -l) * binomial(l, k) *
                 binomial(2 * l - 2 * k, l) * Kokkos::pow(r, 2 * k) *
                 Kokkos::pow(z, l - 2 * k);
     }
@@ -101,8 +102,10 @@ double poly_P(double r, double z, int l, unsigned m) {
 
   // implicit flooring of (l-m)/2 inside the for loop
   for (int k = 0; k < ((l - m) / 2) + 1; ++k) {
+
+    double m1_pow_k = (k % 2 == 0) ? 1.0 : -1.0;
     result +=
-        minus1_lookup[k % 2] * Kokkos::pow(2., -l) * binomial(l, k) *
+        m1_pow_k * Kokkos::pow(2., -l) * binomial(l, k) *
         binomial(2 * l - 2 * k, l) *
         (((double)factorial((l - 2 * k)) / (double)factorial(l - 2 * k - m))) *
         Kokkos::pow(r, 2 * k) * Kokkos::pow(z, l - 2 * k - m);
@@ -121,8 +124,8 @@ double assoc_legendre(const int l, const int m, const double x) {
   // Start on the diagonal: P(m,m) = (-1)^m *(2*m -1)!!  * (1-x^2)^(m/2)
   int loc_l = m;
 
-  const int minus1_lookup[] = {1, -1};
-  double polynomial = minus1_lookup[m % 2] * double_factorial(2 * m - 1) *
+  double m1_pow_m = (m % 2 == 0) ? 1.0 : -1.0;
+  double polynomial = m1_pow_m * double_factorial(2 * m - 1) *
                       (Kokkos::pow(1. - (x * x), m / 2.));
 
   if (loc_l == l)
