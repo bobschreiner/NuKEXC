@@ -239,7 +239,7 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
   }
 }
 
-TEST_CASE("Analytical Gradient Solid harmonics",
+TEST_CASE("Analytical Gradient Solid Harmonics",
           "[compute_solid_harmonics_grad]") {
 
   using radial_type = bk_type;
@@ -316,7 +316,10 @@ TEST_CASE("Analytical Gradient Solid harmonics",
                  Catch::Matchers::WithinRel(0, 1e-5));
   };
 }
-TEST_CASE("Gradient Solid harmonics", "[compute_solid_harmonics_grad]") {
+
+TEST_CASE("Numerical Gradient Solid Harmonics",
+          "[compute_solid_harmonics_grad]") {
+
   using radial_type = bk_type;
   using angular_type = ll_type;
   using angular_traits = quadrature_traits<angular_type>;
@@ -423,13 +426,13 @@ TEST_CASE("Gradient Solid harmonics", "[compute_solid_harmonics_grad]") {
                 grad_solid_analytical_h(i, 0),
                 Catch::Matchers::WithinRel(grad_solid_fd_h(i, 0), 1e-5));
 
-        if (std::abs(grad_solid_analytical(i, 1)) > 1e-5)
+        if (std::abs(grad_solid_analytical_h(i, 1)) > 1e-5)
           if (std::abs(grad_solid_fd_h(i, 1)) > 1e-5)
             REQUIRE_THAT(
                 grad_solid_analytical_h(i, 1),
                 Catch::Matchers::WithinRel(grad_solid_fd_h(i, 1), 1e-5));
 
-        if (std::abs(grad_solid_analytical(i, 2)) > 1e-5)
+        if (std::abs(grad_solid_analytical_h(i, 2)) > 1e-5)
 
           if (std::abs(grad_solid_fd_h(i, 2)) > 1e-5)
             REQUIRE_THAT(
@@ -439,6 +442,7 @@ TEST_CASE("Gradient Solid harmonics", "[compute_solid_harmonics_grad]") {
     }
   }
 }
+
 ///////////////////////////////////////////////////////////////////////////
 int main() {
   Kokkos::initialize();
