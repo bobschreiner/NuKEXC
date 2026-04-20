@@ -124,9 +124,8 @@ double assoc_legendre(const int l, const int m, const double x) {
   // Start on the diagonal: P(m,m) = (-1)^m *(2*m -1)!!  * (1-x^2)^(m/2)
   int loc_l = m;
 
-  double m1_pow_m = (m % 2 == 0) ? 1.0 : -1.0;
-  double polynomial = m1_pow_m * double_factorial(2 * m - 1) *
-                      (Kokkos::pow(1. - (x * x), m / 2.));
+  double polynomial =
+      double_factorial(2 * m - 1) * (Kokkos::pow(1. - (x * x), m / 2.));
 
   if (loc_l == l)
     return polynomial;
