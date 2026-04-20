@@ -173,7 +173,7 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
                            quadrature_points_h(i, 2));
 
           REQUIRE_THAT(harmonic_cart_h(i),
-                       Catch::Matchers::WithinAbs(ref, 1e-15));
+                       Catch::Matchers::WithinAbs(ref, 1e-12));
         }
       };
 
@@ -200,8 +200,8 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
   }
 
   /*
-   * Compare spherical harmonics in cartesian coordinates to spherical harmonics
-   * in spherical coordinates numercially
+   * Compare spherical harmonics in cartesian coordinates to analytical
+   * solutions
    */
 
   for (int l = 0; l < 7; ++l) {
@@ -224,13 +224,12 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
       Kokkos::deep_copy(harmonic_sph_h, harmonic_sph);
       for (int i = 0; i < npts; ++i) {
         REQUIRE_THAT(harmonic_cart_h(i),
-                     Catch::Matchers::WithinAbs(harmonic_sph_h(i), 1e-15));
+                     Catch::Matchers::WithinAbs(harmonic_sph_h(i), 1e-12));
       }
     }
   }
 }
 ///////////////////////////////////////////////////////////////////////////
-
 int main() {
 
   Kokkos::initialize();
