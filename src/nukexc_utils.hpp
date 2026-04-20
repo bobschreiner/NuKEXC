@@ -1,6 +1,6 @@
 /*
- *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator 
- *    Copyright (C) 2026 Bob Schreiner 
+ *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    Copyright (C) 2026 Bob Schreiner
  *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
 #include <Kokkos_Core.hpp>
 
 namespace NuKEXC {
-namespace utils {
+
 KOKKOS_INLINE_FUNCTION
 double rad_dist(const Kokkos::View<double *, Kokkos::LayoutStride> &a,
                 const Kokkos::View<double *, Kokkos::LayoutStride> &b) {
@@ -35,5 +35,33 @@ double rad_dist(const Kokkos::View<double *, Kokkos::LayoutStride> &a,
   return dist;
 }
 
-} // namespace utils
+KOKKOS_INLINE_FUNCTION
+double double_factorial(int n) {
+  if (n <= 0)
+    return 1.0;
+
+  double result = 1.0;
+  for (int i = n; i > 0; i -= 2) {
+    result *= i;
+  }
+  return result;
+}
+
+KOKKOS_INLINE_FUNCTION
+double factorial(int n) {
+
+  if (n <= 0)
+    return 1.0;
+
+  double result = 1.0;
+  for (int i = 1; i <= n; ++i) {
+    result *= i;
+  }
+  return result;
+}
+KOKKOS_INLINE_FUNCTION
+long int binomial(int n, int k) {
+  long int result = factorial(n) / (factorial(k) * factorial(n - k));
+  return result;
+}
 } // namespace NuKEXC

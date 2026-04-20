@@ -18,4 +18,55 @@
  *
  */
 
+#include <iostream>
 
+#include "../src/molecule.hpp"
+#include "../src/stobasis.hpp"
+
+#include <catch2/catch_all.hpp>
+#include <catch2/catch_assertion_info.hpp>
+
+using namespace NuKEXC;
+
+TEST_CASE("h20_STO", "[h20_sto]") {
+  Molecule mol;
+  read_xyz("input/water.xyz", mol);
+  STOBasisSet basis = load_sto_basis(mol, "input/k99light/neutral");
+
+  // On CPU we can print out the basis set
+  // Copy to host device
+  auto n_h = Kokkos::create_mirror_view(basis.n_);
+  auto l_h = Kokkos::create_mirror_view(basis.l_);
+  auto m_h = Kokkos::create_mirror_view(basis.m_);
+  auto norm_h = Kokkos::create_mirror_view(basis.norm_);
+  auto alpha_h = Kokkos::create_mirror_view(basis.alpha_);
+  auto O_h = Kokkos::create_mirror_view(basis.O_);
+
+  Kokkos::deep_copy(n_h, basis.n_);
+  Kokkos::deep_copy(l_h, basis.l_);
+  Kokkos::deep_copy(m_h, basis.m_);
+  Kokkos::deep_copy(alpha_h, basis.alpha_);
+  Kokkos::deep_copy(norm_h, basis.norm_);
+  Kokkos::deep_copy(O_h, basis.O_);
+
+  for (int i = 0; i < basis.nbf(); ++i) {
+    std::cout << "Basis function " << i << std::endl;
+    std::cout << "n " << n_h(i) << std::endl;
+    std::cout << "l " << l_h(i) << std::endl;
+    std::cout << "m " << m_h(i) << std::endl;
+    std::cout << "alpha " << alpha_h(i) << std::endl;
+    std::cout << "coeff " << norm_h(i) << std::endl;
+    std::cout << "O_h " << O_h(i, 0) << " " << O_h(i, 1) << " " << O_h(i, 2)
+              << " " << std::endl
+              << std::endl;
+  }
+};
+
+int main() {
+  Kokkos::initialize();
+  {
+    int result = Catch::Session().run();
+  }
+  Kokkos::finalize();
+  return 0;
+}

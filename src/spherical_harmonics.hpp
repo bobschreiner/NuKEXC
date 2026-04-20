@@ -26,41 +26,10 @@
 
 #pragma once
 #include "kokkos_config.hpp"
+#include "nukexc_utils.hpp"
 #include <iostream>
 
 namespace NuKEXC {
-namespace detail {
-
-KOKKOS_INLINE_FUNCTION
-double double_factorial(int n) {
-  if (n <= 0)
-    return 1.0;
-
-  double result = 1.0;
-  for (int i = n; i > 0; i -= 2) {
-    result *= i;
-  }
-  return result;
-}
-
-KOKKOS_INLINE_FUNCTION
-double factorial(int n) {
-
-  if (n <= 0)
-    return 1.0;
-
-  double result = 1.0;
-  for (int i = 1; i <= n; ++i) {
-    result *= i;
-  }
-  return result;
-}
-
-KOKKOS_INLINE_FUNCTION
-long int binomial(int n, int k) {
-  long int result = factorial(n) / (factorial(k) * factorial(n - k));
-  return result;
-}
 
 KOKKOS_INLINE_FUNCTION
 double poly_A(double x, double y, unsigned m) {
@@ -220,6 +189,143 @@ double real_spherical_harmonic_cart(const int l, const int m, const double x,
   result /= Kokkos::pow(r, l);
   return result;
 }
-} // namespace detail
+
+/*
+ * @brief computes real solid harmonics from their cartesian representation
+ */
+KOKKOS_INLINE_FUNCTION
+double real_solid_harmonic_cart(const int l, const int m, const double x,
+                                const double y, const double z) {
+
+  const double r2 = x * x + y * y + z * z;
+  if (r2 < 1e-18)
+    return (l == 0) ? 0.282094791773878 : 0.0; // 1./sqrt(4*M_PI)
+  const double r = Kokkos::sqrt(r2);
+
+  unsigned abs_m = Kokkos::abs(m);
+
+  if (m == 0) {
+    return Kokkos::sqrt(((2. * l + 1.) / (4. * M_PI))) * poly_P(r, z, l, abs_m);
+  }
+  double result =
+      Kokkos::sqrt(((2. * l + 1.) / (2. * M_PI))) * poly_P(r, z, l, abs_m);
+
+  result *= m > 0 ? poly_A(x, y, abs_m) : poly_B(x, y, abs_m);
+
+  return result;
+}
+
+KOKKOS_INLINE_FUNCTION
+void grad_poly_P(double r, double z, int l, int m, double &dP_dr,
+                 double &dP_dz) {
+  dP_dr = 0.0;
+  dP_dz = 0.0;
+  unsigned abs_m = Kokkos::abs(m);
+  double pre = Kokkos::pow(2.0, -l);
+
+  // The polynomial index logic
+  for (int k = 0; k <= (l - (int)abs_m) / 2; ++k) {
+    double m1_pow_k = (k % 2 == 0) ? 1.0 : -1.0;
+    double coeff = m1_pow_k * pre * binomial(l, k) * binomial(2 * l - 2 * k, l);
+
+    // Handle n-m scaling if using standard normalization
+    if (abs_m > 0) {
+      coeff *=
+          (double)factorial(l - 2 * k) / (double)factorial(l - 2 * k - abs_m);
+    }
+
+    int p_r = 2 * k;
+    int p_z = l - 2 * k - abs_m;
+
+    // dP/dr part
+    if (p_r > 0)
+      dP_dr += coeff * p_r * Kokkos::pow(r, p_r - 1) * Kokkos::pow(z, p_z);
+
+    // dP/dz part
+    if (p_z > 0)
+      dP_dz += coeff * Kokkos::pow(r, p_r) * p_z * Kokkos::pow(z, p_z - 1);
+  }
+
+  if (abs_m > 0) {
+    double f = Kokkos::sqrt((double)factorial(l - abs_m) /
+                            (double)factorial(l + abs_m));
+    dP_dr *= f;
+    dP_dz *= f;
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void grad_poly_A(double x, double y, unsigned m, double &dx, double &dy) {
+  dx = 0.;
+  dy = 0.;
+  for (int p = 0; p < m + 1; ++p) {
+    int cos_val = ((m - p) % 2 == 0) ? (((m - p) / 2) % 2 == 0 ? 1 : -1) : 0;
+    if (p > 0)
+      dx += p * binomial(m, p) * Kokkos::pow(x, p - 1) * Kokkos::pow(y, m - p) *
+            cos_val;
+    if (m - p > 0)
+      dy += (m - p) * binomial(m, p) * Kokkos::pow(x, p) *
+            Kokkos::pow(y, m - p - 1) * cos_val;
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void grad_poly_B(double x, double y, unsigned m, double &dx, double &dy) {
+  dx = 0.;
+  dy = 0.;
+  for (int p = 0; p < m + 1; ++p) {
+    int sin_val =
+        ((m - p) % 2 != 0) ? (((m - p - 1) / 2) % 2 == 0 ? 1 : -1) : 0;
+    if (p > 0)
+      dx += p * binomial(m, p) * Kokkos::pow(x, p - 1) * Kokkos::pow(y, m - p) *
+            sin_val;
+    if (m - p > 0)
+      dy += (m - p) * binomial(m, p) * Kokkos::pow(x, p) *
+            Kokkos::pow(y, m - p - 1) * sin_val;
+  }
+}
+
+/*
+ * @brief computes the gradient of real solid harmonics from their cartesian
+ * representation
+ */
+KOKKOS_INLINE_FUNCTION
+void grad_real_solid_harmonic_cart(const int l, const int m, const double x,
+                                   const double y, const double z, double &dx,
+                                   double &dy, double &dz) {
+  const double r = Kokkos::sqrt(x * x + y * y + z * z) + 1e-15;
+  const int abs_m = Kokkos::abs(m);
+
+  // Get Polynomial values and their internal derivatives
+  double p_val = poly_P(r, z, l, abs_m);
+  double dP_dr, dP_dz;
+  grad_poly_P(r, z, l, abs_m, dP_dr, dP_dz);
+
+  // Angular parts (A for m>0, B for m<0, 1.0 for m=0)
+  double ang = 1.0;
+  double dAng_dx = 0.0;
+  double dAng_dy = 0.0;
+
+  if (m > 0) {
+    ang = poly_A(x, y, abs_m);
+    grad_poly_A(x, y, abs_m, dAng_dx, dAng_dy);
+  } else if (m < 0) {
+    ang = poly_B(x, y, abs_m);
+    grad_poly_B(x, y, abs_m, dAng_dx, dAng_dy);
+  }
+
+  // Normalization prefactor
+  double norm = Kokkos::sqrt((2. * l + 1.) / ((m == 0 ? 4. : 2.) * M_PI));
+
+  // Combine using Product Rule and Chain Rule
+  // dx = norm * ( (dP/dr * x/r) * ang + p_val * dAng/dx )
+  double pr_x = dP_dr * (x / r);
+  double pr_y = dP_dr * (y / r);
+  double pr_z = dP_dr * (z / r);
+
+  dx = norm * (pr_x * ang + p_val * dAng_dx);
+  dy = norm * (pr_y * ang + p_val * dAng_dy);
+  dz = norm * ((pr_z + dP_dz) * ang);
+}
 
 } // namespace NuKEXC

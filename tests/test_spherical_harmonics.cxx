@@ -163,6 +163,8 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
   Kokkos::View<double *> harmonic_sph("harmonic_sph", npts);
   auto harmonic_sph_h = Kokkos::create_mirror_view(harmonic_cart);
 
+  Kokkos::View<double *> harmonic_solid("solid harmonics", npts);
+  auto harmonic_solid_h = Kokkos::create_mirror_view(harmonic_cart);
   // helper function to keep code concise
   auto check_harmonics =
       [&harmonic_cart_h, &npts, &quadrature_points_h](
@@ -185,11 +187,9 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
   for (int l = 0; l < 3; ++l) {
     for (int m = -l; m < l + 1; ++m) {
 
-      std::cout << "Testing analytical l = " << l << " , m = " << m
-                << std::endl;
       Kokkos::parallel_for(
           "For loop", npts, KOKKOS_LAMBDA(int i) {
-            harmonic_cart(i) = NuKEXC::detail::real_spherical_harmonic_cart(
+            harmonic_cart(i) = real_spherical_harmonic_cart(
                 l, m, quadrature_points_device(i, 0),
                 quadrature_points_device(i, 1), quadrature_points_device(i, 2));
           });
@@ -203,35 +203,244 @@ TEST_CASE("Sph harmonicss", "[compute_spherical_harmonics]") {
    * Compare spherical harmonics in cartesian coordinates to analytical
    * solutions
    */
-
   for (int l = 0; l < 7; ++l) {
+    for (int m = -l; m < l + 1; ++m) {
+
+      Kokkos::parallel_for(
+          "For loop", npts, KOKKOS_LAMBDA(int i) {
+            harmonic_sph(i) = real_spherical_harmonic_sph_from_cart(
+                l, m, quadrature_points_device(i, 0),
+                quadrature_points_device(i, 1), quadrature_points_device(i, 2));
+
+            harmonic_cart(i) = real_spherical_harmonic_cart(
+                l, m, quadrature_points_device(i, 0),
+                quadrature_points_device(i, 1), quadrature_points_device(i, 2));
+
+            harmonic_solid(i) = real_solid_harmonic_cart(
+                l, m, quadrature_points_device(i, 0),
+                quadrature_points_device(i, 1), quadrature_points_device(i, 2));
+            double x = quadrature_points_device(i, 0);
+            double y = quadrature_points_device(i, 1);
+            double z = quadrature_points_device(i, 2);
+            double r = Kokkos::sqrt(x * x + y * y + z * z);
+            harmonic_solid(i) /= Kokkos::pow(r, l);
+          });
+      Kokkos::deep_copy(harmonic_cart_h, harmonic_cart);
+      Kokkos::deep_copy(harmonic_sph_h, harmonic_sph);
+      Kokkos::deep_copy(harmonic_solid_h, harmonic_solid);
+
+      for (int i = 0; i < npts; ++i) {
+        REQUIRE_THAT(harmonic_cart_h(i),
+                     Catch::Matchers::WithinAbs(harmonic_sph_h(i), 1e-12));
+        REQUIRE_THAT(harmonic_solid_h(i),
+                     Catch::Matchers::WithinAbs(harmonic_cart_h(i), 1e-12));
+      }
+    }
+  }
+}
+
+TEST_CASE("Analytical Gradient Solid harmonics",
+          "[compute_solid_harmonics_grad]") {
+
+  using radial_type = bk_type;
+  using angular_type = ll_type;
+  using angular_traits = quadrature_traits<angular_type>;
+
+  using spherical_type = SphericalQuadrature<radial_type, angular_type>;
+
+  size_t nrad = 10;
+  size_t nang = angular_traits::npts_by_algebraic_order(
+      angular_traits::next_algebraic_order(
+          5)); // Smallest possible angular grid
+
+  // Generate via runtime API
+  auto rad_spec = radial_from_type<radial_type>();
+  auto rad_traits = make_radial_traits(rad_spec, nrad, 1.0);
+  UnprunedSphericalGridSpecification unp(
+      rad_spec, *rad_traits, angular_from_type<angular_type>(), nang);
+
+  auto sph = SphericalGridFactory::generate_grid(unp);
+
+  const auto npts = sph->npts();
+
+  Kokkos::View<double *[3], Layout, ExecSpace> quadrature_points_device(
+      "quadrature_points", npts);
+
+  auto quadrature_points_h =
+      Kokkos::create_mirror_view(quadrature_points_device);
+
+  for (int i = 0; i < npts; ++i) {
+    quadrature_points_h(i, 0) = sph->points()[i][0];
+    quadrature_points_h(i, 1) = sph->points()[i][1];
+    quadrature_points_h(i, 2) = sph->points()[i][2];
+  }
+  Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
+
+  ///////////////////////////////////////////////////////////////////////
+
+  Kokkos::View<double *> solid_harmonics("solid_harmonics", npts);
+  auto solid_harmonics_h = Kokkos::create_mirror_view(solid_harmonics);
+
+  Kokkos::View<double *[3]> grad_solid_analytical("Analytical grad solid",
+                                                  npts);
+  auto grad_solid_analytical_h =
+      Kokkos::create_mirror_view(grad_solid_analytical);
+
+  /*
+   * Compare analytical spherical harmonics in cartesian coordinates to finite
+   * difference solutions
+   */
+
+  int l = 0;
+  int m = 0;
+  Kokkos::parallel_for(
+      "For loop", npts, KOKKOS_LAMBDA(int i) {
+        grad_real_solid_harmonic_cart(
+            l, m, quadrature_points_device(i, 0),
+            quadrature_points_device(i, 1), quadrature_points_device(i, 2),
+            grad_solid_analytical(i, 0), grad_solid_analytical(i, 1),
+            grad_solid_analytical(i, 2));
+      });
+
+  Kokkos::deep_copy(grad_solid_analytical_h, grad_solid_analytical);
+  double ref = 1. / Kokkos::sqrt(4 * M_PI);
+  for (int i = 0; i < npts; ++i) {
+
+    REQUIRE_THAT(grad_solid_analytical_h(i, 0),
+                 Catch::Matchers::WithinRel(0, 1e-5));
+
+    REQUIRE_THAT(grad_solid_analytical_h(i, 1),
+                 Catch::Matchers::WithinRel(0, 1e-5));
+
+    REQUIRE_THAT(grad_solid_analytical_h(i, 2),
+                 Catch::Matchers::WithinRel(0, 1e-5));
+  };
+}
+TEST_CASE("Gradient Solid harmonics", "[compute_solid_harmonics_grad]") {
+  using radial_type = bk_type;
+  using angular_type = ll_type;
+  using angular_traits = quadrature_traits<angular_type>;
+
+  using spherical_type = SphericalQuadrature<radial_type, angular_type>;
+
+  size_t nrad = 10;
+  size_t nang = angular_traits::npts_by_algebraic_order(
+      angular_traits::next_algebraic_order(
+          5)); // Smallest possible angular grid
+
+  // Generate via runtime API
+  auto rad_spec = radial_from_type<radial_type>();
+  auto rad_traits = make_radial_traits(rad_spec, nrad, 1.0);
+  UnprunedSphericalGridSpecification unp(
+      rad_spec, *rad_traits, angular_from_type<angular_type>(), nang);
+
+  auto sph = SphericalGridFactory::generate_grid(unp);
+
+  const auto npts = sph->npts();
+
+  Kokkos::View<double *[3], Layout, ExecSpace> quadrature_points_device(
+      "quadrature_points", npts);
+
+  auto quadrature_points_h =
+      Kokkos::create_mirror_view(quadrature_points_device);
+
+  for (int i = 0; i < npts; ++i) {
+    quadrature_points_h(i, 0) = sph->points()[i][0];
+    quadrature_points_h(i, 1) = sph->points()[i][1];
+    quadrature_points_h(i, 2) = sph->points()[i][2];
+  }
+  Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
+
+  ///////////////////////////////////////////////////////////////////////
+
+  Kokkos::View<double *> solid_harmonics("solid_harmonics", npts);
+  auto solid_harmonics_h = Kokkos::create_mirror_view(solid_harmonics);
+
+  Kokkos::View<double *[3]> grad_solid_analytical("Analytical grad solid",
+                                                  npts);
+  auto grad_solid_analytical_h =
+      Kokkos::create_mirror_view(grad_solid_analytical);
+
+  Kokkos::View<double *[3]> grad_solid_fd("Numerical grad solid", npts);
+  auto grad_solid_fd_h = Kokkos::create_mirror_view(grad_solid_fd);
+
+  double fd_step = 1e-7;
+  /*
+   * Compare analytical spherical harmonics in cartesian coordinates to finite
+   * difference solutions
+   */
+  for (int l = 1; l < 7; ++l) {
     for (int m = -l; m < l + 1; ++m) {
 
       std::cout << "Testing numerical l = " << l << " , m = " << m << std::endl;
       Kokkos::parallel_for(
           "For loop", npts, KOKKOS_LAMBDA(int i) {
-            harmonic_sph(i) =
-                NuKEXC::detail::real_spherical_harmonic_sph_from_cart(
-                    l, m, quadrature_points_device(i, 0),
-                    quadrature_points_device(i, 1),
-                    quadrature_points_device(i, 2));
-
-            harmonic_cart(i) = NuKEXC::detail::real_spherical_harmonic_cart(
+            grad_real_solid_harmonic_cart(
                 l, m, quadrature_points_device(i, 0),
-                quadrature_points_device(i, 1), quadrature_points_device(i, 2));
+                quadrature_points_device(i, 1), quadrature_points_device(i, 2),
+                grad_solid_analytical(i, 0), grad_solid_analytical(i, 1),
+                grad_solid_analytical(i, 2));
+
+            grad_solid_fd(i, 0) =
+                (real_solid_harmonic_cart(
+                     l, m, quadrature_points_device(i, 0) + fd_step,
+                     quadrature_points_device(i, 1),
+                     quadrature_points_device(i, 2)) -
+                 real_solid_harmonic_cart(
+                     l, m, quadrature_points_device(i, 0) - fd_step,
+                     quadrature_points_device(i, 1),
+                     quadrature_points_device(i, 2))) /
+                (2 * fd_step);
+
+            grad_solid_fd(i, 1) = (real_solid_harmonic_cart(
+                                       l, m, quadrature_points_device(i, 0),
+                                       quadrature_points_device(i, 1) + fd_step,
+                                       quadrature_points_device(i, 2)) -
+                                   real_solid_harmonic_cart(
+                                       l, m, quadrature_points_device(i, 0),
+                                       quadrature_points_device(i, 1) - fd_step,
+                                       quadrature_points_device(i, 2))) /
+                                  (2 * fd_step);
+            grad_solid_fd(i, 2) =
+                (real_solid_harmonic_cart(l, m, quadrature_points_device(i, 0),
+                                          quadrature_points_device(i, 1),
+                                          quadrature_points_device(i, 2) +
+                                              fd_step) -
+                 real_solid_harmonic_cart(l, m, quadrature_points_device(i, 0),
+                                          quadrature_points_device(i, 1),
+                                          quadrature_points_device(i, 2) -
+                                              fd_step)) /
+                (2 * fd_step);
           });
-      Kokkos::deep_copy(harmonic_cart_h, harmonic_cart);
-      Kokkos::deep_copy(harmonic_sph_h, harmonic_sph);
+      Kokkos::deep_copy(grad_solid_analytical_h, grad_solid_analytical);
+      Kokkos::deep_copy(grad_solid_fd_h, grad_solid_fd);
+
       for (int i = 0; i < npts; ++i) {
-        REQUIRE_THAT(harmonic_cart_h(i),
-                     Catch::Matchers::WithinAbs(harmonic_sph_h(i), 1e-12));
+        if (std::abs(grad_solid_analytical_h(i, 0)) > 1e-5)
+
+          if (std::abs(grad_solid_fd_h(i, 0)) > 1e-5)
+            REQUIRE_THAT(
+                grad_solid_analytical_h(i, 0),
+                Catch::Matchers::WithinRel(grad_solid_fd_h(i, 0), 1e-5));
+
+        if (std::abs(grad_solid_analytical(i, 1)) > 1e-5)
+          if (std::abs(grad_solid_fd_h(i, 1)) > 1e-5)
+            REQUIRE_THAT(
+                grad_solid_analytical_h(i, 1),
+                Catch::Matchers::WithinRel(grad_solid_fd_h(i, 1), 1e-5));
+
+        if (std::abs(grad_solid_analytical(i, 2)) > 1e-5)
+
+          if (std::abs(grad_solid_fd_h(i, 2)) > 1e-5)
+            REQUIRE_THAT(
+                grad_solid_analytical_h(i, 2),
+                Catch::Matchers::WithinRel(grad_solid_fd_h(i, 2), 1e-5));
       }
     }
   }
 }
 ///////////////////////////////////////////////////////////////////////////
 int main() {
-
   Kokkos::initialize();
   int result = Catch::Session().run();
   Kokkos::finalize();
