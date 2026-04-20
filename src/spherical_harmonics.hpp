@@ -64,7 +64,7 @@ long int binomial(int n, int k) {
 
 KOKKOS_INLINE_FUNCTION
 double poly_A(double x, double y, unsigned m) {
-  static const int cos_lookup[] = {1, 0, -1, 0};
+  const int cos_lookup[] = {1, 0, -1, 0};
   double result = 0;
   for (int p = 0; p < m + 1; ++p) {
     result += binomial(m, p) * Kokkos::pow(x, p) * Kokkos::pow(y, m - p) *
@@ -192,15 +192,19 @@ KOKKOS_INLINE_FUNCTION
 double real_spherical_harmonic_cart(const int l, const int m, const double x,
                                     const double y, const double z) {
 
-  const double r = Kokkos::sqrt(x * x + y * y + z * z);
+  const double r2 = x * x + y * y + z * z;
+  if (r2 < 1e-18)
+    return (l == 0) ? 0.282094791773878 : 0.0; // 1./sqrt(4*M_PI)
+  const double r = Kokkos::sqrt(r2);
+
   unsigned abs_m = Kokkos::abs(m);
 
   if (m == 0) {
-    return Kokkos::sqrt(((2 * l + 1) / (4 * M_PI))) * poly_P(r, z, l, abs_m) /
-           Kokkos::pow(r, l);
+    return Kokkos::sqrt(((2. * l + 1.) / (4. * M_PI))) *
+           poly_P(r, z, l, abs_m) / Kokkos::pow(r, l);
   }
   double result =
-      Kokkos::sqrt(((2 * l + 1) / (2 * M_PI))) * poly_P(r, z, l, abs_m);
+      Kokkos::sqrt(((2. * l + 1.) / (2. * M_PI))) * poly_P(r, z, l, abs_m);
 
   if (m > 0) {
     result *= poly_A(x, y, abs_m);
