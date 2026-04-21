@@ -38,6 +38,7 @@ overlap_integral(STOBasisSet &basis,
 
   // Can be replaced by Kokkos kernel later
   Kokkos::View<double **> overlap_matrix("Overlap matrix", N, N);
+  Kokkos::deep_copy(overlap_matrix, 0.);
   Kokkos::parallel_for(
       "Overlap Integral",
       Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {N, N, nquad_points}),
