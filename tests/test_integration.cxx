@@ -74,7 +74,7 @@ TEST_CASE("H20", "[h20_weights]") {
 
   auto sph = SphericalGridFactory::generate_grid(unp);
 
-  const auto npts = sph->npts();
+  const unsigned npts = sph->npts();
 
   // Generate water
   Molecule mol = make_water();
@@ -114,15 +114,30 @@ TEST_CASE("H20", "[h20_weights]") {
 
   // Compute the adjusted weights
   partition_becke_team(atom_centers_device, quadrature_points_device,
-                  weights_device);
+                       weights_device);
 
   // Flatten the weights and quadrature_points
-  Kokkos::View<double *> weights_1d(weights_device.data(),
-                                    weights_device.extent(0) *
-                                        weights_device.extent(1));
+
+  Kokkos::View<double *> weights_1d("Weights 1D", weights_device.extent(0) *
+                                                      weights_device.extent(1));
+
   Kokkos::View<double *[3]> quad_points_1d(
-      quadrature_points_device.data(),
+      "Quadrature points 1D",
       quadrature_points_device.extent(0) * quadrature_points_device.extent(1));
+
+  Kokkos::parallel_for(
+      "FlattenViews",
+      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>({0, 0}, {natoms, npts}),
+      KOKKOS_LAMBDA(const int i, const int j) {
+        // Calculate the logical 1D index
+        int flat_idx = i * npts + j;
+
+        weights_1d(flat_idx) = weights_device(i, j);
+
+        quad_points_1d(flat_idx, 0) = quadrature_points_device(i, j, 0);
+        quad_points_1d(flat_idx, 1) = quadrature_points_device(i, j, 1);
+        quad_points_1d(flat_idx, 2) = quadrature_points_device(i, j, 2);
+      });
 
   Kokkos::View<double **> S =
       overlap_integral(stobasis, quad_points_1d, weights_1d);
