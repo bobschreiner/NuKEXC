@@ -1,6 +1,6 @@
 /*
- *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator 
- *    Copyright (C) 2026 Bob Schreiner 
+ *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    Copyright (C) 2026 Bob Schreiner
  *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
@@ -19,20 +19,34 @@
  */
 
 #pragma once
-#include "Kokkos_config.hpp"
+#include "kokkos_config.hpp"
+#include "molecule.hpp"
+#include "partitioning.hpp"
+#include "stobasis.hpp"
 
 namespace NuKEXC {
 
-template <typename F>
-void quadrature(double &energy, Kokkos::View<double *> quadrature_points,
-                Kokkos::View<double *> weights, F functional) {
-  size_t N = weights.extent(0);
-  Kokkos::parallel_reduce(
-      "Quadrature", N,
-      KOKKOS_LAMBDA(const int i, double &tmp) {
-        tmp += weights[i] * functional(quadrature_points[i]);
-      },
-      energy);
+Kokkos::View<double **>
+overlap_integral(STOBasisSet &basis,
+                 Kokkos::View<double *[3]> quadrature_points,
+                 Kokkos::View<double *> quadrature_weights) {
+
+  size_t N = basis.nbf();
+  size_t nquad_points = quadrature_points.extent(0);
+  Kokkos::View<double **> collocation_points =
+      evaluate_sto_basis_shells_on_collocation_points(basis, quadrature_points);
+
+  // Can be replaced by Kokkos kernel later
+  Kokkos::View<double **> overlap_matrix("Overlap matrix", N, N);
+  Kokkos::parallel_for(
+      "Overlap Integral",
+      Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {N, N, nquad_points}),
+      KOKKOS_LAMBDA(const int &i, const int &j, const int &g) {
+        double val = quadrature_weights(g) * collocation_points(i, g) *
+                     collocation_points(j, g);
+        Kokkos::atomic_add(&overlap_matrix(i, j), val);
+      });
+  return overlap_matrix;
 }
 
 } // namespace NuKEXC

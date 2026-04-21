@@ -56,7 +56,9 @@ int label_to_l(char label) {
   return (pos != std::string::npos) ? static_cast<int>(pos) : -1;
 }
 
-STOBasisSet load_sto_basis(const Molecule &mol, const std::string &data_dir) {
+STOBasisSet
+load_sto_basis(const Molecule &mol,
+               const std::string &data_dir = "input/k99light/neutral") {
   struct RawFunc {
     int n, l, m;
     double alpha, norm;
@@ -65,7 +67,6 @@ STOBasisSet load_sto_basis(const Molecule &mol, const std::string &data_dir) {
   std::vector<RawFunc> temp_basis;
 
   for (size_t i = 0; i < mol.natoms; ++i) {
-
     std::string element_symbol = detail::symbols[mol.Z(i)];
     element_symbol[0] = std::tolower(element_symbol[0]);
 

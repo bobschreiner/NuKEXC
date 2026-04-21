@@ -220,11 +220,12 @@ void grad_poly_P(double r, double z, int l, int m, double &dP_dr,
                  double &dP_dz) {
   dP_dr = 0.0;
   dP_dz = 0.0;
+
   unsigned abs_m = Kokkos::abs(m);
   double pre = Kokkos::pow(2.0, -l);
 
   // The polynomial index logic
-  for (int k = 0; k <= (l - (int)abs_m) / 2; ++k) {
+  for (int k = 0; k <= (l - abs_m) / 2; ++k) {
     double m1_pow_k = (k % 2 == 0) ? 1.0 : -1.0;
     double coeff = m1_pow_k * pre * binomial(l, k) * binomial(2 * l - 2 * k, l);
 
@@ -298,7 +299,8 @@ void grad_real_solid_harmonic_cart(const int l, const int m, const double x,
 
   // Get Polynomial values and their internal derivatives
   double p_val = poly_P(r, z, l, abs_m);
-  double dP_dr, dP_dz;
+  double dP_dr;
+  double dP_dz;
   grad_poly_P(r, z, l, abs_m, dP_dr, dP_dz);
 
   // Angular parts (A for m>0, B for m<0, 1.0 for m=0)

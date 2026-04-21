@@ -186,7 +186,7 @@ void partition_becke_team(
 
                   double mu = (r_cache(i) - r_cache(j)) / R_ij(i, j);
                   double poly = compute_p(compute_p(compute_p(mu)));
-                  w_i *= 0.5 * (1.0 - compute_f(poly));
+                  w_i *= compute_f(poly);
                 }
                 if (i == p)
                   w_p = w_i;
