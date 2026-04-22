@@ -13,14 +13,23 @@ add_executable(convergence_integration convergence_integration.cxx standards.cxx
 add_executable(benchmark_partition  standards.cxx benchmark_partition.cxx )
 
 
-target_link_libraries(test_grid Catch2::Catch2 IntegratorXX::IntegratorXX Kokkos::kokkos)
-target_link_libraries(test_partition Catch2::Catch2 IntegratorXX::IntegratorXX Kokkos::kokkos)
-target_link_libraries(benchmark_partition Catch2::Catch2 IntegratorXX::IntegratorXX Kokkos::kokkos)
-target_link_libraries(test_spherical_harmonics Catch2::Catch2 IntegratorXX::IntegratorXX Kokkos::kokkos)
-target_link_libraries(test_molecule Kokkos::kokkos Catch2::Catch2)
-target_link_libraries(test_basisset Kokkos::kokkos Catch2::Catch2)
-target_link_libraries(test_integration Catch2::Catch2 IntegratorXX::IntegratorXX Kokkos::kokkos)
-target_link_libraries(convergence_integration Catch2::Catch2 IntegratorXX::IntegratorXX Kokkos::kokkos)
+# Create a list of all your test targets
+set(ALL_TEST_TARGETS 
+    test_grid 
+    test_partition 
+    test_spherical_harmonics 
+    test_molecule 
+    test_basisset 
+    test_integration 
+    convergence_integration
+    benchmark_partition
+)
+
+# Apply linking to all of them at once
+foreach(tgt IN LISTS ALL_TEST_TARGETS)
+    target_link_libraries(${tgt} PRIVATE libnukexc Catch2::Catch2)
+endforeach()
+
 
 add_custom_command(TARGET test_molecule PRE_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory

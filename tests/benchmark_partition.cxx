@@ -24,8 +24,8 @@
 
 #include <catch2/catch_all.hpp>
 
-#include "../src/molecule.hpp"
-#include "../src/partitioning.hpp"
+#include <nukexc/molecule.hpp>
+#include <nukexc/partitioning.hpp>
 
 #include <integratorxx/composite_quadratures/pruned_spherical_quadrature.hpp>
 #include <integratorxx/composite_quadratures/spherical_quadrature.hpp>

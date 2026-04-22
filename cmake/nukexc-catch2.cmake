@@ -22,4 +22,4 @@ else()
 
 endif()
 
-target_link_libraries(nukexc PUBLIC Catch2::Catch2)
+target_link_libraries(libnukexc INTERFACE Catch2::Catch2)

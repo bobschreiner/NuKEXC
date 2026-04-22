@@ -18,4 +18,4 @@ if( NOT ${IntegratorXX_FOUND} )
 
 endif()
 
-target_link_libraries( nukexc PUBLIC IntegratorXX::IntegratorXX) 
+target_link_libraries( libnukexc INTERFACE IntegratorXX::IntegratorXX) 

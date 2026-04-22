@@ -4,11 +4,16 @@ set(CMAKE_CXX_STANDARD 20)
 include(FetchContent)
 set( FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "Disable FC Updates" )
 
-project( NuKEXC VERSION 0.0.1 LANGUAGES C CXX )
+project( NuKEXC 
+	VERSION 0.1.0 
+	DESCRIPTION "A library for integrating numerical atomic orbitals on GPUs with Kokkos"
+	LANGUAGES C CXX )
+
+include(GNUInstallDirs)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Place local modules in the path
-list( PREPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake )
+list( APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake )
 
 # Guard some options settings to only default when not a subproject
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
@@ -24,9 +29,118 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   endif()
 endif()
 
-add_library(nukexc src/main.cxx)
+set (SOVERSION 0.1.0)
 
-add_subdirectory( src )
-add_subdirectory( tests )
+set (nxc NuKEXC) # Namespace 
 
-list(REMOVE_AT CMAKE_MODULE_PATH 0)
+# ===== Options ====================================================================
+# there are paths that work for both windows and unix but they repeat ${nxc} :-(
+if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
+    set(${nxc}_INSTALL_CMAKEDIR "${nxc}/CMake"
+        CACHE STRING "Directory to which CMake files are installed")
+else()
+    set(${nxc}_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/${nxc}"
+        CACHE STRING "Directory to which CMake files are installed")
+endif()
+message(STATUS "Showing option ${nxc}_INSTALL_CMAKEDIR: ${${nxc}_INSTALL_CMAKEDIR}")
+
+option(${nxc}_BUILD_TESTING "Build test-suite" ${PROJECT_IS_TOP_LEVEL})
+message(STATUS "Showing option ${nxc}_BUILD_TESTING: ${${nxc}_BUILD_TESTING}")
+
+# ==== Build =======================================================================
+
+add_library(libnukexc INTERFACE)
+
+target_compile_features(
+	libnukexc
+	INTERFACE
+	cxx_std_20
+)
+target_include_directories(
+  libnukexc
+  INTERFACE
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+add_library(${nxc}::NuKEXC ALIAS libnukexc)
+
+include( nukexc-integratorxx ) # finds package integratorxx
+include( nukexc-kokkos) # finds package integratorxx
+
+
+set(export_properties
+  "${nxc}_VERSION"
+  )
+
+set_target_properties (
+  libnukexc
+  PROPERTIES
+    EXPORT_NAME "${nxc}"
+    ${nxc}_VERSION ${${nxc}_VERSION}
+  )
+
+set_property(TARGET libnukexc APPEND PROPERTY EXPORT_PROPERTIES "${export_properties}")
+
+
+# Guard the tests
+if(${nxc}_BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
+
+
+# ====  Export & Install  =======================================================
+install(
+  DIRECTORY
+    nukexc
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  FILES_MATCHING
+    PATTERN "*.hpp*"
+  )
+
+install(
+  TARGETS
+    libnukexc 
+  EXPORT
+    ho_interface
+  RUNTIME DESTINATION
+    ${CMAKE_INSTALL_BINDIR}
+  ARCHIVE DESTINATION
+    ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION
+    ${CMAKE_INSTALL_LIBDIR}
+  PUBLIC_HEADER DESTINATION
+    ${CMAKE_INSTALL_INCLUDEDIR}
+  )
+
+install(
+  EXPORT
+    ho_interface
+  FILE
+    "${PROJECT_NAME}Targets.cmake"
+  NAMESPACE
+    "${PROJECT_NAME}::"
+  DESTINATION
+    ${${nxc}_INSTALL_CMAKEDIR}
+  )
+
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+  "cmake/${nxc}Config.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/${nxc}Config.cmake"
+  INSTALL_DESTINATION ${${nxc}_INSTALL_CMAKEDIR}
+  )
+
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/${nxc}ConfigVersion.cmake"
+  VERSION ${${nxc}_VERSION}
+  COMPATIBILITY SameMinorVersion
+  )
+
+install(
+  FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/${nxc}Config.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/${nxc}ConfigVersion.cmake
+  DESTINATION
+    ${${nxc}_INSTALL_CMAKEDIR}
+  )

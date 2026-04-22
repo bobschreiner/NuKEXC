@@ -8,7 +8,7 @@ if(Kokkos_FOUND)
     if(Kokkos_ENABLE_OPENMP)
         message(STATUS "Kokkos has OpenMP enabled. Finding OpenMP...")
         find_package(OpenMP REQUIRED)
-        target_link_libraries(nukexc PUBLIC OpenMP::OpenMP_CXX)
+	target_link_libraries(libnukexc INTERFACE OpenMP::OpenMP_CXX)
     endif()
 
 else()
@@ -26,4 +26,4 @@ else()
 
 endif()
 
-target_link_libraries(nukexc PUBLIC Kokkos::kokkos)
+target_link_libraries(libnukexc INTERFACE Kokkos::kokkos)

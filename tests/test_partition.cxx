@@ -23,10 +23,8 @@
 #include <string_view>
 
 #include <catch2/catch_all.hpp>
+
 #include <integratorxx/composite_quadratures/pruned_spherical_quadrature.hpp>
-
-#include "../src/molecule.hpp"
-
 #include <integratorxx/composite_quadratures/pruned_spherical_quadrature.hpp>
 #include <integratorxx/composite_quadratures/spherical_quadrature.hpp>
 #include <integratorxx/generators/radial_factory.hpp>
@@ -34,7 +32,8 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
-#include "../src/partitioning.hpp"
+#include <nukexc/molecule.hpp>
+#include <nukexc/partitioning.hpp>
 #include "standards.hpp"
 
 using namespace NuKEXC;

@@ -20,7 +20,8 @@
 
 #include <iostream>
 
-#include "../src/molecule.hpp"
+#include <nukexc/molecule.hpp>
+
 #include <catch2/catch_assertion_info.hpp>
 #include <catch2/catch_all.hpp>
 

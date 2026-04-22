@@ -32,10 +32,10 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
-#include "../src/integration.hpp"
-#include "../src/molecule.hpp"
-#include "../src/partitioning.hpp"
-#include "../src/stobasis.hpp"
+#include <nukexc/integration.hpp>
+#include <nukexc/molecule.hpp>
+#include <nukexc/partitioning.hpp>
+#include <nukexc/stobasis.hpp>
 
 #include "standards.hpp"
 
@@ -61,10 +61,10 @@ TEST_CASE("H20", "[h20_weights]") {
 
   using spherical_type = SphericalQuadrature<radial_type, angular_type>;
 
-  size_t nrad = 200;
+  size_t nrad = 120;
   size_t nang = angular_traits::npts_by_algebraic_order(
       angular_traits::next_algebraic_order(
-          30)); // Smallest possible angular grid
+          40)); // Smallest possible angular grid
 
   // Generate via runtime API
   auto rad_spec = radial_from_type<radial_type>();

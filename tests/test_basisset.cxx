@@ -20,8 +20,8 @@
 
 #include <iostream>
 
-#include "../src/molecule.hpp"
-#include "../src/stobasis.hpp"
+#include <nukexc/molecule.hpp>
+#include <nukexc/stobasis.hpp>
 
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_assertion_info.hpp>

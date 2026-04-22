@@ -18,7 +18,7 @@
  *
  */
 
-#include "../src/molecule.hpp"
+#include <nukexc/molecule.hpp>
 
 namespace NuKEXC {
 

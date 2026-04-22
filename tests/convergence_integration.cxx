@@ -30,10 +30,10 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
-#include "../src/integration.hpp"
-#include "../src/molecule.hpp"
-#include "../src/partitioning.hpp"
-#include "../src/stobasis.hpp"
+#include <nukexc/integration.hpp>
+#include <nukexc/molecule.hpp>
+#include <nukexc/partitioning.hpp>
+#include <nukexc/stobasis.hpp>
 
 #include "standards.hpp"
 
@@ -97,7 +97,7 @@ double convergence_analysis(size_t nrad, size_t nang, REC recorder) {
     }
   }
 
-  recorder(npts, npts * natoms);
+  recorder(nrad, nang, npts, npts * natoms);
   // Copy the views from host device to the execution device
   Kokkos::deep_copy(atom_centers_device, atom_centers_h);
   Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
@@ -147,36 +147,45 @@ int main() {
   Kokkos::initialize();
 
   using namespace IntegratorXX;
-  using radial_type = ta_type;
+  using radial_type = bk_type;
   using angular_type = ll_type;
   using angular_traits = quadrature_traits<angular_type>;
   using spherical_type = SphericalQuadrature<radial_type, angular_type>;
 
   // Gater data in std::vectors
   std::vector<double> errors;
-  std::vector<size_t> total_npts;
+  std::vector<size_t> rad_npts;
+  std::vector<size_t> ang_npts;
   std::vector<size_t> atom_npts;
-  auto recorder = [&total_npts, &atom_npts](size_t m, size_t n) {
-    atom_npts.push_back(m);
-    total_npts.push_back(n);
+  std::vector<size_t> total_npts;
+
+  auto recorder = [&rad_npts, &ang_npts, &atom_npts, &total_npts](
+                      size_t rad, size_t ang, size_t atom, size_t total) {
+    rad_npts.push_back(rad);
+    ang_npts.push_back(ang);
+    atom_npts.push_back(atom);
+    total_npts.push_back(total);
   };
 
-  for (unsigned n = 3; n < 7; ++n) {
-    size_t nrad = std::pow(2, n);
-    size_t nang = angular_traits::npts_by_algebraic_order(
-        angular_traits::next_algebraic_order(
-            40)); // Smallest possible angular grid
-    errors.push_back(
-        convergence_analysis<radial_type, angular_type>(nrad, nang, recorder));
+  for (unsigned m = 1; m < 12; ++m) {
+    for (unsigned n = 3; n < 12; ++n) {
+      size_t nrad = std::pow(2, n);
+      size_t ang_deg = m * 10;
+      size_t nang = angular_traits::npts_by_algebraic_order(
+          angular_traits::next_algebraic_order(
+              ang_deg)); // Smallest possible angular grid
+      errors.push_back(convergence_analysis<radial_type, angular_type>(
+          nrad, nang, recorder));
+    }
   }
 
-  std::cout << std::setw(15) << "rad pts" << std::setw(15) << "pts per atom"
-            << std::setw(15) << "pts total" << std::setw(15) << "error"
-            << std::endl;
+  std::cout << std::setw(15) << "rad_pts" << std::setw(15) << "ang_pts"
+            << std::setw(15) << "pts_per_atom" << std::setw(15) << "pts_total"
+            << std::setw(15) << "error" << std::endl;
   for (int i = 0; i < errors.size(); ++i) {
-    std::cout << std::setw(15) << std::pow(2, i + 3) << std::setw(15)
-              << atom_npts[i] << std::setw(15) << total_npts[i] << std::setw(15)
-              << errors[i] << std::endl;
+    std::cout << std::setw(15) << rad_npts[i] << std::setw(15) << ang_npts[i]
+              << std::setw(15) << atom_npts[i] << std::setw(15) << total_npts[i]
+              << std::setw(15) << errors[i] << std::endl;
   }
 
   Kokkos::finalize();

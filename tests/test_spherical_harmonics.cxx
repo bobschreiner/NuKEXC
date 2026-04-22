@@ -29,8 +29,9 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
-#include "../src/spherical_harmonics.hpp"
+#include <nukexc/spherical_harmonics.hpp>
 #include "standards.hpp"
+
 #include <map>
 #include <vector>
 
