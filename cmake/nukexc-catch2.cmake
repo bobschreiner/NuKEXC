@@ -21,5 +21,3 @@ else()
   FetchContent_MakeAvailable( catch2 )
 
 endif()
-
-target_link_libraries(libnukexc INTERFACE Catch2::Catch2)
