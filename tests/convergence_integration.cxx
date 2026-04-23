@@ -131,7 +131,7 @@ double convergence_analysis(size_t nrad, size_t nang, REC recorder) {
       });
 
   Kokkos::View<double **> S =
-      overlap_integral_kernel(stobasis, quad_points_1d, weights_1d);
+      overlap_integral(stobasis, quad_points_1d, weights_1d);
 
   auto S_h = Kokkos::create_mirror_view(S);
   Kokkos::deep_copy(S_h, S);

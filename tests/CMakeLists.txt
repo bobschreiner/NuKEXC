@@ -8,6 +8,8 @@ add_executable(test_spherical_harmonics test_spherical_harmonics.cxx)
 add_executable(test_molecule test_molecule.cxx)
 add_executable(test_basisset test_basisset.cxx)
 add_executable(test_integration test_integration.cxx standards.cxx)
+add_executable(test_hydrogen test_hydrogen.cxx)
+
 add_executable(convergence_integration convergence_integration.cxx standards.cxx)
 
 add_executable(benchmark_partition  standards.cxx benchmark_partition.cxx )
@@ -21,6 +23,7 @@ set(ALL_TEST_TARGETS
     test_molecule 
     test_basisset 
     test_integration 
+    test_hydrogen
     convergence_integration
     benchmark_partition
 )
@@ -44,3 +47,4 @@ add_test( NAME HARMONICS_TEST COMMAND $<TARGET_FILE:test_spherical_harmonics> )
 add_test( NAME MOLECULE_TEST COMMAND $<TARGET_FILE:test_molecule> )
 add_test( NAME BASISSET_TEST COMMAND $<TARGET_FILE:test_basisset> )
 add_test( NAME INTEGRATION_TEST COMMAND $<TARGET_FILE:test_integration> )
+add_test( NAME HYDROGEN_TEST COMMAND $<TARGET_FILE:test_hydrogen> )

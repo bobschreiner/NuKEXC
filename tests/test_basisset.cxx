@@ -39,13 +39,13 @@ TEST_CASE("h20_STO", "[h20_sto]") {
   auto l_h = Kokkos::create_mirror_view(basis.l_);
   auto m_h = Kokkos::create_mirror_view(basis.m_);
   auto norm_h = Kokkos::create_mirror_view(basis.norm_);
-  auto alpha_h = Kokkos::create_mirror_view(basis.alpha_);
+  auto zeta_h = Kokkos::create_mirror_view(basis.zeta_);
   auto O_h = Kokkos::create_mirror_view(basis.O_);
 
   Kokkos::deep_copy(n_h, basis.n_);
   Kokkos::deep_copy(l_h, basis.l_);
   Kokkos::deep_copy(m_h, basis.m_);
-  Kokkos::deep_copy(alpha_h, basis.alpha_);
+  Kokkos::deep_copy(zeta_h, basis.zeta_);
   Kokkos::deep_copy(norm_h, basis.norm_);
   Kokkos::deep_copy(O_h, basis.O_);
 
@@ -54,7 +54,7 @@ TEST_CASE("h20_STO", "[h20_sto]") {
     std::cout << "n " << n_h(i) << std::endl;
     std::cout << "l " << l_h(i) << std::endl;
     std::cout << "m " << m_h(i) << std::endl;
-    std::cout << "alpha " << alpha_h(i) << std::endl;
+    std::cout << "zeta " << zeta_h(i) << std::endl;
     std::cout << "coeff " << norm_h(i) << std::endl;
     std::cout << "O_h " << O_h(i, 0) << " " << O_h(i, 1) << " " << O_h(i, 2)
               << " " << std::endl
