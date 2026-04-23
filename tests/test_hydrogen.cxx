@@ -89,14 +89,14 @@ TEST_CASE("1S", "[hydrogen_1s]") {
   STOBasisSet stobasis = load_sto_basis(mol); // Loads 1s by default
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3], Layout, ExecSpace> atom_centers_device(
+  Kokkos::View<double *[3]> atom_centers_device(
       "atom centers", natoms);
 
-  Kokkos::View<unsigned *, Layout, ExecSpace> Z_device("Z_device", natoms);
+  Kokkos::View<unsigned *> Z_device("Z_device", natoms);
 
-  Kokkos::View<double **[3], Layout, ExecSpace> quadrature_points_device(
+  Kokkos::View<double **[3]> quadrature_points_device(
       "quadrature_points", natoms, npts);
-  Kokkos::View<double **, Layout, ExecSpace> weights_device("weights", natoms,
+  Kokkos::View<double **> weights_device("weights", natoms,
                                                             npts);
 
   // Create all the Kokkos Mirror Views on Execution device
@@ -227,14 +227,14 @@ TEST_CASE("H2+", "[h2_plus]") {
   STOBasisSet stobasis = load_sto_basis(mol); // Loads 1s by default
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3], Layout, ExecSpace> atom_centers_device(
+  Kokkos::View<double *[3]> atom_centers_device(
       "atom centers", natoms);
 
-  Kokkos::View<unsigned *, Layout, ExecSpace> Z_device("Z_device", natoms);
+  Kokkos::View<unsigned *> Z_device("Z_device", natoms);
 
-  Kokkos::View<double **[3], Layout, ExecSpace> quadrature_points_device(
+  Kokkos::View<double **[3]> quadrature_points_device(
       "quadrature_points", natoms, npts);
-  Kokkos::View<double **, Layout, ExecSpace> weights_device("weights", natoms,
+  Kokkos::View<double **> weights_device("weights", natoms,
                                                             npts);
 
   // Create all the Kokkos Mirror Views on Execution device

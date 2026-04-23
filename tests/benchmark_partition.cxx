@@ -97,11 +97,11 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
       int natoms = mol.natoms;
 
       // Create all the Kokkos Views on host device
-      Kokkos::View<double *[3], Layout, ExecSpace> atom_centers_device(
+      Kokkos::View<double *[3]> atom_centers_device(
           "atom centers", natoms);
-      Kokkos::View<double **[3], Layout, ExecSpace> quadrature_points_device(
+      Kokkos::View<double **[3]> quadrature_points_device(
           "quadrature_points", natoms, npts);
-      Kokkos::View<double **, Layout, ExecSpace> weights_device("weights",
+      Kokkos::View<double **> weights_device("weights",
                                                                 natoms, npts);
 
       // Create all the Kokkos Mirror Views on Execution device

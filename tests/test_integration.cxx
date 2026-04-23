@@ -82,11 +82,11 @@ TEST_CASE("H20", "[h20_weights]") {
   STOBasisSet stobasis = load_sto_basis(mol);
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3], Layout, ExecSpace> atom_centers_device(
+  Kokkos::View<double *[3]> atom_centers_device(
       "atom centers", natoms);
-  Kokkos::View<double **[3], Layout, ExecSpace> quadrature_points_device(
+  Kokkos::View<double **[3]> quadrature_points_device(
       "quadrature_points", natoms, npts);
-  Kokkos::View<double **, Layout, ExecSpace> weights_device("weights", natoms,
+  Kokkos::View<double **> weights_device("weights", natoms,
                                                             npts);
 
   // Create all the Kokkos Mirror Views on Execution device

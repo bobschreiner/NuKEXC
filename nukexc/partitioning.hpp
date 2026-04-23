@@ -45,9 +45,9 @@ KOKKOS_INLINE_FUNCTION
 double compute_f(const double x) { return 0.5 * (1.0 - x); }
 
 void partition_becke(
-    const Kokkos::View<double *[3], Layout, ExecSpace> &atom_centers,
-    const Kokkos::View<double **[3], Layout, ExecSpace> &quadrature_points,
-    Kokkos::View<double **, Layout, ExecSpace> &weights) {
+    const Kokkos::View<double *[3]> &atom_centers,
+    const Kokkos::View<double **[3]> &quadrature_points,
+    Kokkos::View<double **> &weights) {
 
   size_t natoms = atom_centers.extent(0);
   assert(natoms = quadrature_points.extent(0));
@@ -115,9 +115,9 @@ using TeamPolicy = Kokkos::TeamPolicy<ExecSpace>;
 using MemberType = typename TeamPolicy::member_type;
 
 void partition_becke_team(
-    const Kokkos::View<double *[3], Layout, ExecSpace> &atom_centers,
-    const Kokkos::View<double **[3], Layout, ExecSpace> &quadrature_points,
-    Kokkos::View<double **, Layout, ExecSpace> &weights) {
+    const Kokkos::View<double *[3]> &atom_centers,
+    const Kokkos::View<double **[3]> &quadrature_points,
+    Kokkos::View<double **> &weights) {
 
   size_t natoms = atom_centers.extent(0);
   size_t nquad_points_per_atom = quadrature_points.extent(1);
