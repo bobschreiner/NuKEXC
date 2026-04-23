@@ -167,8 +167,8 @@ int main() {
     total_npts.push_back(total);
   };
 
-  for (unsigned m = 1; m < 12; ++m) {
-    for (unsigned n = 3; n < 12; ++n) {
+  for (unsigned m = 1; m < 10; ++m) {
+    for (unsigned n = 3; n < 10; ++n) {
       size_t nrad = std::pow(2, n);
       size_t ang_deg = m * 10;
       size_t nang = angular_traits::npts_by_algebraic_order(

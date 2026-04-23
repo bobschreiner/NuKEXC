@@ -86,6 +86,7 @@ void partition_becke(
       });
 
   Kokkos::fence();
+
   Kokkos::parallel_for(
       "Compute weights batched", range_quad_points,
       KOKKOS_LAMBDA(const size_t p, const size_t g) {

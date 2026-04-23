@@ -66,7 +66,8 @@ target_include_directories(
 add_library(${nxc}::NuKEXC ALIAS libnukexc)
 
 include( nukexc-integratorxx ) # finds package integratorxx
-include( nukexc-kokkos) # finds package integratorxx
+include( nukexc-kokkos) # finds package Kokkos 
+include( nukexc-kokkos-kernels) # finds package Kokkos-kernels
 
 
 set(export_properties
