@@ -24,6 +24,8 @@
 #include "partitioning.hpp"
 #include "stobasis.hpp"
 
+#include <KokkosBlas3_gemm.hpp>
+
 namespace NuKEXC {
 
 Kokkos::View<double **>
@@ -38,6 +40,7 @@ overlap_integral(STOBasisSet &basis,
 
   // Can be replaced by Kokkos kernel later
   Kokkos::View<double **> overlap_matrix("Overlap matrix", N, N);
+
   Kokkos::parallel_for(
       "Overlap Integral",
       Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {N, N, nquad_points}),
@@ -49,4 +52,30 @@ overlap_integral(STOBasisSet &basis,
   return overlap_matrix;
 }
 
+Kokkos::View<double **>
+overlap_integral_kernel(STOBasisSet &basis,
+                        Kokkos::View<double *[3]> quadrature_points,
+                        Kokkos::View<double *> quadrature_weights) {
+
+  size_t N = basis.nbf();
+  size_t nquad_points = quadrature_points.extent(0);
+  Kokkos::View<double **> collocation_points =
+      evaluate_sto_basis_shells_on_collocation_points(basis, quadrature_points);
+
+  // Can be replaced by Kokkos kernel later
+  Kokkos::View<double **> overlap_matrix("Overlap matrix", N, N);
+  Kokkos::View<double **> weighted_points("Overlap matrix", N, nquad_points);
+
+  Kokkos::parallel_for(
+      "Scale Points",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N, nquad_points}),
+      KOKKOS_LAMBDA(const int &i, const int &g) {
+        weighted_points(i, g) =
+            quadrature_weights(g) * collocation_points(i, g);
+      });
+  KokkosBlas::gemm("N", "T", 1.0, weighted_points, collocation_points, 0.0,
+                   overlap_matrix);
+
+  return overlap_matrix;
+}
 } // namespace NuKEXC
