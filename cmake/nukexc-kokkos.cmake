@@ -7,7 +7,7 @@ if(Kokkos_FOUND)
     # Check if OpenMP is one of the enabled backends
     if(Kokkos_ENABLE_OPENMP)
         message(STATUS "Kokkos has OpenMP enabled. Finding OpenMP...")
-        find_package(OpenMP REQUIRED)
+	find_package(OpenMP REQUIRED COMPONENTS CXX)
 	target_link_libraries(libnukexc INTERFACE OpenMP::OpenMP_CXX)
     endif()
 
