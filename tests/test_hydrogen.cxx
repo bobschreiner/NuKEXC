@@ -15,310 +15,277 @@
  *    You should have received a copy of the GNU General Public License
  *    along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
- *
  */
 
 #include <Kokkos_Core.hpp>
-// #include <iostream>
-#include <catch2/matchers/catch_matchers.hpp>
-#include <string_view>
-
 #include <catch2/catch_all.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 
-#include <integratorxx/composite_quadratures/pruned_spherical_quadrature.hpp>
 #include <integratorxx/composite_quadratures/spherical_quadrature.hpp>
 #include <integratorxx/generators/radial_factory.hpp>
 #include <integratorxx/generators/spherical_factory.hpp>
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
+#include <nukexc/grid.hpp>
 #include <nukexc/integration.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/partitioning.hpp>
 #include <nukexc/stobasis.hpp>
 
+#include <cmath>
+#include <vector>
+
 using namespace NuKEXC;
 
 using bk_type = IntegratorXX::Becke<double, double>;
-using mk_type = IntegratorXX::MuraKnowles<double, double>;
-using mhl_type = IntegratorXX::MurrayHandyLaming<double, double>;
-using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
-
-using ah_type = IntegratorXX::AhrensBeylkin<double>;
-using de_type = IntegratorXX::Delley<double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
-using wo_type = IntegratorXX::Womersley<double>;
 
-TEST_CASE("1S", "[hydrogen_1s]") {
+// ============================================================
+//  Helper: matrix symmetry check
+// ============================================================
 
-  using namespace IntegratorXX;
+template <typename MirrorView>
+void require_symmetric(const MirrorView &M, double tol = 1e-8) {
+  for (int i = 0; i < (int)M.extent(0); ++i)
+    for (int j = 0; j < (int)M.extent(1); ++j)
+      REQUIRE_THAT(M(i, j), Catch::Matchers::WithinAbs(M(j, i), tol));
+}
 
-  using radial_type = bk_type;
-  using angular_type = ll_type;
-  using angular_traits = quadrature_traits<angular_type>;
+// ============================================================
+//  TEST 1 — Hydrogen 1s (single STO, exact hydrogenic values)
+// ============================================================
+//
+// For a normalized 1s STO with n=1, l=0, zeta=1:
+//   S = 1,   T = zeta^2/2 = 0.5,   V = -Z*zeta = -1.0
+// These are exact for the true hydrogen ground state.
+// Virial theorem: 2T + V = 0 (equivalently E = T + V = -0.5)
 
-  using spherical_type = SphericalQuadrature<radial_type, angular_type>;
+TEST_CASE("hydrogen 1s -- normalization, eigenvalues, virial",
+          "[hydrogen_1s]") {
 
-  size_t nrad = 120;
-  size_t nang = angular_traits::npts_by_algebraic_order(
-      angular_traits::next_algebraic_order(
-          40)); // Smallest possible angular grid
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol);
+  STOBasisSet basis = load_sto_basis(mol);
 
-  // Generate via runtime API
-  auto rad_spec = radial_from_type<radial_type>();
-  auto rad_traits = make_radial_traits(rad_spec, nrad, 1.0);
-  UnprunedSphericalGridSpecification unp(
-      rad_spec, *rad_traits, angular_from_type<angular_type>(), nang);
-
-  auto sph = SphericalGridFactory::generate_grid(unp);
-
-  const unsigned npts = sph->npts();
-
-  // Generate hydrogen
-  std::vector<std::vector<double>> atom_centers;
-  std::vector<double> center;
-  std::vector<unsigned> Z_v;
-  center.push_back(0.);
-  center.push_back(0.);
-  center.push_back(0.);
-  atom_centers.push_back(center);
-  Z_v.push_back(1);
-
-  Molecule mol(atom_centers, Z_v);
-  unsigned int natoms = mol.natoms;
-  STOBasisSet stobasis = load_sto_basis(mol); // Loads 1s by default
-
-  // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3]> atom_centers_device(
-      "atom centers", natoms);
-
-  Kokkos::View<unsigned *> Z_device("Z_device", natoms);
-
-  Kokkos::View<double **[3]> quadrature_points_device(
-      "quadrature_points", natoms, npts);
-  Kokkos::View<double **> weights_device("weights", natoms,
-                                                            npts);
-
-  // Create all the Kokkos Mirror Views on Execution device
-  auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
-  auto Z_h = Kokkos::create_mirror_view(Z_device);
-  auto quadrature_points_h =
-      Kokkos::create_mirror_view(quadrature_points_device);
-  auto weights_h = Kokkos::create_mirror_view(weights_device);
-
-  Kokkos::deep_copy(atom_centers_h, mol.atom_centers);
-  Kokkos::deep_copy(Z_h, mol.Z);
-
-  for (int i = 0; i < natoms; ++i) {
-    for (int j = 0; j < npts; ++j) {
-      quadrature_points_h(i, j, 0) = atom_centers_h(i, 0) + sph->points()[j][0];
-      quadrature_points_h(i, j, 1) = atom_centers_h(i, 1) + sph->points()[j][1];
-      quadrature_points_h(i, j, 2) = atom_centers_h(i, 2) + sph->points()[j][2];
-
-      weights_h(i, j) = sph->weights()[j];
-    }
-  }
-
-  // Copy the views from host device to the execution device
-  Kokkos::deep_copy(atom_centers_device, atom_centers_h);
-  Kokkos::deep_copy(Z_device, Z_h);
-  Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
-  Kokkos::deep_copy(weights_device, weights_h);
-
-  // Compute the adjusted weights
-  partition_becke_team(atom_centers_device, quadrature_points_device,
-                       weights_device);
-
-  // Flatten the weights and quadrature_points
-  Kokkos::View<double *> weights_1d("Weights 1D", weights_device.extent(0) *
-                                                      weights_device.extent(1));
-
-  Kokkos::View<double *[3]> quad_points_1d(
-      "Quadrature points 1D",
-      quadrature_points_device.extent(0) * quadrature_points_device.extent(1));
-
-  Kokkos::parallel_for(
-      "FlattenViews",
-      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>({0, 0}, {natoms, npts}),
-      KOKKOS_LAMBDA(const int i, const int j) {
-        // Calculate the logical 1D index
-        int flat_idx = i * npts + j;
-
-        weights_1d(flat_idx) = weights_device(i, j);
-
-        quad_points_1d(flat_idx, 0) = quadrature_points_device(i, j, 0);
-        quad_points_1d(flat_idx, 1) = quadrature_points_device(i, j, 1);
-        quad_points_1d(flat_idx, 2) = quadrature_points_device(i, j, 2);
-      });
-
-  Kokkos::View<double **> S =
-      overlap_integral(stobasis, quad_points_1d, weights_1d);
-
-  Kokkos::View<double **> T =
-      kinetic_integral(stobasis, quad_points_1d, weights_1d);
-
-  Kokkos::View<double **> V = nuclear_potential_integral(
-      stobasis, quad_points_1d, weights_1d, atom_centers_device, Z_device);
+  auto S = overlap_integral(basis, grid.quad_points, grid.weights);
+  auto T = kinetic_integral(basis, grid.quad_points, grid.weights);
+  auto V = nuclear_potential_integral(basis, grid.quad_points, grid.weights,
+                                      grid.atom_centers, grid.Z);
 
   auto S_h = Kokkos::create_mirror_view(S);
   auto T_h = Kokkos::create_mirror_view(T);
   auto V_h = Kokkos::create_mirror_view(V);
-
   Kokkos::deep_copy(S_h, S);
   Kokkos::deep_copy(T_h, T);
   Kokkos::deep_copy(V_h, V);
 
-  for (int i = 0; i < S_h.extent(0); ++i) {
-    for (int j = 0; j < S_h.extent(1); ++j) {
-      std::cout << S_h(i, j) << std::endl;
-      std::cout << T_h(i, j) << std::endl;
-      std::cout << V_h(i, j) << std::endl;
-    }
-  }
+  require_symmetric(S_h);
+  require_symmetric(T_h);
+  require_symmetric(V_h);
+
+  REQUIRE_THAT(S_h(0, 0), Catch::Matchers::WithinRel(1.0, 1e-7));
+  REQUIRE_THAT(T_h(0, 0), Catch::Matchers::WithinRel(0.5, 1e-7));
+  REQUIRE_THAT(V_h(0, 0), Catch::Matchers::WithinRel(-1.0, 1e-7));
+
+  // Virial theorem: 2T + V = 0
+  REQUIRE_THAT(2.0 * T_h(0, 0) + V_h(0, 0),
+               Catch::Matchers::WithinAbs(0.0, 1e-7));
+  // Total energy
+  REQUIRE_THAT(T_h(0, 0) + V_h(0, 0), Catch::Matchers::WithinRel(-0.5, 1e-7));
 }
 
-TEST_CASE("H2+", "[h2_plus]") {
+// ============================================================
+//  TEST 2 — Single-center 1s + 2p (multi-shell)
+// ============================================================
+//
+// Basis: exact hydrogenic 1s (n=1, l=0, zeta=1.0)
+//      + all three 2p (n=2, l=1, zeta=0.5)  at the origin.
+//
+//  Exact values for 2p (n=2, l=1, zeta=0.5, Z=1) derived analytically:
+//  ------------------------------------------------------------------
+//  N^2 = (2*zeta)^{2n+1} / (2n)! = 1^5 / 24 = 1/24
+//
+//  Kinetic energy (integrate term by term):
+//    T = N^2/2 * [-(n(n-1)-l(l+1)) * I(2n-2, 2z)
+//                 + 2*zeta*n * I(2n-1, 2z) - zeta^2 * I(2n, 2z)]
+//    For n=2, l=1, zeta=0.5:  all I evaluated at alpha=1 -> I(k,1)=k!
+//    Term 1: -(2 - 2) * 2! = 0
+//    Term 2: 2*0.5*2 * 3! = 12
+//    Term 3: 0.25 * 4!    =  6
+//    T = (1/24)/2 * (12 - 6) = 1/8
+//
+//  Nuclear potential (V = -Z * <1/r>):
+//    <1/r> = N^2 * (2n-1)! / (2*zeta)^{2n} = (1/24)*6/1 = 1/4
+//    V = -1/4
+//
+//  Orthogonality:
+//    1s ⊥ 2p   -- exact by angular symmetry (different l), should hold
+//                 to near machine precision rather than just quadrature noise.
+//    2p_m ⊥ 2p_{m'} -- exact by angular symmetry (different m).
+//
+//  m-degeneracy:
+//    T and V diagonal elements are identical for m = -1, 0, +1.
 
-  using namespace IntegratorXX;
+TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
+          "[multi_shell]") {
 
-  using radial_type = bk_type;
-  using angular_type = ll_type;
-  using angular_traits = quadrature_traits<angular_type>;
+  // Index map:  0 -> 1s,  1 -> 2p_{m=-1},  2 -> 2p_{m=0},  3 -> 2p_{m=+1}
+  STOBasisSet basis = make_manual_basis({
+      {1, 0, 0, 1.0, 0., 0., 0.},  // 1s
+      {2, 1, -1, 0.5, 0., 0., 0.}, // 2p_{-1}
+      {2, 1, 0, 0.5, 0., 0., 0.},  // 2p_0
+      {2, 1, +1, 0.5, 0., 0., 0.}, // 2p_{+1}
+  });
 
-  using spherical_type = SphericalQuadrature<radial_type, angular_type>;
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol);
 
-  size_t nrad = 120;
-  size_t nang = angular_traits::npts_by_algebraic_order(
-      angular_traits::next_algebraic_order(
-          40)); // Smallest possible angular grid
-
-  // Generate via runtime API
-  auto rad_spec = radial_from_type<radial_type>();
-  auto rad_traits = make_radial_traits(rad_spec, nrad, 1.0);
-  UnprunedSphericalGridSpecification unp(
-      rad_spec, *rad_traits, angular_from_type<angular_type>(), nang);
-
-  auto sph = SphericalGridFactory::generate_grid(unp);
-
-  const unsigned npts = sph->npts();
-
-  // Generate hydrogen
-  std::vector<std::vector<double>> atom_centers;
-  std::vector<double> center1;
-  std::vector<double> center2;
-  std::vector<unsigned> Z_v;
-
-  center1.push_back(0.);
-  center1.push_back(0.);
-  center1.push_back(0.);
-
-  center2.push_back(1.);
-  center2.push_back(0.);
-  center2.push_back(0.);
-
-  atom_centers.push_back(center1);
-  atom_centers.push_back(center2);
-
-  Z_v.push_back(1);
-  Z_v.push_back(1);
-
-  Molecule mol(atom_centers, Z_v);
-  unsigned int natoms = mol.natoms;
-  STOBasisSet stobasis = load_sto_basis(mol); // Loads 1s by default
-
-  // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3]> atom_centers_device(
-      "atom centers", natoms);
-
-  Kokkos::View<unsigned *> Z_device("Z_device", natoms);
-
-  Kokkos::View<double **[3]> quadrature_points_device(
-      "quadrature_points", natoms, npts);
-  Kokkos::View<double **> weights_device("weights", natoms,
-                                                            npts);
-
-  // Create all the Kokkos Mirror Views on Execution device
-  auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
-  auto Z_h = Kokkos::create_mirror_view(Z_device);
-  auto quadrature_points_h =
-      Kokkos::create_mirror_view(quadrature_points_device);
-  auto weights_h = Kokkos::create_mirror_view(weights_device);
-
-  Kokkos::deep_copy(atom_centers_h, mol.atom_centers);
-  Kokkos::deep_copy(Z_h, mol.Z);
-
-  for (int i = 0; i < natoms; ++i) {
-    for (int j = 0; j < npts; ++j) {
-      quadrature_points_h(i, j, 0) = atom_centers_h(i, 0) + sph->points()[j][0];
-      quadrature_points_h(i, j, 1) = atom_centers_h(i, 1) + sph->points()[j][1];
-      quadrature_points_h(i, j, 2) = atom_centers_h(i, 2) + sph->points()[j][2];
-
-      weights_h(i, j) = sph->weights()[j];
-    }
-  }
-
-  // Copy the views from host device to the execution device
-  Kokkos::deep_copy(atom_centers_device, atom_centers_h);
-  Kokkos::deep_copy(Z_device, Z_h);
-  Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
-  Kokkos::deep_copy(weights_device, weights_h);
-
-  // Compute the adjusted weights
-  partition_becke_team(atom_centers_device, quadrature_points_device,
-                       weights_device);
-
-  // Flatten the weights and quadrature_points
-  Kokkos::View<double *> weights_1d("Weights 1D", weights_device.extent(0) *
-                                                      weights_device.extent(1));
-
-  Kokkos::View<double *[3]> quad_points_1d(
-      "Quadrature points 1D",
-      quadrature_points_device.extent(0) * quadrature_points_device.extent(1));
-
-  Kokkos::parallel_for(
-      "FlattenViews",
-      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>({0, 0}, {natoms, npts}),
-      KOKKOS_LAMBDA(const int i, const int j) {
-        // Calculate the logical 1D index
-        int flat_idx = i * npts + j;
-
-        weights_1d(flat_idx) = weights_device(i, j);
-
-        quad_points_1d(flat_idx, 0) = quadrature_points_device(i, j, 0);
-        quad_points_1d(flat_idx, 1) = quadrature_points_device(i, j, 1);
-        quad_points_1d(flat_idx, 2) = quadrature_points_device(i, j, 2);
-      });
-
-  Kokkos::View<double **> S =
-      overlap_integral(stobasis, quad_points_1d, weights_1d);
-
-  Kokkos::View<double **> T =
-      kinetic_integral(stobasis, quad_points_1d, weights_1d);
-
-  Kokkos::View<double **> V = nuclear_potential_integral(
-      stobasis, quad_points_1d, weights_1d, atom_centers_device, Z_device);
+  auto S = overlap_integral(basis, grid.quad_points, grid.weights);
+  auto T = kinetic_integral(basis, grid.quad_points, grid.weights);
+  auto V = nuclear_potential_integral(basis, grid.quad_points, grid.weights,
+                                      grid.atom_centers, grid.Z);
 
   auto S_h = Kokkos::create_mirror_view(S);
   auto T_h = Kokkos::create_mirror_view(T);
   auto V_h = Kokkos::create_mirror_view(V);
-
   Kokkos::deep_copy(S_h, S);
   Kokkos::deep_copy(T_h, T);
   Kokkos::deep_copy(V_h, V);
 
-  for (int i = 0; i < S_h.extent(0); ++i) {
-    for (int j = 0; j < S_h.extent(1); ++j) {
-      std::cout << S_h(i, j) << std::endl;
-      std::cout << T_h(i, j) << std::endl;
-      std::cout << V_h(i, j) << std::endl;
-    }
+  // All matrices must be symmetric
+  require_symmetric(S_h);
+  require_symmetric(T_h);
+  require_symmetric(V_h);
+
+  // ---- Normalization ----
+  REQUIRE_THAT(S_h(0, 0), Catch::Matchers::WithinRel(1.0, 1e-7)); // 1s
+  REQUIRE_THAT(S_h(1, 1), Catch::Matchers::WithinRel(1.0, 1e-7)); // 2p_{-1}
+  REQUIRE_THAT(S_h(2, 2), Catch::Matchers::WithinRel(1.0, 1e-7)); // 2p_0
+  REQUIRE_THAT(S_h(3, 3), Catch::Matchers::WithinRel(1.0, 1e-7)); // 2p_{+1}
+
+  // ---- Angular orthogonality: 1s ⊥ all 2p ----
+  // This is exact by symmetry; use a tight absolute tolerance.
+  REQUIRE_THAT(S_h(0, 1), Catch::Matchers::WithinAbs(0.0, 1e-10));
+  REQUIRE_THAT(S_h(0, 2), Catch::Matchers::WithinAbs(0.0, 1e-10));
+  REQUIRE_THAT(S_h(0, 3), Catch::Matchers::WithinAbs(0.0, 1e-10));
+
+  // ---- Angular orthogonality: 2p components mutually orthogonal ----
+  REQUIRE_THAT(S_h(1, 2), Catch::Matchers::WithinAbs(0.0, 1e-10));
+  REQUIRE_THAT(S_h(1, 3), Catch::Matchers::WithinAbs(0.0, 1e-10));
+  REQUIRE_THAT(S_h(2, 3), Catch::Matchers::WithinAbs(0.0, 1e-10));
+
+  // ---- Kinetic energy: exact analytical values ----
+  REQUIRE_THAT(T_h(0, 0), Catch::Matchers::WithinRel(0.5, 1e-7));   // 1s
+  REQUIRE_THAT(T_h(1, 1), Catch::Matchers::WithinRel(0.125, 1e-7)); // 2p_{-1}
+  REQUIRE_THAT(T_h(2, 2), Catch::Matchers::WithinRel(0.125, 1e-7)); // 2p_0
+  REQUIRE_THAT(T_h(3, 3), Catch::Matchers::WithinRel(0.125, 1e-7)); // 2p_{+1}
+
+  // ---- Nuclear potential energy: exact analytical values ----
+  REQUIRE_THAT(V_h(0, 0), Catch::Matchers::WithinRel(-1.0, 1e-7));  // 1s
+  REQUIRE_THAT(V_h(1, 1), Catch::Matchers::WithinRel(-0.25, 1e-7)); // 2p_{-1}
+  REQUIRE_THAT(V_h(2, 2), Catch::Matchers::WithinRel(-0.25, 1e-7)); // 2p_0
+  REQUIRE_THAT(V_h(3, 3), Catch::Matchers::WithinRel(-0.25, 1e-7)); // 2p_{+1}
+
+  // ---- m-degeneracy: all 2p states must give identical diagonal T and V ----
+  // Using a tighter relative tolerance here than for the absolute values,
+  // because residual asymmetry diagnoses a grid-symmetry or sign error.
+  REQUIRE_THAT(T_h(1, 1), Catch::Matchers::WithinRel(T_h(2, 2), 1e-10));
+  REQUIRE_THAT(T_h(1, 1), Catch::Matchers::WithinRel(T_h(3, 3), 1e-10));
+  REQUIRE_THAT(V_h(1, 1), Catch::Matchers::WithinRel(V_h(2, 2), 1e-10));
+  REQUIRE_THAT(V_h(1, 1), Catch::Matchers::WithinRel(V_h(3, 3), 1e-10));
+
+  // ---- Virial theorem: 2T + V = 0 for both shells ----
+  REQUIRE_THAT(2.0 * T_h(0, 0) + V_h(0, 0),
+               Catch::Matchers::WithinAbs(0.0, 1e-7)); // 1s
+  REQUIRE_THAT(2.0 * T_h(1, 1) + V_h(1, 1),
+               Catch::Matchers::WithinAbs(0.0, 1e-7)); // 2p
+
+  // ---- Off-diagonal T and V blocks are zero by angular symmetry ----
+  // Different-l blocks (1s/2p) and different-m blocks within 2p
+  for (int i = 1; i <= 3; ++i) {
+    REQUIRE_THAT(T_h(0, i), Catch::Matchers::WithinAbs(0.0, 1e-8));
+    REQUIRE_THAT(V_h(0, i), Catch::Matchers::WithinAbs(0.0, 1e-8));
   }
+  for (int i = 1; i <= 3; ++i)
+    for (int j = i + 1; j <= 3; ++j) {
+      REQUIRE_THAT(T_h(i, j), Catch::Matchers::WithinAbs(0.0, 1e-8));
+      REQUIRE_THAT(V_h(i, j), Catch::Matchers::WithinAbs(0.0, 1e-8));
+    }
 }
+
+// ============================================================
+//  TEST 3 — H2+ overlap matrix
+// ============================================================
+//
+// Two H atoms 1 bohr apart along x.  Basis: one 1s STO (zeta=1) per atom.
+//
+// The off-diagonal overlap integral is known exactly for unnormalized STOs
+// and reduces to:
+//
+//   S_AB(zeta=1, R) = e^{-R} (1 + R + R^2/3)
+//
+// At R = 1 bohr:  S_AB = e^{-1} * 7/3 ≈ 0.85836...
+//
+// All matrices must be symmetric, and the on-diagonal elements are 1
+// (each function is normalized by construction).
+// T_AA = T_BB = 0.5 still holds for the single-center kinetic integrals.
+
+TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
+          "[h2_plus]") {
+
+  const double R = 1.0; // bond length in bohr
+
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}, {R, 0., 0.}},
+               std::vector<unsigned>{1u, 1u});
+
+  auto grid = make_flat_grid<bk_type, ll_type>(mol);
+
+  // Build the basis explicitly so the zeta value is unambiguous.
+  STOBasisSet basis = make_manual_basis({
+      {1, 0, 0, 1.0, 0., 0., 0.}, // 1s on atom A
+      {1, 0, 0, 1.0, R, 0., 0.},  // 1s on atom B
+  });
+
+  auto S = overlap_integral(basis, grid.quad_points, grid.weights);
+  auto T = kinetic_integral(basis, grid.quad_points, grid.weights);
+  auto V = nuclear_potential_integral(basis, grid.quad_points, grid.weights,
+                                      grid.atom_centers, grid.Z);
+
+  auto S_h = Kokkos::create_mirror_view(S);
+  auto T_h = Kokkos::create_mirror_view(T);
+  auto V_h = Kokkos::create_mirror_view(V);
+  Kokkos::deep_copy(S_h, S);
+  Kokkos::deep_copy(T_h, T);
+  Kokkos::deep_copy(V_h, V);
+
+  require_symmetric(S_h);
+  require_symmetric(T_h);
+  require_symmetric(V_h);
+
+  // ---- Normalization ----
+  REQUIRE_THAT(S_h(0, 0), Catch::Matchers::WithinRel(1.0, 1e-7));
+  REQUIRE_THAT(S_h(1, 1), Catch::Matchers::WithinRel(1.0, 1e-7));
+
+  // ---- Off-diagonal overlap: exact formula S_AB = e^{-R}(1 + R + R^2/3) ----
+  const double S_exact = std::exp(-R) * (1.0 + R + R * R / 3.0);
+  REQUIRE_THAT(S_h(0, 1), Catch::Matchers::WithinRel(S_exact, 1e-6));
+
+  // ---- Single-center kinetic energy is unchanged by the second atom ----
+  REQUIRE_THAT(T_h(0, 0), Catch::Matchers::WithinRel(0.5, 1e-7));
+  REQUIRE_THAT(T_h(1, 1), Catch::Matchers::WithinRel(0.5, 1e-7));
+
+  // ---- V has no closed form for the cross-nuclear terms, but the two  ----
+  // ---- on-diagonal elements must be equal by the symmetry of the system ----
+  REQUIRE_THAT(V_h(0, 0), Catch::Matchers::WithinRel(V_h(1, 1), 1e-6));
+}
+
+// ============================================================
 int main() {
-
   Kokkos::initialize();
   int result = Catch::Session().run();
   Kokkos::finalize();
-
   return result;
 }

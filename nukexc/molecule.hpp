@@ -112,8 +112,8 @@ inline bool operator==(const Molecule &m1, const Molecule &m2) {
   for (unsigned int i = 0; i < m1.natoms; ++i) {
     if (m1.Z(i) != m2.Z(i))
       return false;
-    for (unsigned int j = 0; i < 3; ++j) {
-      if (m1.atom_centers(i, j) != m1.atom_centers(i, j))
+    for (unsigned int j = 0; j < 3; ++j) {
+      if (m1.atom_centers(i, j) != m2.atom_centers(i, j))
         return false;
     }
   }

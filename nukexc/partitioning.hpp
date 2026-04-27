@@ -70,7 +70,7 @@ void partition_becke(
       KOKKOS_LAMBDA(const int &i, const int &j) {
         auto subView_i = Kokkos::subview(atom_centers, i, Kokkos::ALL());
         auto subView_j = Kokkos::subview(atom_centers, j, Kokkos::ALL());
-        R(i, j) = rad_dist(subView_i, subView_j);
+        R(i, j) = rad_dist(subView_i, subView_j) + 1e-15;
       });
 
   Kokkos::fence();
@@ -138,7 +138,7 @@ void partition_becke_team(
             double d = atom_centers(i, k) - atom_centers(j, k);
             d2 += d * d;
           }
-          R_ij(i, j) = sqrt(d2);
+          R_ij(i, j) = sqrt(d2) + 1e-15;
         }
       });
 

@@ -11,6 +11,7 @@ add_executable(test_integration test_integration.cxx standards.cxx)
 add_executable(test_hydrogen test_hydrogen.cxx)
 
 add_executable(convergence_integration convergence_integration.cxx standards.cxx)
+add_executable(convergence_h2plus convergence_h2plus.cxx)
 
 add_executable(benchmark_partition  standards.cxx benchmark_partition.cxx )
 
@@ -25,7 +26,9 @@ set(ALL_TEST_TARGETS
     test_integration 
     test_hydrogen
     convergence_integration
+    convergence_h2plus
     benchmark_partition
+
 )
 
 # Apply linking to all of them at once

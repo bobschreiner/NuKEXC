@@ -56,6 +56,66 @@ int label_to_l(char label) {
   return (pos != std::string::npos) ? static_cast<int>(pos) : -1;
 }
 
+// ============================================================
+//  Manual STOBasisSet
+// ============================================================
+//
+// Constructs an STOBasisSet directly from a plain list rather than
+// reading from disk.  This decouples integration tests from the
+// basis-file format and makes the quantum numbers explicit.
+//
+// Each entry is { n, l, m, zeta, ox, oy, oz }.
+
+struct STOFunc {
+  int n, l, m;
+  double zeta;
+  double ox, oy, oz;
+};
+
+STOBasisSet make_manual_basis(const std::vector<STOFunc> &funcs) {
+  const size_t nbf = funcs.size();
+
+  STOBasisSet basis;
+  basis.n_ = Kokkos::View<int *>("n", nbf);
+  basis.l_ = Kokkos::View<int *>("l", nbf);
+  basis.m_ = Kokkos::View<int *>("m", nbf);
+  basis.zeta_ = Kokkos::View<double *>("zeta", nbf);
+  basis.norm_ = Kokkos::View<double *>("norm", nbf);
+  basis.O_ = Kokkos::View<double *[3]>("centers", nbf);
+
+  auto n_h = Kokkos::create_mirror_view(basis.n_);
+  auto l_h = Kokkos::create_mirror_view(basis.l_);
+  auto m_h = Kokkos::create_mirror_view(basis.m_);
+  auto zeta_h = Kokkos::create_mirror_view(basis.zeta_);
+  auto norm_h = Kokkos::create_mirror_view(basis.norm_);
+  auto O_h = Kokkos::create_mirror_view(basis.O_);
+
+  for (size_t i = 0; i < nbf; ++i) {
+    const auto &f = funcs[i];
+    // Matches the normalization used by load_sto_basis:
+    //   N = (2*zeta)^{n+0.5} / sqrt((2n)!)
+    const double norm = std::pow(2.0 * f.zeta, f.n + 0.5) /
+                        std::sqrt(static_cast<double>(factorial(2 * f.n)));
+    n_h(i) = f.n;
+    l_h(i) = f.l;
+    m_h(i) = f.m;
+    zeta_h(i) = f.zeta;
+    norm_h(i) = norm;
+    O_h(i, 0) = f.ox;
+    O_h(i, 1) = f.oy;
+    O_h(i, 2) = f.oz;
+  }
+
+  Kokkos::deep_copy(basis.n_, n_h);
+  Kokkos::deep_copy(basis.l_, l_h);
+  Kokkos::deep_copy(basis.m_, m_h);
+  Kokkos::deep_copy(basis.zeta_, zeta_h);
+  Kokkos::deep_copy(basis.norm_, norm_h);
+  Kokkos::deep_copy(basis.O_, O_h);
+
+  return basis;
+}
+
 STOBasisSet
 load_sto_basis(const Molecule &mol,
                const std::string &data_dir = "input/k99light/neutral") {
@@ -203,19 +263,12 @@ Kokkos::View<double **> evaluate_sto_basis_on_collocation_points(
         double dx = collocation_points(j, 0) - basis_set.O_(i, 0);
         double dy = collocation_points(j, 1) - basis_set.O_(i, 1);
         double dz = collocation_points(j, 2) - basis_set.O_(i, 2);
-        double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz); // Avoid pow(0,0)
+        double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + 1e-15; // Avoid pow(0,0)
 
         double radial_part;
 
-        if (r > 0.0) {
-          radial_part =
-              norm * Kokkos::pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
-        } else {
-          // At the nucleus (r=0):
-          // Only n=1 has a non-zero value (r^0 = 1).
-          // n > 1 are all 0.0 (r^1, r^2, etc.)
-          radial_part = (n_val == 1) ? norm * Kokkos::pow(r, l_val - 1) : 0.0;
-        }
+        radial_part =
+            norm * Kokkos::pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
 
         // Angular part of the shell
         // https://en.wikipedia.org/wiki/Spherical_harmonics
@@ -273,11 +326,11 @@ Kokkos::View<double **[3]> evaluate_sto_basis_grad_on_collocation_points(
 
         double dR_dr = ((n_val - l_val - 1) / r - zeta) * R_pre;
 
-	double common_R = dR_dr / r;
+        double common_R = dR_dr / r;
 
-        collocation_values(i, j, 0) = R_pre * dS_dx + S_val * (dx*common_R);
-        collocation_values(i, j, 1) = R_pre * dS_dy + S_val * (dy*common_R);
-        collocation_values(i, j, 2) = R_pre * dS_dz + S_val * (dz*common_R);
+        collocation_values(i, j, 0) = R_pre * dS_dx + S_val * (dx * common_R);
+        collocation_values(i, j, 1) = R_pre * dS_dy + S_val * (dy * common_R);
+        collocation_values(i, j, 2) = R_pre * dS_dz + S_val * (dz * common_R);
       });
   return collocation_values;
 }
