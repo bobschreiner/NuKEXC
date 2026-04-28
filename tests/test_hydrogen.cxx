@@ -67,7 +67,7 @@ TEST_CASE("hydrogen 1s -- normalization, eigenvalues, virial",
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
   auto grid = make_flat_grid<bk_type, ll_type>(mol);
-  STOBasisSet basis = load_sto_basis(mol);
+  STOBasisSet basis = load_thakkar_basis(mol);
 
   auto S = overlap_integral(basis, grid.quad_points, grid.weights);
   auto T = kinetic_integral(basis, grid.quad_points, grid.weights);

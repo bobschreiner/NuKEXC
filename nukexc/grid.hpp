@@ -97,7 +97,7 @@ FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 120,
   Kokkos::deep_copy(qp_2d, qp_h);
   Kokkos::deep_copy(wt_2d, wt_h);
 
-  partition_becke_team(ac_dev, qp_2d, wt_2d);
+  partition_becke(ac_dev, qp_2d, wt_2d);
 
   Kokkos::View<double *[3]> qp_1d("quad points 1D", natoms * npts);
   Kokkos::View<double *> wt_1d("weights 1D", natoms * npts);

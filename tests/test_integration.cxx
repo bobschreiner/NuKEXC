@@ -79,7 +79,7 @@ TEST_CASE("H20", "[h20_weights]") {
   // Generate water
   Molecule mol = make_water();
   unsigned int natoms = mol.natoms;
-  STOBasisSet stobasis = load_sto_basis(mol);
+  STOBasisSet stobasis = load_adf_basis(mol);
 
   // Create all the Kokkos Views on host device
   Kokkos::View<double *[3]> atom_centers_device(
@@ -113,7 +113,7 @@ TEST_CASE("H20", "[h20_weights]") {
   Kokkos::deep_copy(weights_device, weights_h);
 
   // Compute the adjusted weights
-  partition_becke_team(atom_centers_device, quadrature_points_device,
+  partition_becke(atom_centers_device, quadrature_points_device,
                        weights_device);
 
   // Flatten the weights and quadrature_points

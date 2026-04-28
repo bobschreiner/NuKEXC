@@ -28,10 +28,10 @@
 
 using namespace NuKEXC;
 
-TEST_CASE("h20_STO", "[h20_sto]") {
+TEST_CASE("H2O_thakkar", "[h20_thakkar]") {
   Molecule mol;
   read_xyz("input/water.xyz", mol);
-  STOBasisSet basis = load_sto_basis(mol, "input/k99light/neutral");
+  STOBasisSet basis = load_thakkar_basis(mol, "input/k99light/neutral");
 
   // On CPU we can print out the basis set
   // Copy to host device
@@ -49,6 +49,43 @@ TEST_CASE("h20_STO", "[h20_sto]") {
   Kokkos::deep_copy(norm_h, basis.norm_);
   Kokkos::deep_copy(O_h, basis.O_);
 
+  std::cout << "Thakkar Basis" << std::endl;
+  for (int i = 0; i < basis.nbf(); ++i) {
+    std::cout << "Basis function " << i << std::endl;
+    std::cout << "n " << n_h(i) << std::endl;
+    std::cout << "l " << l_h(i) << std::endl;
+    std::cout << "m " << m_h(i) << std::endl;
+    std::cout << "zeta " << zeta_h(i) << std::endl;
+    std::cout << "norm " << norm_h(i) << std::endl;
+    std::cout << "O_h " << O_h(i, 0) << " " << O_h(i, 1) << " " << O_h(i, 2)
+              << " " << std::endl
+              << std::endl;
+  }
+  std::cout << "--------------------------------------------------" << std::endl;
+};
+
+TEST_CASE("H2O_adf_regular", "[h20][adf]") {
+  Molecule mol;
+  read_xyz("input/water.xyz", mol);
+  STOBasisSet basis = load_adf_basis(mol);
+
+  // On CPU we can print out the basis set
+  // Copy to host device
+  auto n_h = Kokkos::create_mirror_view(basis.n_);
+  auto l_h = Kokkos::create_mirror_view(basis.l_);
+  auto m_h = Kokkos::create_mirror_view(basis.m_);
+  auto norm_h = Kokkos::create_mirror_view(basis.norm_);
+  auto zeta_h = Kokkos::create_mirror_view(basis.zeta_);
+  auto O_h = Kokkos::create_mirror_view(basis.O_);
+
+  Kokkos::deep_copy(n_h, basis.n_);
+  Kokkos::deep_copy(l_h, basis.l_);
+  Kokkos::deep_copy(m_h, basis.m_);
+  Kokkos::deep_copy(zeta_h, basis.zeta_);
+  Kokkos::deep_copy(norm_h, basis.norm_);
+  Kokkos::deep_copy(O_h, basis.O_);
+
+  std::cout << "ADF TZP" << std::endl;
   for (int i = 0; i < basis.nbf(); ++i) {
     std::cout << "Basis function " << i << std::endl;
     std::cout << "n " << n_h(i) << std::endl;
@@ -60,7 +97,48 @@ TEST_CASE("h20_STO", "[h20_sto]") {
               << " " << std::endl
               << std::endl;
   }
+  std::cout << "--------------------------------------------------" << std::endl;
 };
+
+TEST_CASE("H2O_adf_QZ4P", "[h20][adf]") {
+  Molecule mol;
+  read_xyz("input/water.xyz", mol);
+  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P");
+
+  // On CPU we can print out the basis set
+  // Copy to host device
+  auto n_h = Kokkos::create_mirror_view(basis.n_);
+  auto l_h = Kokkos::create_mirror_view(basis.l_);
+  auto m_h = Kokkos::create_mirror_view(basis.m_);
+  auto norm_h = Kokkos::create_mirror_view(basis.norm_);
+  auto zeta_h = Kokkos::create_mirror_view(basis.zeta_);
+  auto O_h = Kokkos::create_mirror_view(basis.O_);
+
+  Kokkos::deep_copy(n_h, basis.n_);
+  Kokkos::deep_copy(l_h, basis.l_);
+  Kokkos::deep_copy(m_h, basis.m_);
+  Kokkos::deep_copy(zeta_h, basis.zeta_);
+  Kokkos::deep_copy(norm_h, basis.norm_);
+  Kokkos::deep_copy(O_h, basis.O_);
+
+
+  std::cout << "ADF QZ4P" << std::endl;
+
+  for (int i = 0; i < basis.nbf(); ++i) {
+    std::cout << "Basis function " << i << std::endl;
+    std::cout << "n " << n_h(i) << std::endl;
+    std::cout << "l " << l_h(i) << std::endl;
+    std::cout << "m " << m_h(i) << std::endl;
+    std::cout << "zeta " << zeta_h(i) << std::endl;
+    std::cout << "coeff " << norm_h(i) << std::endl;
+    std::cout << "O_h " << O_h(i, 0) << " " << O_h(i, 1) << " " << O_h(i, 2)
+              << " " << std::endl
+              << std::endl;
+  }
+  std::cout << "--------------------------------------------------" << std::endl;
+};
+
+
 
 int main() {
   Kokkos::initialize();

@@ -117,14 +117,72 @@ STOBasisSet make_manual_basis(const std::vector<STOFunc> &funcs) {
 }
 
 STOBasisSet
-load_sto_basis(const Molecule &mol,
-               const std::string &data_dir = "input/k99light/neutral") {
-  struct RawFunc {
-    int n, l, m;
-    double zeta, norm;
-    double x, y, z;
-  };
-  std::vector<RawFunc> temp_basis;
+load_adf_basis(const Molecule &mol,
+               const std::string &data_dir = "input/zorabasis/TZP") {
+
+  std::vector<STOFunc> temp_basis;
+
+  for (size_t i = 0; i < mol.natoms; ++i) {
+    std::string element_symbol = detail::symbols[mol.Z(i)];
+    element_symbol[0] = std::toupper(element_symbol[0]);
+
+    std::string filename = data_dir + "/" + element_symbol;
+
+    std::ifstream file(filename);
+    if (!file.is_open())
+      continue;
+
+    std::string line;
+    int current_l = 0;
+
+    // Skip all lines until we find the BASIS keyword
+    while (std::getline(file, line)) {
+      if (line == "BASIS")
+        break;
+    }
+
+    // Read line by line until we find END keyword
+    while (std::getline(file, line)) {
+      if (line == "END") {
+        break;
+
+        // Skip the line if it is empty
+      } else if (line.empty()) {
+        continue;
+
+      } else {
+
+        // momentum labels This handles S, P, D, F, G, H, I, K (l=0 to 7)
+
+        //  Parse Basis rows: Label (e.g. 4F), zeta
+        std::stringstream ss(line);
+        std::string label;
+        double zeta;
+
+        if (ss >> label >> zeta) {
+
+          int n = std::stoi(label.substr(0, 1));
+          int l = label_to_l(label[1]);
+
+          // 4. Expand for each m component (-l to +l)
+          // This accounts for the degeneracy of higher l states
+          for (int m = -l; m <= l; ++m) {
+            temp_basis.push_back({n, l, m, zeta, mol.atom_centers(i, 0),
+                                  mol.atom_centers(i, 1),
+                                  mol.atom_centers(i, 2)});
+          }
+        }
+      }
+    }
+  }
+  return make_manual_basis(temp_basis);
+}
+
+STOBasisSet
+load_thakkar_basis(const Molecule &mol,
+                   const std::string &data_dir = "input/k99light/neutral") {
+
+  std::vector<STOFunc> temp_basis;
 
   for (size_t i = 0; i < mol.natoms; ++i) {
     std::string element_symbol = detail::symbols[mol.Z(i)];
@@ -185,55 +243,15 @@ load_sto_basis(const Molecule &mol,
         // 4. Expand for each m component (-l to +l)
         // This accounts for the degeneracy of higher l states
         for (int m = -current_l; m <= current_l; ++m) {
-          temp_basis.push_back({n, current_l, m, zeta, 1.,
-                                mol.atom_centers(i, 0), mol.atom_centers(i, 1),
+          temp_basis.push_back({n, current_l, m, zeta, mol.atom_centers(i, 0),
+                                mol.atom_centers(i, 1),
                                 mol.atom_centers(i, 2)});
         }
       }
     }
   }
 
-  // Allocate Kokkos Views based on total expanded size
-  size_t total_nbf = temp_basis.size();
-  STOBasisSet basis;
-  basis.n_ = Kokkos::View<int *>("n", total_nbf);
-  basis.l_ = Kokkos::View<int *>("l", total_nbf);
-  basis.m_ = Kokkos::View<int *>("m", total_nbf);
-  basis.zeta_ = Kokkos::View<double *>("zeta", total_nbf);
-  basis.norm_ = Kokkos::View<double *>("normalization", total_nbf);
-  basis.O_ = Kokkos::View<double *[3]>("centers", total_nbf);
-
-  // Create Host Mirrors
-  auto n_h = Kokkos::create_mirror_view(basis.n_);
-  auto l_h = Kokkos::create_mirror_view(basis.l_);
-  auto m_h = Kokkos::create_mirror_view(basis.m_);
-  auto zeta_h = Kokkos::create_mirror_view(basis.zeta_);
-  auto norm_h = Kokkos::create_mirror_view(basis.norm_);
-  auto O_h = Kokkos::create_mirror_view(basis.O_);
-
-  for (size_t i = 0; i < total_nbf; ++i) {
-    int n = temp_basis[i].n;
-    double zeta = temp_basis[i].zeta;
-    double norm = std::pow(2.0 * zeta, n + 0.5) / std::sqrt(factorial(2 * n));
-
-    n_h(i) = temp_basis[i].n;
-    l_h(i) = temp_basis[i].l;
-    m_h(i) = temp_basis[i].m;
-    zeta_h(i) = temp_basis[i].zeta;
-    norm_h(i) = norm;
-    O_h(i, 0) = temp_basis[i].x;
-    O_h(i, 1) = temp_basis[i].y;
-    O_h(i, 2) = temp_basis[i].z;
-  }
-
-  Kokkos::deep_copy(basis.n_, n_h);
-  Kokkos::deep_copy(basis.l_, l_h);
-  Kokkos::deep_copy(basis.m_, m_h);
-  Kokkos::deep_copy(basis.zeta_, zeta_h);
-  Kokkos::deep_copy(basis.norm_, norm_h);
-  Kokkos::deep_copy(basis.O_, O_h);
-
-  return basis;
+  return make_manual_basis(temp_basis);
 }
 
 Kokkos::View<double **> evaluate_sto_basis_on_collocation_points(
@@ -263,7 +281,8 @@ Kokkos::View<double **> evaluate_sto_basis_on_collocation_points(
         double dx = collocation_points(j, 0) - basis_set.O_(i, 0);
         double dy = collocation_points(j, 1) - basis_set.O_(i, 1);
         double dz = collocation_points(j, 2) - basis_set.O_(i, 2);
-        double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + 1e-15; // Avoid pow(0,0)
+        double r =
+            Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + 1e-15; // Avoid pow(0,0)
 
         double radial_part;
 

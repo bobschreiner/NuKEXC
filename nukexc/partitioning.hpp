@@ -29,12 +29,7 @@ namespace NuKEXC {
 KOKKOS_INLINE_FUNCTION
 double compute_mu(const double r_i, const double r_j, const double R_ij) {
   double mu = (r_i - r_j) / R_ij;
-
-  if (mu < -1.0)
-    mu = -1.0;
-  else if (mu > 1.0)
-    mu = 1.0;
-
+  mu = mu > 1.0 ? 1.0 : mu < -1.0 ? -1.0 : mu;
   return mu;
 }
 
@@ -42,12 +37,11 @@ KOKKOS_INLINE_FUNCTION
 double compute_p(const double x) { return (1.5 * x) - (0.5 * std::pow(x, 3)); }
 
 KOKKOS_INLINE_FUNCTION
-double compute_f(const double x) { return 0.5 * (1.0 - x); }
+double compute_s(const double f) { return 0.5 * (1.0 - f); }
 
-void partition_becke(
-    const Kokkos::View<double *[3]> &atom_centers,
-    const Kokkos::View<double **[3]> &quadrature_points,
-    Kokkos::View<double **> &weights) {
+void partition_becke(const Kokkos::View<double *[3]> &atom_centers,
+                     const Kokkos::View<double **[3]> &quadrature_points,
+                     Kokkos::View<double **> &weights) {
 
   size_t natoms = atom_centers.extent(0);
   assert(natoms = quadrature_points.extent(0));
@@ -97,8 +91,10 @@ void partition_becke(
           for (size_t j = 0; j < natoms; ++j) {
             if (i != j) {
               double mu = (r(p, g, i) - r(p, g, j)) / R(i, j);
+              mu = mu > 1.0 ? 1.0 : mu < -1.0 ? -1.0 : mu;
               double poly = compute_p(compute_p(compute_p(mu)));
-              double s = compute_f(poly);
+
+              double s = compute_s(poly);
               part_weight *= s;
             }
           }
@@ -114,10 +110,9 @@ void partition_becke(
 using TeamPolicy = Kokkos::TeamPolicy<ExecSpace>;
 using MemberType = typename TeamPolicy::member_type;
 
-void partition_becke_team(
-    const Kokkos::View<double *[3]> &atom_centers,
-    const Kokkos::View<double **[3]> &quadrature_points,
-    Kokkos::View<double **> &weights) {
+void partition_becke_team(const Kokkos::View<double *[3]> &atom_centers,
+                          const Kokkos::View<double **[3]> &quadrature_points,
+                          Kokkos::View<double **> &weights) {
 
   size_t natoms = atom_centers.extent(0);
   size_t nquad_points_per_atom = quadrature_points.extent(1);
@@ -186,8 +181,10 @@ void partition_becke_team(
                     continue;
 
                   double mu = (r_cache(i) - r_cache(j)) / R_ij(i, j);
+                  mu = mu > 1.0 ? 1.0 : mu < -1.0 ? -1.0 : mu;
                   double poly = compute_p(compute_p(compute_p(mu)));
-                  w_i *= compute_f(poly);
+
+                  w_i *= compute_s(poly);
                 }
                 if (i == p)
                   w_p = w_i;

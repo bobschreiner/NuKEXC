@@ -69,7 +69,7 @@ double convergence_analysis(size_t nrad, size_t nang, REC recorder) {
   // Generate water
   Molecule mol = make_water();
   unsigned int natoms = mol.natoms;
-  STOBasisSet stobasis = load_sto_basis(mol);
+  STOBasisSet stobasis = load_adf_basis(mol);
 
   // Create all the Kokkos Views on host device
   Kokkos::View<double *[3]> atom_centers_device(
