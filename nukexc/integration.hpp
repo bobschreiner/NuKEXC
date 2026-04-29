@@ -24,6 +24,7 @@
 #include "partitioning.hpp"
 #include "stobasis.hpp"
 
+#include <KokkosBatched_Dot.hpp>
 #include <KokkosBlas3_gemm.hpp>
 
 namespace NuKEXC {
@@ -56,11 +57,31 @@ overlap_integral(STOBasisSet &basis,
 }
 
 Kokkos::View<double **>
-nuclear_potential_integral(STOBasisSet &basis,
-                           Kokkos::View<double *[3]> quadrature_points,
-                           Kokkos::View<double *> quadrature_weights,
-                           Kokkos::View<double *[3]> atom_centers,
-                           Kokkos::View<unsigned *> Z) {
+diag_overlap_integral(STOBasisSet &basis,
+                      Kokkos::View<double *[3]> quadrature_points,
+                      Kokkos::View<double *> quadrature_weights) {
+
+  size_t N = basis.nbf();
+  size_t nquad_points = quadrature_points.extent(0);
+  Kokkos::View<double **> collocation_points =
+      evaluate_sto_basis_on_collocation_points(basis, quadrature_points);
+
+  // Can be replaced by Kokkos kernel later
+  Kokkos::View<double **> overlap_matrix("Overlap matrix", N, N);
+
+  Kokkos::parallel_for(
+      "Compute diag{S}", N, KOKKOS_LAMBDA(const int &i) {
+        for (int g = 0; g < nquad_points; ++g) {
+          overlap_matrix(i,i) += quadrature_weights(g) * collocation_points(i, g) *
+                         collocation_points(i, g);
+        }
+      });
+  return overlap_matrix;
+}
+Kokkos::View<double **> nuclear_potential_integral(
+    STOBasisSet &basis, Kokkos::View<double *[3]> quadrature_points,
+    Kokkos::View<double *> quadrature_weights,
+    Kokkos::View<double *[3]> atom_centers, Kokkos::View<unsigned *> Z) {
 
   size_t N = basis.nbf();
   size_t nquad_points = quadrature_points.extent(0);
@@ -81,8 +102,8 @@ nuclear_potential_integral(STOBasisSet &basis,
           double dz = quadrature_points(g, 2) - atom_centers(k, 2);
           double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + 1e-15;
 
-          weighted_points(i, g) -= (Z(k)/r)*
-              quadrature_weights(g) * collocation_points(i, g);
+          weighted_points(i, g) -=
+              (Z(k) / r) * quadrature_weights(g) * collocation_points(i, g);
         }
       });
   KokkosBlas::gemm("N", "T", 1.0, weighted_points, collocation_points, 0.0,

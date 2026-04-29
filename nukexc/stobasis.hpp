@@ -80,7 +80,7 @@ STOBasisSet make_manual_basis(const std::vector<STOFunc> &funcs) {
   basis.l_ = Kokkos::View<int *>("l", nbf);
   basis.m_ = Kokkos::View<int *>("m", nbf);
   basis.zeta_ = Kokkos::View<double *>("zeta", nbf);
-  basis.norm_ = Kokkos::View<double *>("norm", nbf);
+  basis.norm_ = Kokkos::View<double *>("coeff", nbf);
   basis.O_ = Kokkos::View<double *[3]>("centers", nbf);
 
   auto n_h = Kokkos::create_mirror_view(basis.n_);

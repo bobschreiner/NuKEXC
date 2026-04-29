@@ -113,7 +113,12 @@ static void print_convergence_table(const std::string &sweep_label,
                                     const std::vector<ConvergencePoint> &data) {
 
   const int w1 = 14, w2 = 12, w3 = 18, w4 = 14;
-  std::cout << "\n-- " << sweep_label << " convergence --\n";
+  if (sweep_label == "nrad") {
+    std::cout << "\n-- " << sweep_label << " convergence (nang_order=59) --\n";
+  }else{
+	      std::cout << "\n-- " << sweep_label << " convergence (nrad=200) --\n";
+  }
+
   std::cout << std::setw(w1) << std::left << sweep_label << std::setw(w2)
             << std::right << "npts" << std::setw(w3) << std::right << "S_AB"
             << std::setw(w4) << std::right << "|error|"
@@ -142,10 +147,13 @@ static void print_convergence_table(const std::string &sweep_label,
 
   // Print successive algebraic convergence estimate.
   std::cout << "  Successive convergence rates:\n  ";
-  for (size_t i = 0; i + 1 < data.size(); ++i) {
+  for (size_t i = 1; i + 1 < data.size(); ++i) {
     if (data[i + 1].abs_error > 0.0)
       std::cout << std::fixed << std::setprecision(2)
-                << -std::log(data[i+1].abs_error / data[0].abs_error)/ std::log(data[i+1].npts_actual / (double)data[0].npts_actual) << "  ";
+                << -std::log(data[i + 1].abs_error / data[i].abs_error) /
+                       std::log(data[i].abs_error /
+                                (double)data[i - 1].abs_error)
+                << "  ";
     else
       std::cout << "inf  ";
   }

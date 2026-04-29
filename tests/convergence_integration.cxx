@@ -69,15 +69,13 @@ double convergence_analysis(size_t nrad, size_t nang, REC recorder) {
   // Generate water
   Molecule mol = make_water();
   unsigned int natoms = mol.natoms;
-  STOBasisSet stobasis = load_adf_basis(mol);
+  STOBasisSet stobasis = load_adf_basis(mol, "input/zorabasis/QZ4P");
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3]> atom_centers_device(
-      "atom centers", natoms);
-  Kokkos::View<double **[3]> quadrature_points_device(
-      "quadrature_points", natoms, npts);
-  Kokkos::View<double **> weights_device("weights", natoms,
-                                                            npts);
+  Kokkos::View<double *[3]> atom_centers_device("atom centers", natoms);
+  Kokkos::View<double **[3]> quadrature_points_device("quadrature_points",
+                                                      natoms, npts);
+  Kokkos::View<double **> weights_device("weights", natoms, npts);
 
   // Create all the Kokkos Mirror Views on Execution device
   auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
@@ -131,7 +129,7 @@ double convergence_analysis(size_t nrad, size_t nang, REC recorder) {
       });
 
   Kokkos::View<double **> S =
-      overlap_integral(stobasis, quad_points_1d, weights_1d);
+      diag_overlap_integral(stobasis, quad_points_1d, weights_1d);
 
   auto S_h = Kokkos::create_mirror_view(S);
   Kokkos::deep_copy(S_h, S);
@@ -147,7 +145,7 @@ int main() {
   Kokkos::initialize();
 
   using namespace IntegratorXX;
-  using radial_type = bk_type;
+  using radial_type = ta_type;
   using angular_type = ll_type;
   using angular_traits = quadrature_traits<angular_type>;
   using spherical_type = SphericalQuadrature<radial_type, angular_type>;

@@ -92,7 +92,7 @@ TEST_CASE("H2O_adf_regular", "[h20][adf]") {
     std::cout << "l " << l_h(i) << std::endl;
     std::cout << "m " << m_h(i) << std::endl;
     std::cout << "zeta " << zeta_h(i) << std::endl;
-    std::cout << "coeff " << norm_h(i) << std::endl;
+    std::cout << "norm " << norm_h(i) << std::endl;
     std::cout << "O_h " << O_h(i, 0) << " " << O_h(i, 1) << " " << O_h(i, 2)
               << " " << std::endl
               << std::endl;
@@ -130,7 +130,7 @@ TEST_CASE("H2O_adf_QZ4P", "[h20][adf]") {
     std::cout << "l " << l_h(i) << std::endl;
     std::cout << "m " << m_h(i) << std::endl;
     std::cout << "zeta " << zeta_h(i) << std::endl;
-    std::cout << "coeff " << norm_h(i) << std::endl;
+    std::cout << "norm " << norm_h(i) << std::endl;
     std::cout << "O_h " << O_h(i, 0) << " " << O_h(i, 1) << " " << O_h(i, 2)
               << " " << std::endl
               << std::endl;
