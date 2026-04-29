@@ -282,7 +282,7 @@ Kokkos::View<double **> evaluate_sto_basis_on_collocation_points(
         double dy = collocation_points(j, 1) - basis_set.O_(i, 1);
         double dz = collocation_points(j, 2) - basis_set.O_(i, 2);
         double r =
-            Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + 1e-15; // Avoid pow(0,0)
+            Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + epsilon_shift; // Avoid pow(0,0)
 
         double radial_part;
 
@@ -324,7 +324,7 @@ Kokkos::View<double **[3]> evaluate_sto_basis_grad_on_collocation_points(
         double dy = collocation_points(j, 1) - basis_set.O_(i, 1);
         double dz = collocation_points(j, 2) - basis_set.O_(i, 2);
         double r =
-            Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + 1e-15; // Avoid pow(0,0)
+            Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + epsilon_shift; // Avoid pow(0,0)
 
         // Angular part
         double S_val;

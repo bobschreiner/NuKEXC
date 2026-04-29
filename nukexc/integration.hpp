@@ -100,7 +100,7 @@ Kokkos::View<double **> nuclear_potential_integral(
           double dx = quadrature_points(g, 0) - atom_centers(k, 0);
           double dy = quadrature_points(g, 1) - atom_centers(k, 1);
           double dz = quadrature_points(g, 2) - atom_centers(k, 2);
-          double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + 1e-15;
+          double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + epsilon_shift;
 
           weighted_points(i, g) -=
               (Z(k) / r) * quadrature_weights(g) * collocation_points(i, g);

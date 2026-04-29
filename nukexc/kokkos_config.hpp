@@ -39,4 +39,5 @@ using MemSpace = ExecSpace::memory_space;
 
 //using Layout = Kokkos::LayoutLeft;
 using Layout = Kokkos::LayoutRight;
+const double epsilon_shift = 1e-30;
 } // namespace NuKEXC

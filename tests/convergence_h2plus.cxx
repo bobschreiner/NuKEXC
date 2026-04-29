@@ -115,8 +115,8 @@ static void print_convergence_table(const std::string &sweep_label,
   const int w1 = 14, w2 = 12, w3 = 18, w4 = 14;
   if (sweep_label == "nrad") {
     std::cout << "\n-- " << sweep_label << " convergence (nang_order=59) --\n";
-  }else{
-	      std::cout << "\n-- " << sweep_label << " convergence (nrad=200) --\n";
+  } else {
+    std::cout << "\n-- " << sweep_label << " convergence (nrad=200) --\n";
   }
 
   std::cout << std::setw(w1) << std::left << sweep_label << std::setw(w2)

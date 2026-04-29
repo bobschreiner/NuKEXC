@@ -294,7 +294,7 @@ KOKKOS_INLINE_FUNCTION
 void grad_real_solid_harmonic_cart(const int l, const int m, const double x,
                                    const double y, const double z, double &dx,
                                    double &dy, double &dz) {
-  const double r = Kokkos::sqrt(x * x + y * y + z * z) + 1e-15;
+  const double r = Kokkos::sqrt(x * x + y * y + z * z) + epsilon_shift;
   const int abs_m = Kokkos::abs(m);
 
   // Get Polynomial values and their internal derivatives

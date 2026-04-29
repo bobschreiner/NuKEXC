@@ -43,8 +43,6 @@ void diagonalise(const Kokkos::View<double ***> &fock_matrix,
   using team_policy_type = Kokkos::TeamPolicy<ExecSpace>;
   team_policy_type policy_team(batch_size, Kokkos::AUTO, 32);
 
-  Kokkos::View<double ***, Kokkos::LayoutRight> A("A", batch_size, n,
-                                                  n); // Left eigenvectors
   Kokkos::View<double ***, Kokkos::LayoutRight> UL("UL", batch_size, n,
                                                    n); // Left eigenvectors
   Kokkos::View<double ***, Kokkos::LayoutRight> UR("UR", batch_size, n,
