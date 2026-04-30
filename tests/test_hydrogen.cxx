@@ -27,6 +27,7 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
+#include <nukexc/diagonaliser.hpp>
 #include <nukexc/grid.hpp>
 #include <nukexc/integration.hpp>
 #include <nukexc/molecule.hpp>
@@ -214,6 +215,65 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
       REQUIRE_THAT(T_h(i, j), Catch::Matchers::WithinAbs(0.0, 1e-8));
       REQUIRE_THAT(V_h(i, j), Catch::Matchers::WithinAbs(0.0, 1e-8));
     }
+
+  // ---- Diagonalization Test ----
+  int n_basis = 4;
+
+  // 1. Prepare Batched Views (Device)
+
+  Kokkos::View<double **> H("mo_coeffs", n_basis, n_basis);
+  Kokkos::View<double **> mo_coeffs("mo_coeffs", n_basis, n_basis);
+  Kokkos::View<double *> mo_energies("mo_energies", n_basis);
+
+  auto H_h = Kokkos::create_mirror_view(H);
+
+  for (int i = 0; i < n_basis; ++i) {
+    for (int j = 0; j < n_basis; ++j) {
+      H_h(i, j) = T_h(i, j) + V_h(i, j);
+    }
+  }
+
+  // 3. Transfer to Device and Run
+  Kokkos::deep_copy(H, H_h);
+
+  NuKEXC::Diagonalizer diagonalizer(n_basis);
+  diagonalizer.compute_transformation(S);
+  diagonalizer.solve(H, mo_coeffs, mo_energies);
+
+  // 4. Verify Results on Host
+  auto energies_h = Kokkos::create_mirror_view(mo_energies);
+  Kokkos::deep_copy(energies_h, mo_energies);
+
+  // Sort if necessary, though for H they should naturally fall into -0.5 and
+  // -0.125 We expect one -0.5 (1s) and three -0.125 (2p)
+  double e_1s = -0.5;
+  double e_2p = -0.125;
+
+  // Check 1s energy (usually the lowest)
+  REQUIRE_THAT(energies_h(0), Catch::Matchers::WithinRel(e_1s, 1e-7));
+
+  // Check 2p degeneracy and values
+  for (int i = 1; i < 4; ++i) {
+    REQUIRE_THAT(energies_h(i), Catch::Matchers::WithinRel(e_2p, 1e-7));
+  }
+
+  // 5. Verify Orthonormality of MO Coefficients: C^T * S * C = I
+  auto C_h = Kokkos::create_mirror_view(mo_coeffs);
+  Kokkos::deep_copy(C_h, mo_coeffs);
+
+  for (int i = 0; i < n_basis; ++i) {
+    for (int j = 0; j < n_basis; ++j) {
+      double orthogonality_sum = 0.0;
+      for (int a = 0; a < n_basis; ++a) {
+        for (int b = 0; b < n_basis; ++b) {
+          orthogonality_sum += C_h(a, i) * S_h(a, b) * C_h(b, j);
+        }
+      }
+      double expected = (i == j) ? 1.0 : 0.0;
+      REQUIRE_THAT(orthogonality_sum,
+                   Catch::Matchers::WithinAbs(expected, 1e-8));
+    }
+  }
 }
 
 // ============================================================
@@ -280,6 +340,116 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
   // ---- V has no closed form for the cross-nuclear terms, but the two  ----
   // ---- on-diagonal elements must be equal by the symmetry of the system ----
   REQUIRE_THAT(V_h(0, 0), Catch::Matchers::WithinRel(V_h(1, 1), 1e-6));
+}
+
+// ============================================================
+//  TEST 4 — H2+ Energies
+// ============================================================
+//
+// Two H atoms 1 bohr apart along x.  Basis: one 1s STO (zeta=1) per atom.
+//
+// The off-diagonal overlap integral is known exactly for unnormalized STOs
+// and reduces to:
+//
+//   S_AB(zeta=1, R) = e^{-R} (1 + R + R^2/3)
+//
+// At R = 1 bohr:  S_AB = e^{-1} * 7/3 ≈ 0.85836...
+//
+// All matrices must be symmetric, and the on-diagonal elements are 1
+// (each function is normalized by construction).
+// T_AA = T_BB = 0.5 still holds for the single-center kinetic integrals.
+
+TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
+
+  const double R = 2.0; // bond length in bohr
+
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}, {R, 0., 0.}},
+               std::vector<unsigned>{1u, 1u});
+
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 50);
+
+  // Build the basis explicitly so the zeta value is unambiguous.
+  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P");
+
+  auto S = overlap_integral(basis, grid.quad_points, grid.weights);
+  auto T = kinetic_integral(basis, grid.quad_points, grid.weights);
+  auto V = nuclear_potential_integral(basis, grid.quad_points, grid.weights,
+                                      grid.atom_centers, grid.Z);
+
+  auto S_h = Kokkos::create_mirror_view(S);
+  auto T_h = Kokkos::create_mirror_view(T);
+  auto V_h = Kokkos::create_mirror_view(V);
+  Kokkos::deep_copy(S_h, S);
+  Kokkos::deep_copy(T_h, T);
+  Kokkos::deep_copy(V_h, V);
+
+  require_symmetric(S_h);
+  require_symmetric(T_h);
+  require_symmetric(V_h);
+
+  // ---- Diagonalization Test ----
+  int n_basis = basis.nbf();
+
+  // 1. Prepare Batched Views (Device)
+
+  Kokkos::View<double **> H("mo_coeffs", n_basis, n_basis);
+  Kokkos::View<double **> mo_coeffs("mo_coeffs", n_basis, n_basis);
+  Kokkos::View<double *> mo_energies("mo_energies", n_basis);
+
+  auto H_h = Kokkos::create_mirror_view(H);
+
+  for (int i = 0; i < n_basis; ++i) {
+    for (int j = 0; j < n_basis; ++j) {
+      H_h(i, j) = T_h(i, j) + V_h(i, j);
+    }
+  }
+
+  // 3. Transfer to Device and Run
+  Kokkos::deep_copy(H, H_h);
+
+  NuKEXC::Diagonalizer diagonalizer(n_basis);
+  diagonalizer.compute_transformation(S);
+  diagonalizer.solve(H, mo_coeffs, mo_energies);
+
+  // 4. Verify Results on Host
+  auto energies_h = Kokkos::create_mirror_view(mo_energies);
+  Kokkos::deep_copy(energies_h, mo_energies);
+
+  // 5. Verify Orthonormality: C^T * S * C = I
+  auto C_h = Kokkos::create_mirror_view(mo_coeffs);
+  Kokkos::deep_copy(C_h, mo_coeffs);
+
+  for (int i = 0; i < n_basis; ++i) {
+    for (int j = 0; j < n_basis; ++j) {
+      double orthogonality_sum = 0.0;
+      for (int a = 0; a < n_basis; ++a) {
+        for (int b = 0; b < n_basis; ++b) {
+          orthogonality_sum += C_h(a, i) * S_h(a, b) * C_h(b, j);
+        }
+      }
+      double expected = (i == j) ? 1.0 : 0.0;
+      // Use Abs tolerance because off-diagonals should be near zero
+      REQUIRE_THAT(orthogonality_sum,
+                   Catch::Matchers::WithinAbs(expected, 1e-8));
+    }
+  }
+
+  // 6. Verify Energy Ordering (Ascending)
+  for (int i = 0; i < n_basis - 1; ++i) {
+    CHECK(energies_h(i) <= energies_h(i + 1));
+  }
+
+  // 7. Verify the Ground State Energy (sigma_g)
+  // For H2+ at R=1.0 bohr, the exact electronic energy is roughly -1.45 au
+  // Depending on your basis set quality, we check if it's in the ballpark.
+  double e_ground = energies_h(0);
+  REQUIRE(e_ground < 0.0); // Must be bound
+
+  // Optional: print out the spectrum for debugging
+  std::cout << "H2+ Spectrum (R=" << R << "): ";
+  for (int i = 0; i < n_basis; ++i)
+    std::cout << energies_h(i) << " ";
+  std::cout << std::endl;
 }
 
 // ============================================================

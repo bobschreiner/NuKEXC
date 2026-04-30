@@ -20,80 +20,121 @@
 
 #pragma once
 #include "kokkos_config.hpp"
-#include "molecule.hpp"
-#include "partitioning.hpp"
-#include "stobasis.hpp"
 
-#include <KokkosBatched_Eigendecomposition_Decl.hpp>
 #include <KokkosBlas3_gemm.hpp>
+#include <KokkosBlas3_trsm.hpp>
+
+#include <KokkosBatched_Dot.hpp>
+#include <KokkosLapack_svd.hpp>
+
+#include <Kokkos_Core.hpp>
+
+// The Kokkos Cholesky implementation is a work in progress as of May 2026
+// We use svd instead
+// #include <KokkosLapack_potrf.hpp>
 
 namespace NuKEXC {
 
-void diagonalise(const Kokkos::View<double ***> &fock_matrix,
-                 Kokkos::View<double ***> &mo_coeff,
-                 Kokkos::View<double **> &mo_energies) {
+class Diagonalizer {
+public:
+  using View2D = Kokkos::View<double **>;
+  using View2DLeft =
+      Kokkos::View<double **, Kokkos::LayoutLeft>; // LAPACK requires LeftLayout
+  using View1D = Kokkos::View<double *>;
 
-  int batch_size = fock_matrix.extent(0);
-  int n = fock_matrix.extent(1);
+  Diagonalizer(int N) : _N(N) {
+    _X = View2DLeft("TransformationMatrix_X", _N, _N);
+    _XT_F = View2DLeft("XT_F_temp", _N, _N);
+    _U = View2DLeft("U_temp", _N, _N);
+    _VT = View2DLeft("VT_temp", _N, _N);
+  }
 
-  //==================================================
-  // Allocate matrices for Eigenvalu decomposition
-  //==================================================
+  // Call this only when the overlap matrix S changes (e.g., new geometry)
+  void compute_transformation(const Kokkos::View<double **> &overlap_matrix) {
+    View2DLeft S("TempS", _N, _N);
+    Kokkos::deep_copy(S, overlap_matrix);
 
-  using team_policy_type = Kokkos::TeamPolicy<ExecSpace>;
-  team_policy_type policy_team(batch_size, Kokkos::AUTO, 32);
+    View2DLeft Us("Us", _N, _N);
+    View2DLeft VTs("VTs", _N, _N);
+    View1D sigma("sigma", _N);
 
-  Kokkos::View<double ***, Kokkos::LayoutRight> UL("UL", batch_size, n,
-                                                   n); // Left eigenvectors
-  Kokkos::View<double ***, Kokkos::LayoutRight> UR("UR", batch_size, n,
-                                                   n); // Right eigenvectors
+    // SVD of S to handle potential singularity
+    KokkosLapack::svd("S", "S", S, sigma, Us, VTs);
 
-  Kokkos::View<double **, Kokkos::LayoutRight> er(
-      "er", batch_size, n); // Real parts of eigenvalues
-  Kokkos::View<double **, Kokkos::LayoutRight> ei(
-      "ei", batch_size, n); // Imaginary parts of eigenvalues
+    // Build X = Us * sigma^-1/2 (Canonical Orthogonalization)
+    auto X_local = _X;
+    Kokkos::parallel_for(
+        "BuildX", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {_N, _N}),
+        KOKKOS_LAMBDA(const int i, const int k) {
+          if (sigma(k) > 1e-7) {
+            X_local(i, k) = Us(i, k) / Kokkos::sqrt(sigma(k));
+          } else {
+            X_local(i, k) = 0.0;
+          }
+        });
+  }
 
-  // Workspace (size = 2*n*n + 5*n)
-  Kokkos::View<double **, Kokkos::LayoutRight> W("W", batch_size,
-                                                 2 * n * n + 5 * n);
-  //==================================================
-  // Compute X = S^(-1/2) using Cholesky
-  //==================================================
+  // Repeatedly call this with updated Fock matrices
+  void solve(const Kokkos::View<double **> &fock_matrix, View2D &mo_coeff,
+             View1D &mo_energies) {
 
-  //==================================================
-  // Compute F in othogoanl Basis
-  //==================================================
+    View2DLeft F("LocalF", _N, _N);
+    Kokkos::deep_copy(F, fock_matrix);
 
-  //==================================================
-  // Diagonalise F
-  //==================================================
-  Kokkos::parallel_for(
-      "Diagonalise F", policy_team,
-      KOKKOS_LAMBDA(const typename team_policy_type::member_type &member) {
-        // Get batch index from team rank
-        const int i = member.league_rank();
+    // 1. Transform Fock Matrix: F' = X^T * F * X
+    KokkosBlas::gemm("T", "N", 1.0, _X, F, 0.0, _XT_F);
+    KokkosBlas::gemm("N", "N", 1.0, _XT_F, _X, 0.0, F);
 
-        // Extract batch slice
-        auto A_i =
-            Kokkos::subview(fock_matrix, i, Kokkos::ALL(), Kokkos::ALL());
-        auto er_i = Kokkos::subview(er, i, Kokkos::ALL());
-        auto ei_i = Kokkos::subview(ei, i, Kokkos::ALL());
-        auto UR_i = Kokkos::subview(UR, i, Kokkos::ALL(), Kokkos::ALL());
-        auto UL_i = Kokkos::subview(UL, i, Kokkos::ALL(), Kokkos::ALL());
-        auto W_i = Kokkos::subview(W, i, Kokkos::ALL());
+    // 2. Diagonalize the transformed F
+    KokkosLapack::svd("S", "S", F, mo_energies, _U, _VT);
 
-        // Perform eigendecomposition
-        KokkosBatched::TeamVectorEigendecomposition<
-            typename team_policy_type::member_type>::invoke(member, A_i, er_i,
-                                                            ei_i, UL_i, UR_i,
-                                                            W_i);
-      });
+    // 3. Restore signs for symmetric singular values
+    auto U_local = _U;
+    auto VT_local = _VT;
+    int N = _N;
+    Kokkos::parallel_for(
+        "SwitchSigns", N, KOKKOS_LAMBDA(const int j) {
+          double dot = 0.0;
+          for (int k = 0; k < N; ++k) {
+            dot += U_local(k, j) * VT_local(j, k);
+          }
+          if (dot < 0)
+            mo_energies(j) = -mo_energies(j);
+        });
 
-  Kokkos::fence();
+    // 4. Back-transform: C = X * U
+    KokkosBlas::gemm("N", "N", 1.0, _X, _U, 0.0, mo_coeff);
 
-  //==================================================
-  // Compute mo_coeff in original basis
-  //==================================================
-}
+    // 5. Final Sorting
+    sort(mo_coeff, mo_energies);
+  }
+
+private:
+  int _N;
+  View2DLeft _X, _XT_F, _U, _VT;
+  void sort(View2D &mo_coeff, View1D &mo_energies) {
+    int N = _N;
+    Kokkos::parallel_for(
+        "SerialSort", 1, KOKKOS_LAMBDA(const int) {
+          for (int i = 0; i < N - 1; i++) {
+            int min_idx = i;
+            for (int j = i + 1; j < N; j++) {
+              if (mo_energies(j) < mo_energies(min_idx))
+                min_idx = j;
+            }
+            if (min_idx != i) {
+              double e_tmp = mo_energies(i);
+              mo_energies(i) = mo_energies(min_idx);
+              mo_energies(min_idx) = e_tmp;
+              for (int k = 0; k < N; k++) {
+                double c_tmp = mo_coeff(k, i);
+                mo_coeff(k, i) = mo_coeff(k, min_idx);
+                mo_coeff(k, min_idx) = c_tmp;
+              }
+            }
+          }
+        });
+  }
+};
 
 } // namespace NuKEXC
