@@ -34,6 +34,14 @@ double compute_mu(const double r_i, const double r_j, const double R_ij) {
 }
 
 KOKKOS_INLINE_FUNCTION
+double compute_mu_laqua(const double r_i, const double r_j, const double R_ij,
+                        const double R_cutoff = 5.) {
+  double R = Kokkos::min(R_ij, R_cutoff);
+  double mu = (r_i - r_j) / R;
+  mu = mu > 1.0 ? 1.0 : mu < -1.0 ? -1.0 : mu;
+  return mu;
+}
+KOKKOS_INLINE_FUNCTION
 double compute_p(const double x) { return (1.5 * x) - (0.5 * std::pow(x, 3)); }
 
 KOKKOS_INLINE_FUNCTION
@@ -90,8 +98,7 @@ void partition_becke(const Kokkos::View<double *[3]> &atom_centers,
           double part_weight = 1.;
           for (size_t j = 0; j < natoms; ++j) {
             if (i != j) {
-              double mu = (r(p, g, i) - r(p, g, j)) / R(i, j);
-              mu = mu > 1.0 ? 1.0 : mu < -1.0 ? -1.0 : mu;
+              double mu = compute_mu_laqua(r(p, g, i), r(p, g, j), R(i, j));
               double poly = compute_p(compute_p(compute_p(mu)));
 
               double s = compute_s(poly);
