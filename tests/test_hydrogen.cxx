@@ -219,19 +219,27 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
 
   // ---- Diagonalization Test ----
   int n_basis = 4;
-  DeviceView2DLeft H_h("mo_coeffs", n_basis, n_basis);
-  DeviceView2DLeft mo_coeffs_h("mo_coeffs", n_basis, n_basis);
-  DeviceView1D mo_energies_h("mo_energies", n_basis);
+  // 1. Prepare Batched Views on Device
+  DeviceView2DLeft H("mo_coeffs", n_basis, n_basis);
+  DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, n_basis);
+  DeviceView1D mo_energies("mo_energies", n_basis);
 
-  for (int i = 0; i < n_basis; ++i) {
-    for (int j = 0; j < n_basis; ++j) {
-      H_h(i, j) = T_h(i, j) + V_h(i, j);
-    }
-  }
+  auto H_h = Kokkos::create_mirror_view(H);
+  auto mo_coeffs_h = Kokkos::create_mirror_view(mo_coeffs);
+  auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
+
+  Kokkos::parallel_for(
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {n_basis, n_basis}),
+      KOKKOS_LAMBDA(const int &i, const int &j) {
+        H(i, j) = T(i, j) + V(i, j);
+      });
 
   NuKEXC::Diagonalizer diagonalizer(n_basis);
-  diagonalizer.compute_transformation(S_h);
-  diagonalizer.solve(H_h, mo_coeffs_h, mo_energies_h);
+  diagonalizer.compute_transformation(S);
+  diagonalizer.solve(H, mo_coeffs, mo_energies);
+
+  Kokkos::deep_copy(mo_coeffs_h, mo_coeffs);
+  Kokkos::deep_copy(mo_energies_h, mo_energies);
 
   // Sort if necessary, though for H they should naturally fall into -0.5 and
   // -0.125 We expect one -0.5 (1s) and three -0.125 (2p)
