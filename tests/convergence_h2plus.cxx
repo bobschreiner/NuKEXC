@@ -23,7 +23,7 @@
  *
  *   S_AB(zeta=1, R) = e^{-R} (1 + R + R^2/3)
  *
- * At R = 1 bohr, zeta = 1:  S_AB = (7/3) e^{-1} ≈ 0.858361...
+ * At R = 1 bohr, zeta = 1:  S_AB = (7/3) e^{-1}
  *
  * Two orthogonal sweeps are performed:
  *

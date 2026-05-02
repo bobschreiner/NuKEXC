@@ -38,20 +38,20 @@ namespace NuKEXC {
 class Diagonalizer {
 public:
   Diagonalizer(int N) : _N(N) {
-    _X = HostView2DLeft("TransformationMatrix_X", _N, _N);
-    _XT_F = HostView2DLeft("XT_F_temp", _N, _N);
-    _U = HostView2DLeft("U_temp", _N, _N);
-    _VT = HostView2DLeft("VT_temp", _N, _N);
+    _X = DeviceView2DLeft("TransformationMatrix_X", _N, _N);
+    _XT_F = DeviceView2DLeft("XT_F_temp", _N, _N);
+    _U = DeviceView2DLeft("U_temp", _N, _N);
+    _VT = DeviceView2DLeft("VT_temp", _N, _N);
   }
 
   // Call this only when the overlap matrix S changes (e.g., new geometry)
-  void compute_transformation(const HostView2DLeft &overlap_matrix) {
-    HostView2DLeft S("TempS", _N, _N);
+  void compute_transformation(const DeviceView2DLeft &overlap_matrix) {
+    DeviceView2DLeft S("TempS", _N, _N);
     Kokkos::deep_copy(S, overlap_matrix);
 
-    HostView2DLeft Us("Us", _N, _N);
-    HostView2DLeft VTs("VTs", _N, _N);
-    HostView1D sigma("sigma", _N);
+    DeviceView2DLeft Us("Us", _N, _N);
+    DeviceView2DLeft VTs("VTs", _N, _N);
+    DeviceView1D sigma("sigma", _N);
 
     // SVD of S to handle potential singularity
     KokkosLapack::svd("S", "S", S, sigma, Us, VTs);
@@ -70,10 +70,10 @@ public:
   }
 
   // Repeatedly call this with updated Fock matrices
-  void solve(const HostView2DLeft &fock_matrix, HostView2DLeft &mo_coeff,
-             HostView1D &mo_energies) {
+  void solve(const DeviceView2DLeft &fock_matrix, DeviceView2DLeft &mo_coeff,
+             DeviceView1D &mo_energies) {
 
-    HostView2DLeft F("LocalF", _N, _N);
+    DeviceView2DLeft F("LocalF", _N, _N);
     Kokkos::deep_copy(F, fock_matrix);
 
     // 1. Transform Fock Matrix: F' = X^T * F * X
@@ -106,9 +106,9 @@ public:
 
 private:
   int _N;
-  HostView2DLeft _X, _XT_F, _U, _VT;
+  DeviceView2DLeft _X, _XT_F, _U, _VT;
 
-  void sort(HostView2DLeft &mo_coeff, HostView1D &mo_energies) {
+  void sort(DeviceView2DLeft &mo_coeff, DeviceView1D &mo_energies) {
     int N = _N;
     Kokkos::parallel_for(
         "SerialSort", 1, KOKKOS_LAMBDA(const int) {
