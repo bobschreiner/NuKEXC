@@ -45,7 +45,7 @@ public:
   }
 
   // Call this only when the overlap matrix S changes (e.g., new geometry)
-  void compute_transformation(const HostView2D &overlap_matrix) {
+  void compute_transformation(const HostView2DLeft &overlap_matrix) {
     HostView2DLeft S("TempS", _N, _N);
     Kokkos::deep_copy(S, overlap_matrix);
 

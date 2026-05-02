@@ -128,8 +128,8 @@ double convergence_analysis(size_t nrad, size_t nang, REC recorder) {
         quad_points_1d(flat_idx, 2) = quadrature_points_device(i, j, 2);
       });
 
-  Kokkos::View<double **> S =
-      diag_overlap_integral(stobasis, quad_points_1d, weights_1d);
+  DeviceView2DLeft S =
+      overlap_integral(stobasis, quad_points_1d, weights_1d);
 
   auto S_h = Kokkos::create_mirror_view(S);
   Kokkos::deep_copy(S_h, S);

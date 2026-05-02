@@ -29,10 +29,9 @@
 
 namespace NuKEXC {
 
-Kokkos::View<double **>
-overlap_integral(STOBasisSet &basis,
-                 Kokkos::View<double *[3]> quadrature_points,
-                 Kokkos::View<double *> quadrature_weights) {
+DeviceView2DLeft overlap_integral(STOBasisSet &basis,
+                                  Kokkos::View<double *[3]> quadrature_points,
+                                  Kokkos::View<double *> quadrature_weights) {
 
   size_t N = basis.nbf();
   size_t nquad_points = quadrature_points.extent(0);
@@ -40,8 +39,8 @@ overlap_integral(STOBasisSet &basis,
       evaluate_sto_basis_on_collocation_points(basis, quadrature_points);
 
   // Can be replaced by Kokkos kernel later
-  Kokkos::View<double **> overlap_matrix("Overlap matrix", N, N);
-  Kokkos::View<double **> weighted_points("Weighted points", N, nquad_points);
+  DeviceView2DLeft overlap_matrix("Overlap matrix", N, N);
+  DeviceView2DLeft weighted_points("Weighted points", N, nquad_points);
 
   Kokkos::parallel_for(
       "Scale Points",
@@ -56,29 +55,32 @@ overlap_integral(STOBasisSet &basis,
   return overlap_matrix;
 }
 
-Kokkos::View<double **>
+DeviceView2DLeft
 diag_overlap_integral(STOBasisSet &basis,
                       Kokkos::View<double *[3]> quadrature_points,
                       Kokkos::View<double *> quadrature_weights) {
 
   size_t N = basis.nbf();
   size_t nquad_points = quadrature_points.extent(0);
+
+  DeviceView2DLeft overlap_matrix("Overlap matrix", N, N);
   Kokkos::View<double **> collocation_points =
       evaluate_sto_basis_on_collocation_points(basis, quadrature_points);
 
   // Can be replaced by Kokkos kernel later
-  Kokkos::View<double **> overlap_matrix("Overlap matrix", N, N);
+  DeviceView2DLeft diag_overlap_integraloverlap_matrix("Overlap matrix", N, N);
 
   Kokkos::parallel_for(
       "Compute diag{S}", N, KOKKOS_LAMBDA(const int &i) {
         for (int g = 0; g < nquad_points; ++g) {
-          overlap_matrix(i,i) += quadrature_weights(g) * collocation_points(i, g) *
-                         collocation_points(i, g);
+          overlap_matrix(i, i) += quadrature_weights(g) *
+                                  collocation_points(i, g) *
+                                  collocation_points(i, g);
         }
       });
   return overlap_matrix;
 }
-Kokkos::View<double **> nuclear_potential_integral(
+DeviceView2DLeft nuclear_potential_integral(
     STOBasisSet &basis, Kokkos::View<double *[3]> quadrature_points,
     Kokkos::View<double *> quadrature_weights,
     Kokkos::View<double *[3]> atom_centers, Kokkos::View<unsigned *> Z) {
@@ -89,8 +91,8 @@ Kokkos::View<double **> nuclear_potential_integral(
       evaluate_sto_basis_on_collocation_points(basis, quadrature_points);
 
   // Can be replaced by Kokkos kernel later
-  Kokkos::View<double **> V_n("Nuclear potential matrix", N, N);
-  Kokkos::View<double **> weighted_points("Weighted points", N, nquad_points);
+  DeviceView2DLeft V_n("Nuclear potential matrix", N, N);
+  DeviceView2DLeft weighted_points("Weighted points", N, nquad_points);
 
   Kokkos::parallel_for(
       "Scale Points",
@@ -111,10 +113,10 @@ Kokkos::View<double **> nuclear_potential_integral(
 
   return V_n;
 }
-Kokkos::View<double **>
-kinetic_integral(STOBasisSet &basis,
-                 Kokkos::View<double *[3]> quadrature_points,
-                 Kokkos::View<double *> quadrature_weights) {
+
+DeviceView2DLeft kinetic_integral(STOBasisSet &basis,
+                                  Kokkos::View<double *[3]> quadrature_points,
+                                  Kokkos::View<double *> quadrature_weights) {
 
   size_t nbasis = basis.nbf();
   size_t nquad_points = quadrature_points.extent(0);
@@ -122,10 +124,10 @@ kinetic_integral(STOBasisSet &basis,
       evaluate_sto_basis_grad_on_collocation_points(basis, quadrature_points);
 
   // Can be replaced by Kokkos kernel later
-  Kokkos::View<double **> kinetic_matrix("Overlap matrix", nbasis, nbasis);
-  Kokkos::View<double **> Gx("Gradient in x direction", nbasis, nquad_points);
-  Kokkos::View<double **> Gy("Gradient in y direction", nbasis, nquad_points);
-  Kokkos::View<double **> Gz("Gradient in z direction", nbasis, nquad_points);
+  DeviceView2DLeft kinetic_matrix("Overlap matrix", nbasis, nbasis);
+  DeviceView2DLeft Gx("Gradient in x direction", nbasis, nquad_points);
+  DeviceView2DLeft Gy("Gradient in y direction", nbasis, nquad_points);
+  DeviceView2DLeft Gz("Gradient in z direction", nbasis, nquad_points);
 
   Kokkos::parallel_for(
       "Weighted Grad Collocation",

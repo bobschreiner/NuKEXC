@@ -17,6 +17,7 @@
  *
  */
 
+#include "nukexc/kokkos_config.hpp"
 #include <Kokkos_Core.hpp>
 #include <catch2/catch_all.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -27,7 +28,7 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
-#include <nukexc/diagonaliser.hpp>
+#include <nukexc/diagonalizer.hpp>
 #include <nukexc/grid.hpp>
 #include <nukexc/integration.hpp>
 #include <nukexc/molecule.hpp>
@@ -70,9 +71,9 @@ TEST_CASE("hydrogen 1s -- normalization, eigenvalues, virial",
   auto grid = make_flat_grid<bk_type, ll_type>(mol);
   STOBasisSet basis = load_thakkar_basis(mol);
 
-  auto S = overlap_integral(basis, grid.quad_points, grid.weights);
-  auto T = kinetic_integral(basis, grid.quad_points, grid.weights);
-  auto V = nuclear_potential_integral(basis, grid.quad_points, grid.weights,
+  DeviceView2DLeft S = overlap_integral(basis, grid.quad_points, grid.weights);
+  DeviceView2DLeft T = kinetic_integral(basis, grid.quad_points, grid.weights);
+  DeviceView2DLeft V = nuclear_potential_integral(basis, grid.quad_points, grid.weights,
                                       grid.atom_centers, grid.Z);
 
   auto S_h = Kokkos::create_mirror_view(S);

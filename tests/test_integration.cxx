@@ -37,6 +37,7 @@
 #include <nukexc/partitioning.hpp>
 #include <nukexc/stobasis.hpp>
 
+#include "nukexc/kokkos_config.hpp"
 #include "standards.hpp"
 
 using namespace NuKEXC;
@@ -139,7 +140,7 @@ TEST_CASE("H20", "[h20_weights]") {
         quad_points_1d(flat_idx, 2) = quadrature_points_device(i, j, 2);
       });
 
-  Kokkos::View<double **> S =
+  DeviceView2DLeft S =
       overlap_integral(stobasis, quad_points_1d, weights_1d);
 
   auto S_h = Kokkos::create_mirror_view(S);
