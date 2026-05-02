@@ -1,6 +1,6 @@
 /*
- *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator 
- *    Copyright (C) 2026 Bob Schreiner 
+ *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    Copyright (C) 2026 Bob Schreiner
  *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
@@ -37,7 +37,25 @@ using HostSpace = Kokkos::HostSpace;
 // using MemSpace = Kokkos::HIPSpace;
 using MemSpace = ExecSpace::memory_space;
 
-//using Layout = Kokkos::LayoutLeft;
+// using Layout = Kokkos::LayoutLeft;
 using Layout = Kokkos::LayoutRight;
 const double epsilon_shift = 1e-30;
+
+// Standard Views
+using View1D = Kokkos::View<double *>;
+using DeviceView2D = Kokkos::View<double **, ExecSpace>;
+using HostView2D = Kokkos::View<double **, HostSpace>;
+
+// Device Views with specific layout
+using DeviceView2DLeft = Kokkos::View<double **, Kokkos::LayoutLeft,
+                                      ExecSpace>; // LAPACK requires LeftLayout
+using DeviceView2DRight =
+    Kokkos::View<double **, Kokkos::LayoutRight, ExecSpace>;
+using DeviceView1D = Kokkos::View<double *, ExecSpace>;
+
+// Host Views with specific layout
+using HostView2DLeft = Kokkos::View<double **, Kokkos::LayoutLeft, HostSpace>;
+using HostView2DRight = Kokkos::View<double **, Kokkos::LayoutRight, HostSpace>;
+using HostView1D = Kokkos::View<double *, HostSpace>;
+
 } // namespace NuKEXC

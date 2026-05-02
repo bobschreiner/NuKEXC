@@ -218,14 +218,9 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
 
   // ---- Diagonalization Test ----
   int n_basis = 4;
-
-  // 1. Prepare Batched Views (Device)
-
-  Kokkos::View<double **> H("mo_coeffs", n_basis, n_basis);
-  Kokkos::View<double **> mo_coeffs("mo_coeffs", n_basis, n_basis);
-  Kokkos::View<double *> mo_energies("mo_energies", n_basis);
-
-  auto H_h = Kokkos::create_mirror_view(H);
+  HostView2DLeft H_h("mo_coeffs", n_basis, n_basis);
+  HostView2DLeft mo_coeffs_h("mo_coeffs", n_basis, n_basis);
+  HostView1D mo_energies_h("mo_energies", n_basis);
 
   for (int i = 0; i < n_basis; ++i) {
     for (int j = 0; j < n_basis; ++j) {
@@ -233,16 +228,9 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
     }
   }
 
-  // 3. Transfer to Device and Run
-  Kokkos::deep_copy(H, H_h);
-
   NuKEXC::Diagonalizer diagonalizer(n_basis);
-  diagonalizer.compute_transformation(S);
-  diagonalizer.solve(H, mo_coeffs, mo_energies);
-
-  // 4. Verify Results on Host
-  auto energies_h = Kokkos::create_mirror_view(mo_energies);
-  Kokkos::deep_copy(energies_h, mo_energies);
+  diagonalizer.compute_transformation(S_h);
+  diagonalizer.solve(H_h, mo_coeffs_h, mo_energies_h);
 
   // Sort if necessary, though for H they should naturally fall into -0.5 and
   // -0.125 We expect one -0.5 (1s) and three -0.125 (2p)
@@ -250,23 +238,21 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
   double e_2p = -0.125;
 
   // Check 1s energy (usually the lowest)
-  REQUIRE_THAT(energies_h(0), Catch::Matchers::WithinRel(e_1s, 1e-7));
+  REQUIRE_THAT(mo_energies_h(0), Catch::Matchers::WithinRel(e_1s, 1e-7));
 
   // Check 2p degeneracy and values
   for (int i = 1; i < 4; ++i) {
-    REQUIRE_THAT(energies_h(i), Catch::Matchers::WithinRel(e_2p, 1e-7));
+    REQUIRE_THAT(mo_energies_h(i), Catch::Matchers::WithinRel(e_2p, 1e-7));
   }
 
   // 5. Verify Orthonormality of MO Coefficients: C^T * S * C = I
-  auto C_h = Kokkos::create_mirror_view(mo_coeffs);
-  Kokkos::deep_copy(C_h, mo_coeffs);
-
   for (int i = 0; i < n_basis; ++i) {
     for (int j = 0; j < n_basis; ++j) {
       double orthogonality_sum = 0.0;
       for (int a = 0; a < n_basis; ++a) {
         for (int b = 0; b < n_basis; ++b) {
-          orthogonality_sum += C_h(a, i) * S_h(a, b) * C_h(b, j);
+          orthogonality_sum +=
+              mo_coeffs_h(a, i) * S_h(a, b) * mo_coeffs_h(b, j);
         }
       }
       double expected = (i == j) ? 1.0 : 0.0;
@@ -346,7 +332,7 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
 //  TEST 4 — H2+ Energies
 // ============================================================
 //
-// Two H atoms 1 bohr apart along x.  Basis: one 1s STO (zeta=1) per atom.
+// Two H atoms R bohr apart along x.  Basis: one 1s STO (zeta=1) per atom.
 //
 // The off-diagonal overlap integral is known exactly for unnormalized STOs
 // and reduces to:
@@ -361,7 +347,7 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
 
 TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
 
-  const double R = 2.0; // bond length in bohr
+  const double R = 1.0; // bond length in bohr
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}, {R, 0., 0.}},
                std::vector<unsigned>{1u, 1u});
@@ -390,13 +376,11 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
   // ---- Diagonalization Test ----
   int n_basis = basis.nbf();
 
-  // 1. Prepare Batched Views (Device)
+  // 1. Prepare Batched Views on Host
 
-  Kokkos::View<double **> H("mo_coeffs", n_basis, n_basis);
-  Kokkos::View<double **> mo_coeffs("mo_coeffs", n_basis, n_basis);
-  Kokkos::View<double *> mo_energies("mo_energies", n_basis);
-
-  auto H_h = Kokkos::create_mirror_view(H);
+  HostView2DLeft H_h("mo_coeffs", n_basis, n_basis);
+  HostView2DLeft mo_coeffs_h("mo_coeffs", n_basis, n_basis);
+  HostView1D mo_energies_h("mo_energies", n_basis);
 
   for (int i = 0; i < n_basis; ++i) {
     for (int j = 0; j < n_basis; ++j) {
@@ -404,27 +388,17 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
     }
   }
 
-  // 3. Transfer to Device and Run
-  Kokkos::deep_copy(H, H_h);
-
   NuKEXC::Diagonalizer diagonalizer(n_basis);
-  diagonalizer.compute_transformation(S);
-  diagonalizer.solve(H, mo_coeffs, mo_energies);
-
-  // 4. Verify Results on Host
-  auto energies_h = Kokkos::create_mirror_view(mo_energies);
-  Kokkos::deep_copy(energies_h, mo_energies);
-
-  // 5. Verify Orthonormality: C^T * S * C = I
-  auto C_h = Kokkos::create_mirror_view(mo_coeffs);
-  Kokkos::deep_copy(C_h, mo_coeffs);
+  diagonalizer.compute_transformation(S_h);
+  diagonalizer.solve(H_h, mo_coeffs_h, mo_energies_h);
 
   for (int i = 0; i < n_basis; ++i) {
     for (int j = 0; j < n_basis; ++j) {
       double orthogonality_sum = 0.0;
       for (int a = 0; a < n_basis; ++a) {
         for (int b = 0; b < n_basis; ++b) {
-          orthogonality_sum += C_h(a, i) * S_h(a, b) * C_h(b, j);
+          orthogonality_sum +=
+              mo_coeffs_h(a, i) * S_h(a, b) * mo_coeffs_h(b, j);
         }
       }
       double expected = (i == j) ? 1.0 : 0.0;
@@ -436,19 +410,19 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
 
   // 6. Verify Energy Ordering (Ascending)
   for (int i = 0; i < n_basis - 1; ++i) {
-    CHECK(energies_h(i) <= energies_h(i + 1));
+    CHECK(mo_energies_h(i) <= mo_energies_h(i + 1));
   }
 
   // 7. Verify the Ground State Energy (sigma_g)
   // For H2+ at R=1.0 bohr, the exact electronic energy is roughly -1.45 au
   // Depending on your basis set quality, we check if it's in the ballpark.
-  double e_ground = energies_h(0);
+  double e_ground = mo_energies_h(0);
   REQUIRE(e_ground < 0.0); // Must be bound
 
   // Optional: print out the spectrum for debugging
-  std::cout << "H2+ Spectrum (R=" << R << "): ";
+  std::cout << "H2+ Spectrum (R=" << R << ")" << std::endl;
   for (int i = 0; i < n_basis; ++i)
-    std::cout << energies_h(i) << " ";
+    std::cout << mo_energies_h(i) << std::endl;
   std::cout << std::endl;
 }
 
