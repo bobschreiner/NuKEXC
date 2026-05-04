@@ -17,6 +17,8 @@
  *
  */
 
+#pragma once
+
 #include <Kokkos_Core.hpp>
 #include <catch2/catch_all.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -32,7 +34,6 @@
 #include <nukexc/partitioning.hpp>
 #include <nukexc/stobasis.hpp>
 
-#include <cmath>
 #include <vector>
 
 //

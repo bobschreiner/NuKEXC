@@ -63,22 +63,21 @@ diag_overlap_integral(STOBasisSet &basis,
   size_t N = basis.nbf();
   size_t nquad_points = quadrature_points.extent(0);
 
-  DeviceView2DLeft overlap_matrix("Overlap matrix", N, N);
   Kokkos::View<double **> collocation_points =
       evaluate_sto_basis_on_collocation_points(basis, quadrature_points);
 
   // Can be replaced by Kokkos kernel later
-  DeviceView2DLeft diag_overlap_integraloverlap_matrix("Overlap matrix", N, N);
+  DeviceView2DLeft diag_overlap_matrix("Overlap matrix", N, N);
 
   Kokkos::parallel_for(
       "Compute diag{S}", N, KOKKOS_LAMBDA(const int &i) {
         for (int g = 0; g < nquad_points; ++g) {
-          overlap_matrix(i, i) += quadrature_weights(g) *
-                                  collocation_points(i, g) *
-                                  collocation_points(i, g);
+          diag_overlap_matrix(i, i) += quadrature_weights(g) *
+                                       collocation_points(i, g) *
+                                       collocation_points(i, g);
         }
       });
-  return overlap_matrix;
+  return diag_overlap_matrix;
 }
 DeviceView2DLeft nuclear_potential_integral(
     STOBasisSet &basis, Kokkos::View<double *[3]> quadrature_points,
