@@ -18,7 +18,6 @@
  *
  */
 
-#include <impl/Kokkos_CheckUsage.hpp>
 #include <integratorxx/quadratures/radial/treutlerahlrichs.hpp>
 #include <integratorxx/quadratures/s2/lebedev_laikov.hpp>
 #include <iomanip>
