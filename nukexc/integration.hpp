@@ -94,7 +94,7 @@ DeviceView2DLeft nuclear_potential_integral(
   DeviceView2DLeft weighted_points("Weighted points", N, nquad_points);
 
   Kokkos::parallel_for(
-      "Scale Points",
+      "Scale Points nuclear potential",
       Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N, nquad_points}),
       KOKKOS_LAMBDA(const int &i, const int &g) {
         for (unsigned int k = 0; k < atom_centers.extent(0); ++k) {
