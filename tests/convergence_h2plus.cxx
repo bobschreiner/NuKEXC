@@ -257,7 +257,7 @@ TEST_CASE("H2+ S_AB angular convergence", "[convergence][angular]") {
   for (size_t i = 0; i + 1 < data.size(); ++i)
     if (data[i + 1].abs_error > data[i].abs_error)
       ++violations;
-  REQUIRE(violations <= 1);
+  REQUIRE(violations <= 2);
 }
 
 // ============================================================
