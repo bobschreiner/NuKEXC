@@ -200,24 +200,94 @@ target_link_libraries(your_target PRIVATE NuKEXC::NuKEXC)
 ```
 
 ---
-
 ## Platform Notes
-
-**LUMI (AMD MI250X)**
-
-Use the Cray compiler wrappers and load the appropriate modules before configuring:
-
-```bash
-module load PrgEnv-cray craype-accel-amd-gfx90a rocm
-export CXX=CC
+ 
+### LUMI (AMD MI250X)
+ 
+On LUMI, Kokkos and KokkosKernels must be installed via EasyBuild using the provided easyconfig files. Do **not** attempt a manual CMake install — the Cray PE toolchain requires specific flags that are encoded in the easyconfigs.
+ 
+**Prerequisites**
+ 
+EasyBuild 5.1.2 or later must be available. The builds use the `cpeAMD/25.03` toolchain and depend on the `rocm` external module, both of which are available on LUMI-G nodes.
+ 
+**Step 1 — Copy the easyconfig files**
+ 
+The two easyconfig files are provided in the `lumi/` directory of this repository:
+ 
 ```
-
-Set `-DKokkos_ARCH_VEGA90A=ON` and enable ROCBlas/ROCSolver TPLs.
-
+lumi/Kokkos-4.6.02-cpeAMD-25.03-rocm.eb
+lumi/Kokkos-kernels-4.6.02-cpeAMD-25.03-rocm.eb
+```
+ 
+**Step 2 — Set up EasyBuild for your user installation**
+ 
+```bash
+module load LUMI/25.03 partition/G
+module load EasyBuild-user
+```
+ 
+**Step 3 — Install Kokkos**
+ 
+Kokkos must be installed before KokkosKernels. Run from a login node (`uan`):
+ 
+```bash
+eb Kokkos-4.6.02-cpeAMD-25.03-rocm.eb
+```
+ 
+This builds Kokkos 4.6.02 with the following configuration:
+- Compiler: `${ROCM_PATH}/bin/hipcc`
+- GPU arch: `AMD_GFX90A` (MI250X)
+- CPU arch: `ZEN3`
+- HIP + OpenMP backends enabled
+- `HIP_MULTIPLE_KERNEL_INSTANTIATIONS` enabled for better GPU occupancy
+- Build time: approximately 72 seconds
+**Step 4 — Install KokkosKernels**
+ 
+```bash
+eb Kokkos-kernels-4.6.02-cpeAMD-25.03-rocm.eb
+```
+ 
+This builds KokkosKernels 4.6.02 with:
+- `Kokkos_ROOT` set automatically from the installed Kokkos module
+- ROCBlas, ROCSparse, and ROCSolver TPLs enabled — these are required for GPU-accelerated GEMM and SVD
+- Host BLAS and LAPACK also enabled
+- Build time: approximately 7 minutes
+**Step 5 — Load the modules**
+ 
+After installation, load the modules before configuring NuKEXC:
+ 
+```bash
+module load Kokkos/4.6.02-cpeAMD-25.03-rocm
+module load Kokkos-kernels/4.6.02-cpeAMD-25.03-rocm
+```
+ 
+**Step 6 — Configure and build NuKEXC**
+ 
+```bash
+cd NuKEXC
+mkdir build && cd build
+ 
+cmake .. \
+  -DCMAKE_CXX_COMPILER=CC \
+  -DKokkos_ROOT=${EBROOTKOKKOS} \
+  -DKokkosKernels_ROOT=${EBROOTKOKKOSKERNELS} \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DNuKEXC_BUILD_TESTING=ON
+ 
+make -j16
+```
+ 
+Note that `craype-accel-amd-gfx90a` is explicitly unloaded during the Kokkos and KokkosKernels builds (as specified in the easyconfigs) to avoid conflicts with `hipcc`. NuKEXC itself uses the Cray `CC` wrapper which handles this automatically.
+ 
 **HPC clusters without internet access**
-
-Set `FETCHCONTENT_UPDATES_DISCONNECTED=ON` (already the default in NuKEXC's CMake) and pre-clone IntegratorXX into your source tree or a shared directory. Pass its path via `-DIntegratorXX_ROOT`.
-
+ 
+`FETCHCONTENT_UPDATES_DISCONNECTED=ON` is already set in NuKEXC's CMake, so FetchContent will not attempt network access if the source is already present. On LUMI, pre-clone IntegratorXX into your source tree or a shared project directory before configuring:
+ 
+```bash
+git clone https://github.com/wavefunction91/IntegratorXX.git /path/to/integratorxx
+```
+ 
+Then pass `-DIntegratorXX_ROOT=/path/to/integratorxx` to CMake.
 ---
 
 ## License
