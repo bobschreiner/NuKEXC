@@ -1,6 +1,6 @@
 # NuKEXC — Numerical Kokkos Enhanced Exchange Correlation Integrator
 
-NuKEXC is a header-only C++ library for numerically integrating atomic orbital integrals (overlap, kinetic, nuclear potential, exchange-correlation) on GPUs using Kokkos. It targets Slater-type orbital (STO) basis sets and is designed for use in GPU-accelerated self-consistent field (SCF) calculations.
+NuKEXC is a header-only C++ library for numerically integrating atomic orbital integrals (overlap, kinetic, nuclear potential, exchange-correlation) on GPUs using Kokkos. It targets Numerical Atomic Orbital (NAO) and Slater-type orbital (STO) basis sets and is designed for use in GPU-accelerated self-consistent field (SCF) calculations.
 
 ---
 
@@ -128,7 +128,7 @@ Then pass `-DIntegratorXX_ROOT=/path/to/integratorxx` when configuring NuKEXC.
 ## Building NuKEXC
 
 ```bash
-git clone https://github.com/your-org/NuKEXC.git
+git clone https://github.com/bobschreiner/NuKEXC.git
 cd NuKEXC
 mkdir build && cd build
 
@@ -184,7 +184,7 @@ Add NuKEXC to your project via `FetchContent`:
 include(FetchContent)
 FetchContent_Declare(
   NuKEXC
-  GIT_REPOSITORY https://github.com/your-org/NuKEXC.git
+  GIT_REPOSITORY https://github.com/bobschreiner/NuKEXC.git
   GIT_TAG        main
 )
 FetchContent_MakeAvailable(NuKEXC)
