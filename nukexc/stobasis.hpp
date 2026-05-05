@@ -254,35 +254,32 @@ load_thakkar_basis(const Molecule &mol,
   return make_manual_basis(temp_basis);
 }
 
-Kokkos::View<double **> evaluate_sto_basis_on_collocation_points(
-    const STOBasisSet &basis_set,
-    Kokkos::View<double *[3]> &collocation_points) {
-
-  size_t col_points = collocation_points.extent(0);
-  size_t nbasis_functions = basis_set.nbf();
-
-  Kokkos::View<double **> collocation_values("collocation values",
-                                             nbasis_functions, col_points);
-
-  Kokkos::MDRangePolicy<Kokkos::Rank<2>> md_policy(
-      {0, 0}, {nbasis_functions, col_points});
+template <typename PointsView, typename ValuesView>
+void fill_collocation(
+    ExecSpace &space, const STOBasisSet &basis, PointsView collocation_points,
+    ValuesView collocation_values) // pre-allocated, written in place
+{
+  int N = basis.nbf();
+  int G = collocation_points.extent(0);
   Kokkos::parallel_for(
-      "Compute collocation of shells", md_policy,
-      KOKKOS_LAMBDA(const int &i, const int &j) {
-        const int n_val = basis_set.n_(i);
-        const int l_val = basis_set.l_(i);
-        const int m_val = basis_set.m_(i);
-        const double norm = basis_set.norm_(i);
-        const double zeta = basis_set.zeta_(i);
+      "Fill collocation",
+      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>(space, {0, 0}, {N, G}),
+      KOKKOS_LAMBDA(int i, int j) {
+        // same math as before, written directly into col(i,j)
+        const int n_val = basis.n_(i);
+        const int l_val = basis.l_(i);
+        const int m_val = basis.m_(i);
+        const double norm = basis.norm_(i);
+        const double zeta = basis.zeta_(i);
 
         // radial part of the shell
         // radial_part = R_nl(r) = r^(n-1) * C_nl * exp(-⍺ * r))
 
-        double dx = collocation_points(j, 0) - basis_set.O_(i, 0);
-        double dy = collocation_points(j, 1) - basis_set.O_(i, 1);
-        double dz = collocation_points(j, 2) - basis_set.O_(i, 2);
-        double r =
-            Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + epsilon_shift; // Avoid pow(0,0)
+        double dx = collocation_points(j, 0) - basis.O_(i, 0);
+        double dy = collocation_points(j, 1) - basis.O_(i, 1);
+        double dz = collocation_points(j, 2) - basis.O_(i, 2);
+        double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
+                   epsilon_shift; // Avoid pow(0,0)
 
         double radial_part;
 
@@ -296,21 +293,19 @@ Kokkos::View<double **> evaluate_sto_basis_on_collocation_points(
 
         collocation_values(i, j) = radial_part * angular_part;
       });
-  return collocation_values;
 }
 
-Kokkos::View<double **[3]> evaluate_sto_basis_grad_on_collocation_points(
-    const STOBasisSet &basis_set,
-    Kokkos::View<double *[3]> &collocation_points) {
+template <typename PointsView, typename ValuesView>
+void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
+                           PointsView &collocation_points,
+                           ValuesView &collocation_values) {
 
   size_t col_points = collocation_points.extent(0);
   size_t nbasis_functions = basis_set.nbf();
 
-  Kokkos::View<double **[3]> collocation_values("collocation values",
-                                                nbasis_functions, col_points);
-
   Kokkos::MDRangePolicy<Kokkos::Rank<2>> md_policy(
-      {0, 0}, {nbasis_functions, col_points});
+      space, {0, 0}, {nbasis_functions, col_points});
+
   Kokkos::parallel_for(
       "Compute collocation of shells", md_policy,
       KOKKOS_LAMBDA(const int &i, const int &j) {
@@ -323,8 +318,8 @@ Kokkos::View<double **[3]> evaluate_sto_basis_grad_on_collocation_points(
         double dx = collocation_points(j, 0) - basis_set.O_(i, 0);
         double dy = collocation_points(j, 1) - basis_set.O_(i, 1);
         double dz = collocation_points(j, 2) - basis_set.O_(i, 2);
-        double r =
-            Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + epsilon_shift; // Avoid pow(0,0)
+        double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
+                   epsilon_shift; // Avoid pow(0,0)
 
         // Angular part
         double S_val;
@@ -351,6 +346,5 @@ Kokkos::View<double **[3]> evaluate_sto_basis_grad_on_collocation_points(
         collocation_values(i, j, 1) = R_pre * dS_dy + S_val * (dy * common_R);
         collocation_values(i, j, 2) = R_pre * dS_dz + S_val * (dz * common_R);
       });
-  return collocation_values;
 }
 } // namespace NuKEXC
