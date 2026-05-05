@@ -42,19 +42,20 @@ public:
     _XT_F = DeviceView2DLeft("XT_F_temp", _N, _N);
     _U = DeviceView2DLeft("U_temp", _N, _N);
     _VT = DeviceView2DLeft("VT_temp", _N, _N);
+    _F = DeviceView2DLeft("LocalF", _N, _N);
+    _S = DeviceView2DLeft("LocalS", _N, _N);
   }
 
   // Call this only when the overlap matrix S changes (e.g., new geometry)
   void compute_transformation(const DeviceView2DLeft &overlap_matrix) {
-    DeviceView2DLeft S("TempS", _N, _N);
-    Kokkos::deep_copy(S, overlap_matrix);
+    Kokkos::deep_copy(_S, overlap_matrix);
 
-    DeviceView2DLeft Us("Us", _N, _N);
+    DeviceView2DLeft Us("U", _N, _N);
     DeviceView2DLeft VTs("VTs", _N, _N);
     DeviceView1D sigma("sigma", _N);
 
     // SVD of S to handle potential singularity
-    KokkosLapack::svd("S", "S", S, sigma, Us, VTs);
+    KokkosLapack::svd("S", "S", _S, sigma, Us, VTs);
 
     // Build X = Us * sigma^-1/2 (Canonical Orthogonalization)
     auto X_local = _X;
@@ -73,15 +74,14 @@ public:
   void solve(const DeviceView2DLeft &fock_matrix, DeviceView2DLeft &mo_coeff,
              DeviceView1D &mo_energies) {
 
-    DeviceView2DLeft F("LocalF", _N, _N);
-    Kokkos::deep_copy(F, fock_matrix);
+    Kokkos::deep_copy(_F, fock_matrix);
 
     // 1. Transform Fock Matrix: F' = X^T * F * X
-    KokkosBlas::gemm("T", "N", 1.0, _X, F, 0.0, _XT_F);
-    KokkosBlas::gemm("N", "N", 1.0, _XT_F, _X, 0.0, F);
+    KokkosBlas::gemm("T", "N", 1.0, _X, _F, 0.0, _XT_F);
+    KokkosBlas::gemm("N", "N", 1.0, _XT_F, _X, 0.0, _F);
 
     // 2. Diagonalize the transformed F
-    KokkosLapack::svd("S", "S", F, mo_energies, _U, _VT);
+    KokkosLapack::svd("S", "S", _F, mo_energies, _U, _VT);
 
     // 3. Restore signs for symmetric singular values
     auto U_local = _U;
@@ -106,7 +106,7 @@ public:
 
 private:
   int _N;
-  DeviceView2DLeft _X, _XT_F, _U, _VT;
+  DeviceView2DLeft _X, _XT_F, _U, _VT, _S, _F;
 
   void sort(DeviceView2DLeft &mo_coeff, DeviceView1D &mo_energies) {
     int N = _N;

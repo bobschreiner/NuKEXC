@@ -111,7 +111,7 @@ TEST_CASE("Benchmark SCF", "[benchmark_scf]") {
 
       // Generate the grid
       grid_construction_timer.reset();
-      FlatGrid quadrature_grid = make_flat_grid<ta_type, ll_type>(mol, 50, 20);
+      FlatGrid quadrature_grid = make_flat_grid<ta_type, ll_type>(mol);
       mol_timing["grid"] = grid_construction_timer.seconds();
 
       // Compute all integrals

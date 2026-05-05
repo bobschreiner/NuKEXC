@@ -307,7 +307,7 @@ void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
       space, {0, 0}, {nbasis_functions, col_points});
 
   Kokkos::parallel_for(
-      "Compute collocation of shells", md_policy,
+      "Fill collocation grad", md_policy,
       KOKKOS_LAMBDA(const int &i, const int &j) {
         const int n_val = basis_set.n_(i);
         const int l_val = basis_set.l_(i);
