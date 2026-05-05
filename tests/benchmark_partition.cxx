@@ -20,7 +20,6 @@
 
 #include <iomanip>
 #include <iostream>
-#include <string_view>
 
 #include <catch2/catch_all.hpp>
 
@@ -97,12 +96,10 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
       int natoms = mol.natoms;
 
       // Create all the Kokkos Views on host device
-      Kokkos::View<double *[3]> atom_centers_device(
-          "atom centers", natoms);
-      Kokkos::View<double **[3]> quadrature_points_device(
-          "quadrature_points", natoms, npts);
-      Kokkos::View<double **> weights_device("weights",
-                                                                natoms, npts);
+      Kokkos::View<double *[3]> atom_centers_device("atom centers", natoms);
+      Kokkos::View<double **[3]> quadrature_points_device("quadrature_points",
+                                                          natoms, npts);
+      Kokkos::View<double **> weights_device("weights", natoms, npts);
 
       // Create all the Kokkos Mirror Views on Execution device
       auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);

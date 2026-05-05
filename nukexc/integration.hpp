@@ -261,4 +261,151 @@ kinetic_integral(STOBasisSet &basis,
   space_b.fence();
   return kinetic_matrix;
 }
+
+struct CoreHamiltonianResult {
+  DeviceView2DLeft overlap;
+  DeviceView2DLeft kinetic;
+  DeviceView2DLeft nuclear;
+  DeviceView2DLeft hamiltonian; // T + V_n
+};
+
+CoreHamiltonianResult
+compute_core_hamiltonian(STOBasisSet &basis,
+                         Kokkos::View<double *[3], ExecSpace> quadrature_points,
+                         Kokkos::View<double *, ExecSpace> quadrature_weights,
+                         Kokkos::View<double *[3], ExecSpace> atom_centers,
+                         Kokkos::View<unsigned *, ExecSpace> Z) {
+  int N = basis.nbf();
+  int total_quad_points = quadrature_points.extent(0);
+
+  CoreHamiltonianResult result;
+  result.overlap = DeviceView2DLeft("Overlap matrix", N, N);
+  result.kinetic = DeviceView2DLeft("Kinetic matrix", N, N);
+  result.nuclear = DeviceView2DLeft("Nuclear potential matrix", N, N);
+  result.hamiltonian = DeviceView2DLeft("Core Hamiltonian", N, N);
+
+  // Single set of double buffers shared across all three integrals
+  DeviceView2DLeft col_a("col_a", N, CHUNK_SIZE);
+  DeviceView2DLeft col_b("col_b", N, CHUNK_SIZE);
+  DeviceView2DLeft wt_overlap_a("wt_overlap_a", N, CHUNK_SIZE);
+  DeviceView2DLeft wt_overlap_b("wt_overlap_b", N, CHUNK_SIZE);
+  DeviceView2DLeft wt_nuclear_a("wt_nuclear_a", N, CHUNK_SIZE);
+  DeviceView2DLeft wt_nuclear_b("wt_nuclear_b", N, CHUNK_SIZE);
+
+  Kokkos::View<double **[3], ExecSpace> grad_a("grad_a", N, CHUNK_SIZE);
+  Kokkos::View<double **[3], ExecSpace> grad_b("grad_b", N, CHUNK_SIZE);
+
+  DeviceView2DLeft Gx_a("Gx_a", N, CHUNK_SIZE), Gx_b("Gx_b", N, CHUNK_SIZE);
+  DeviceView2DLeft Gy_a("Gy_a", N, CHUNK_SIZE), Gy_b("Gy_b", N, CHUNK_SIZE);
+  DeviceView2DLeft Gz_a("Gz_a", N, CHUNK_SIZE), Gz_b("Gz_b", N, CHUNK_SIZE);
+
+  ExecSpace space_a, space_b;
+
+  for (size_t start = 0; start < total_quad_points; start += CHUNK_SIZE) {
+    int cur = std::min(CHUNK_SIZE, total_quad_points - start);
+    bool even = (start / CHUNK_SIZE) % 2 == 0;
+
+    auto &col_cur = even ? col_a : col_b;
+    auto &wt_ov_cur = even ? wt_overlap_a : wt_overlap_b;
+    auto &wt_nuc_cur = even ? wt_nuclear_a : wt_nuclear_b;
+    auto &grad_cur = even ? grad_a : grad_b;
+    auto &Gx_cur = even ? Gx_a : Gx_b;
+    auto &Gy_cur = even ? Gy_a : Gy_b;
+    auto &Gz_cur = even ? Gz_a : Gz_b;
+    auto &space_cur = even ? space_a : space_b;
+    auto &space_prev = even ? space_b : space_a;
+
+    auto batch_pts = Kokkos::subview(
+        quadrature_points, std::make_pair(start, start + cur), Kokkos::ALL);
+    auto batch_wts =
+        Kokkos::subview(quadrature_weights, std::make_pair(start, start + cur));
+
+    auto col_view =
+        Kokkos::subview(col_cur, Kokkos::ALL, std::make_pair(0, cur));
+    auto wt_ov_view =
+        Kokkos::subview(wt_ov_cur, Kokkos::ALL, std::make_pair(0, cur));
+    auto wt_nuc_view =
+        Kokkos::subview(wt_nuc_cur, Kokkos::ALL, std::make_pair(0, cur));
+    auto grad_view = Kokkos::subview(grad_cur, Kokkos::ALL,
+                                     std::make_pair(0, cur), Kokkos::ALL);
+    auto Gx_view = Kokkos::subview(Gx_cur, Kokkos::ALL, std::make_pair(0, cur));
+    auto Gy_view = Kokkos::subview(Gy_cur, Kokkos::ALL, std::make_pair(0, cur));
+    auto Gz_view = Kokkos::subview(Gz_cur, Kokkos::ALL, std::make_pair(0, cur));
+
+    // Single collocation evaluation — used by overlap AND nuclear
+    fill_collocation(space_cur, basis, batch_pts, col_view);
+
+    // Single grad collocation evaluation — used by kinetic only
+    fill_grad_collocation(space_cur, basis, batch_pts, grad_view);
+
+    // Zero nuclear weight buffer before accumulating
+    Kokkos::deep_copy(space_cur, wt_nuc_view, 0.0);
+
+    // Single fused kernel: compute overlap weights, nuclear weights,
+    // and gradient weights all in one pass over (i, g)
+    Kokkos::parallel_for(
+        "Fused scale",
+        Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>(space_cur, {0, 0},
+                                                          {N, cur}),
+        KOKKOS_LAMBDA(int i, int g) {
+          double phi_ig = col_view(i, g);
+          double w_g = batch_wts(g);
+
+          // Overlap weight
+          wt_ov_view(i, g) = w_g * phi_ig;
+
+          // Nuclear weight — accumulate over atoms
+          double v_nuc = 0.0;
+          for (unsigned k = 0; k < atom_centers.extent(0); ++k) {
+            double dx = batch_pts(g, 0) - atom_centers(k, 0);
+            double dy = batch_pts(g, 1) - atom_centers(k, 1);
+            double dz = batch_pts(g, 2) - atom_centers(k, 2);
+            double r =
+                Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + epsilon_shift;
+            v_nuc -= double(Z(k)) / r;
+          }
+          wt_nuc_view(i, g) = v_nuc * w_g * phi_ig;
+
+          // Gradient weights
+          double wf = Kokkos::sqrt(w_g);
+          Gx_view(i, g) = grad_view(i, g, 0) * wf;
+          Gy_view(i, g) = grad_view(i, g, 1) * wf;
+          Gz_view(i, g) = grad_view(i, g, 2) * wf;
+        });
+
+    // Serialise GEMMs against previous iteration
+    space_prev.fence();
+
+    // Overlap: S += wt_ov * col^T
+    KokkosBlas::gemm(space_cur, "N", "T", 1.0, wt_ov_view, col_view, 1.0,
+                     result.overlap);
+
+    // Nuclear: V += wt_nuc * col^T
+    KokkosBlas::gemm(space_cur, "N", "T", 1.0, wt_nuc_view, col_view, 1.0,
+                     result.nuclear);
+
+    // Kinetic: T += 0.5 * G{xyz} * G{xyz}^T
+    KokkosBlas::gemm(space_cur, "N", "T", 0.5, Gx_view, Gx_view, 1.0,
+                     result.kinetic);
+    KokkosBlas::gemm(space_cur, "N", "T", 0.5, Gy_view, Gy_view, 1.0,
+                     result.kinetic);
+    KokkosBlas::gemm(space_cur, "N", "T", 0.5, Gz_view, Gz_view, 1.0,
+                     result.kinetic);
+  }
+
+  space_a.fence();
+  space_b.fence();
+
+  // Form H = T + V_n
+  int total = N * N;
+  auto T = result.kinetic;
+  auto V = result.nuclear;
+  auto H = result.hamiltonian;
+  Kokkos::parallel_for(
+      "Form core Hamiltonian",
+      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>({0, 0}, {N, N}),
+      KOKKOS_LAMBDA(int i, int j) { H(i, j) = T(i, j) + V(i, j); });
+
+  return result;
+}
 } // namespace NuKEXC
