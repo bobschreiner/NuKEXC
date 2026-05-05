@@ -1,0 +1,147 @@
+# Built with EasyBuild version 5.1.2 on 2026-05-03_01-06-04
+# Built with EasyBuild version 5.1.2 on 2026-04-23_11-15-57
+easyblock = 'CMakeMake'
+
+name =          'Kokkos-kernels'
+version =       '4.6.02'
+versionsuffix = '-rocm'
+
+homepage = 'https://github.com/kokkos/kokkos-kernels'
+
+whatis = [
+    "Kokkos C++ Performance Portability Programming Ecosystem: Math Kernels - Provides BLAS, Sparse BLAS and Graph Kernels"
+]
+
+description = """
+Kokkos C++ Performance Portability Programming Ecosystem: Math Kernels - 
+Provides BLAS, Sparse BLAS and Graph Kernels
+"""
+
+toolchain = {'name': 'cpeAMD', 'version': '25.03'}
+toolchainopts = {'verbose': False, 'openmp': True}
+
+sources = [{
+    'filename': '%(namelower)s-%(version)s.tar.gz',
+    'git_config': {
+        'url': 'https://github.com/kokkos',
+        'repo_name': '%(namelower)s',
+        'commit': '%(version)s',
+    }
+}]
+
+builddependencies = [
+    ('buildtools', '%(toolchain_version)s', '', True),
+]
+
+dependencies = [
+    ('rocm',   EXTERNAL_MODULE),
+    ('Kokkos', version,         '-rocm'),
+]
+
+preconfigopts = 'module unload craype-accel-amd-gfx90a && '
+
+configopts = ' '.join([
+    '-D Kokkos_ROOT=${EBROOTKOKKOS}',
+    '-D CMAKE_CXX_COMPILER=CC', # Isn't really needed as EasyBuild does that already, but stresses the difference with the cpeGNU version.
+    '-D BUILD_SHARED_LIBS=ON',
+    '-D KokkosKernels_ENABLE_TPL_BLAS=ON',
+    '-D KokkosKernels_ENABLE_TPL_LAPACK=ON',
+    '-D KokkosKernels_ENABLE_TPL_ROCBLAS=ON',
+    '-D KokkosKernels_ENABLE_TPL_ROCSPARSE=ON',
+    '-D KokkosKernels_ENABLE_TPL_ROCSOLVER=ON',
+])
+
+prebuildopts = 'module unload craype-accel-amd-gfx90a && '
+
+sanity_check_paths = {
+    'files': ['lib/libkokkoskernels.%s' % SHLIB_EXT,
+              'include/KokkosKernels_config.h'],
+    'dirs':  ['lib', 'include'],
+}
+
+moduleclass = 'lib'
+
+
+# Build statistics
+buildstats = [{
+    "build_time": 400.32,
+    "command_line": ["--allow-loaded-modules='EasyBuild,EasyBuild-production,EasyBuild-infrastructure,EasyBuild-user,EasyBuild-tools,lumi-tools'", "--buildpath='/run/user/10035206/easybuild/build'", "--check-ebroot-env-vars='ignore'", "--configfiles='/appl/lumi/LUMI-SoftwareStack/easybuild/config/easybuild-production.cfg'", "--containerpath='/users/schreinb/EasyBuild/containers'", "--external-modules-metadata='/appl/lumi/LUMI-SoftwareStack/easybuild/config/external_modules_metadata-CPE-25.03.cfg'", '--group-writable-installdir', "--hooks='/appl/lumi/LUMI-SoftwareStack/easybuild/hooks/LUMI_site_hooks-22.08.py'", "--include-easyblocks='/appl/lumi/LUMI-SoftwareStack/easybuild/easyblocks/*/*.py,/appl/lumi/LUMI-EasyBuild-contrib/easybuild/easyblocks/*/*.py,/users/schreinb/EasyBuild/UserRepo/easybuild/easyblocks/*/*.py'", "--include-module-naming-schemes='/appl/lumi/LUMI-SoftwareStack/easybuild/tools/module_naming_scheme/*.py'", "--include-toolchains='/appl/lumi/LUMI-SoftwareStack/easybuild/toolchains/*.py,/appl/lumi/LUMI-SoftwareStack/easybuild/toolchains/compiler/*.py'", "--installpath='/users/schreinb/EasyBuild'", "--installpath-modules='/users/schreinb/EasyBuild/modules/LUMI/25.03/partition/G'", "--installpath-software='/users/schreinb/EasyBuild/SW/LUMI-25.03/G'", '--disable-module-depends-on', '--disable-module-extensions', "--module-naming-scheme='LUMI_FlatMNS'", "--optarch='x86-trento'", "--packagepath='/users/schreinb/EasyBuild/packages'", "--parallel='16'", "--prefix='/users/schreinb/EasyBuild'", "--repositorypath='/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-G'", "--robot='/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-G:/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-common:/appl/lumi/mgmt/ebfiles_repo/LUMI-25.03/LUMI-G:/appl/lumi/mgmt/ebfiles_repo/LUMI-25.03/LUMI-common:/users/schreinb/EasyBuild/UserRepo/easybuild/easyconfigs:/appl/lumi/LUMI-EasyBuild-contrib/easybuild/easyconfigs:/appl/lumi/LUMI-SoftwareStack/easybuild/easyconfigs'", "--robot-paths='/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-G:/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-common:/appl/lumi/mgmt/ebfiles_repo/LUMI-25.03/LUMI-G:/appl/lumi/mgmt/ebfiles_repo/LUMI-25.03/LUMI-common:/users/schreinb/EasyBuild/UserRepo/easybuild/easyconfigs:/appl/lumi/LUMI-EasyBuild-contrib/easybuild/easyconfigs:/appl/lumi/LUMI-SoftwareStack/easybuild/easyconfigs'", '--disable-rpath', "--sourcepath='/users/schreinb/EasyBuild/sources:/appl/lumi/sources/easybuild:/appl/local/containers/easybuild-sif-images'", "--sourcepath-data='/users/schreinb/EasyBuild/sources'", "--suffix-modules-path=''", "--tmpdir='/run/user/10035206/easybuild/tmp'", "--umask='002'", 'Kokkos-kernels-4.6.02-cpeAMD-25.03-rocm.eb'],
+    "core_count": 256,
+    "cpu_arch": "x86_64",
+    "cpu_arch_name": "zen2",
+    "cpu_model": "AMD EPYC 7742 64-Core Processor",
+    "cpu_speed": 2250.0,
+    "cpu_vendor": "AMD",
+    "easybuild-easyblocks_version": "5.1.2",
+    "easybuild-framework_version": "5.1.2",
+    "gcc_version": "Using built-in specs.; COLLECT_GCC=gcc; COLLECT_LTO_WRAPPER=/usr/lib64/gcc/x86_64-suse-linux/7/lto-wrapper; OFFLOAD_TARGET_NAMES=hsa:nvptx-none; Target: x86_64-suse-linux; Configured with: ../configure --prefix=/usr --infodir=/usr/share/info --mandir=/usr/share/man --libdir=/usr/lib64 --libexecdir=/usr/lib64 --enable-languages=c,c++,objc,fortran,obj-c++,ada,go --enable-offload-targets=hsa,nvptx-none, --without-cuda-driver --enable-checking=release --disable-werror --with-gxx-include-dir=/usr/include/c++/7 --enable-ssp --disable-libssp --disable-libvtv --disable-libcc1 --disable-plugin --with-bugurl=https://bugs.opensuse.org/ --with-pkgversion='SUSE Linux' --with-slibdir=/lib64 --with-system-zlib --enable-libstdcxx-allocator=new --disable-libstdcxx-pch --enable-version-specific-runtime-libs --with-gcc-major-version-only --enable-linker-build-id --enable-linux-futex --enable-gnu-indirect-function --program-suffix=-7 --without-system-libunwind --enable-multilib --with-arch-32=x86-64 --with-tune=generic --build=x86_64-suse-linux --host=x86_64-suse-linux; Thread model: posix; gcc version 7.5.0 (SUSE Linux) ; ",
+    "glibc_version": "2.38",
+    "hostname": "uan03",
+    "install_size": 103496330,
+    "modules_tool": ('Lmod', '/opt/cray/pe/lmod/lmod/libexec/lmod', '8.7.55'),
+    "os_name": "SLES",
+    "os_type": "Linux",
+    "os_version": "15-SP6",
+    "platform_name": "x86_64-unknown-linux",
+    "python_version": "3.11.7 (main, Jun 17 2024, 15:36:19) [GCC 12.3.0]",
+    "system_gcc_path": "/usr/bin/gcc",
+    "system_python_path": None,
+    "timestamp": 1776932157,
+    "total_memory": 1030907,
+}]
+
+# Build statistics
+buildstats = [
+{
+    "build_time": 400.32,
+    "command_line": ["--allow-loaded-modules='EasyBuild,EasyBuild-production,EasyBuild-infrastructure,EasyBuild-user,EasyBuild-tools,lumi-tools'", "--buildpath='/run/user/10035206/easybuild/build'", "--check-ebroot-env-vars='ignore'", "--configfiles='/appl/lumi/LUMI-SoftwareStack/easybuild/config/easybuild-production.cfg'", "--containerpath='/users/schreinb/EasyBuild/containers'", "--external-modules-metadata='/appl/lumi/LUMI-SoftwareStack/easybuild/config/external_modules_metadata-CPE-25.03.cfg'", '--group-writable-installdir', "--hooks='/appl/lumi/LUMI-SoftwareStack/easybuild/hooks/LUMI_site_hooks-22.08.py'", "--include-easyblocks='/appl/lumi/LUMI-SoftwareStack/easybuild/easyblocks/*/*.py,/appl/lumi/LUMI-EasyBuild-contrib/easybuild/easyblocks/*/*.py,/users/schreinb/EasyBuild/UserRepo/easybuild/easyblocks/*/*.py'", "--include-module-naming-schemes='/appl/lumi/LUMI-SoftwareStack/easybuild/tools/module_naming_scheme/*.py'", "--include-toolchains='/appl/lumi/LUMI-SoftwareStack/easybuild/toolchains/*.py,/appl/lumi/LUMI-SoftwareStack/easybuild/toolchains/compiler/*.py'", "--installpath='/users/schreinb/EasyBuild'", "--installpath-modules='/users/schreinb/EasyBuild/modules/LUMI/25.03/partition/G'", "--installpath-software='/users/schreinb/EasyBuild/SW/LUMI-25.03/G'", '--disable-module-depends-on', '--disable-module-extensions', "--module-naming-scheme='LUMI_FlatMNS'", "--optarch='x86-trento'", "--packagepath='/users/schreinb/EasyBuild/packages'", "--parallel='16'", "--prefix='/users/schreinb/EasyBuild'", "--repositorypath='/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-G'", "--robot='/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-G:/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-common:/appl/lumi/mgmt/ebfiles_repo/LUMI-25.03/LUMI-G:/appl/lumi/mgmt/ebfiles_repo/LUMI-25.03/LUMI-common:/users/schreinb/EasyBuild/UserRepo/easybuild/easyconfigs:/appl/lumi/LUMI-EasyBuild-contrib/easybuild/easyconfigs:/appl/lumi/LUMI-SoftwareStack/easybuild/easyconfigs'", "--robot-paths='/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-G:/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-common:/appl/lumi/mgmt/ebfiles_repo/LUMI-25.03/LUMI-G:/appl/lumi/mgmt/ebfiles_repo/LUMI-25.03/LUMI-common:/users/schreinb/EasyBuild/UserRepo/easybuild/easyconfigs:/appl/lumi/LUMI-EasyBuild-contrib/easybuild/easyconfigs:/appl/lumi/LUMI-SoftwareStack/easybuild/easyconfigs'", '--disable-rpath', "--sourcepath='/users/schreinb/EasyBuild/sources:/appl/lumi/sources/easybuild:/appl/local/containers/easybuild-sif-images'", "--sourcepath-data='/users/schreinb/EasyBuild/sources'", "--suffix-modules-path=''", "--tmpdir='/run/user/10035206/easybuild/tmp'", "--umask='002'", 'Kokkos-kernels-4.6.02-cpeAMD-25.03-rocm.eb'],
+    "core_count": 256,
+    "cpu_arch": "x86_64",
+    "cpu_arch_name": "zen2",
+    "cpu_model": "AMD EPYC 7742 64-Core Processor",
+    "cpu_speed": 2250.0,
+    "cpu_vendor": "AMD",
+    "easybuild-easyblocks_version": "5.1.2",
+    "easybuild-framework_version": "5.1.2",
+    "gcc_version": "Using built-in specs.; COLLECT_GCC=gcc; COLLECT_LTO_WRAPPER=/usr/lib64/gcc/x86_64-suse-linux/7/lto-wrapper; OFFLOAD_TARGET_NAMES=hsa:nvptx-none; Target: x86_64-suse-linux; Configured with: ../configure --prefix=/usr --infodir=/usr/share/info --mandir=/usr/share/man --libdir=/usr/lib64 --libexecdir=/usr/lib64 --enable-languages=c,c++,objc,fortran,obj-c++,ada,go --enable-offload-targets=hsa,nvptx-none, --without-cuda-driver --enable-checking=release --disable-werror --with-gxx-include-dir=/usr/include/c++/7 --enable-ssp --disable-libssp --disable-libvtv --disable-libcc1 --disable-plugin --with-bugurl=https://bugs.opensuse.org/ --with-pkgversion='SUSE Linux' --with-slibdir=/lib64 --with-system-zlib --enable-libstdcxx-allocator=new --disable-libstdcxx-pch --enable-version-specific-runtime-libs --with-gcc-major-version-only --enable-linker-build-id --enable-linux-futex --enable-gnu-indirect-function --program-suffix=-7 --without-system-libunwind --enable-multilib --with-arch-32=x86-64 --with-tune=generic --build=x86_64-suse-linux --host=x86_64-suse-linux; Thread model: posix; gcc version 7.5.0 (SUSE Linux) ; ",
+    "glibc_version": "2.38",
+    "hostname": "uan03",
+    "install_size": 103496330,
+    "modules_tool": ('Lmod', '/opt/cray/pe/lmod/lmod/libexec/lmod', '8.7.55'),
+    "os_name": "SLES",
+    "os_type": "Linux",
+    "os_version": "15-SP6",
+    "platform_name": "x86_64-unknown-linux",
+    "python_version": "3.11.7 (main, Jun 17 2024, 15:36:19) [GCC 12.3.0]",
+    "system_gcc_path": "/usr/bin/gcc",
+    "system_python_path": None,
+    "timestamp": 1776932157,
+    "total_memory": 1030907,
+},
+{
+    "build_time": 409.18,
+    "command_line": ["--allow-loaded-modules='EasyBuild,EasyBuild-production,EasyBuild-infrastructure,EasyBuild-user,EasyBuild-tools,lumi-tools'", "--buildpath='/run/user/10035206/easybuild/build'", "--check-ebroot-env-vars='ignore'", "--configfiles='/appl/lumi/LUMI-SoftwareStack/easybuild/config/easybuild-production.cfg'", "--containerpath='/users/schreinb/EasyBuild/containers'", "--external-modules-metadata='/appl/lumi/LUMI-SoftwareStack/easybuild/config/external_modules_metadata-CPE-25.03.cfg'", '--force', '--group-writable-installdir', "--hooks='/appl/lumi/LUMI-SoftwareStack/easybuild/hooks/LUMI_site_hooks-22.08.py'", "--include-easyblocks='/appl/lumi/LUMI-SoftwareStack/easybuild/easyblocks/*/*.py,/appl/lumi/LUMI-EasyBuild-contrib/easybuild/easyblocks/*/*.py,/users/schreinb/EasyBuild/UserRepo/easybuild/easyblocks/*/*.py'", "--include-module-naming-schemes='/appl/lumi/LUMI-SoftwareStack/easybuild/tools/module_naming_scheme/*.py'", "--include-toolchains='/appl/lumi/LUMI-SoftwareStack/easybuild/toolchains/*.py,/appl/lumi/LUMI-SoftwareStack/easybuild/toolchains/compiler/*.py'", "--installpath='/users/schreinb/EasyBuild'", "--installpath-modules='/users/schreinb/EasyBuild/modules/LUMI/25.03/partition/G'", "--installpath-software='/users/schreinb/EasyBuild/SW/LUMI-25.03/G'", '--disable-module-depends-on', '--disable-module-extensions', "--module-naming-scheme='LUMI_FlatMNS'", "--optarch='x86-trento'", "--packagepath='/users/schreinb/EasyBuild/packages'", "--parallel='16'", "--prefix='/users/schreinb/EasyBuild'", "--repositorypath='/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-G'", "--robot='/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-G:/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-common:/appl/lumi/mgmt/ebfiles_repo/LUMI-25.03/LUMI-G:/appl/lumi/mgmt/ebfiles_repo/LUMI-25.03/LUMI-common:/users/schreinb/EasyBuild/UserRepo/easybuild/easyconfigs:/appl/lumi/LUMI-EasyBuild-contrib/easybuild/easyconfigs:/appl/lumi/LUMI-SoftwareStack/easybuild/easyconfigs'", "--robot-paths='/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-G:/users/schreinb/EasyBuild/ebfiles_repo/LUMI-25.03/LUMI-common:/appl/lumi/mgmt/ebfiles_repo/LUMI-25.03/LUMI-G:/appl/lumi/mgmt/ebfiles_repo/LUMI-25.03/LUMI-common:/users/schreinb/EasyBuild/UserRepo/easybuild/easyconfigs:/appl/lumi/LUMI-EasyBuild-contrib/easybuild/easyconfigs:/appl/lumi/LUMI-SoftwareStack/easybuild/easyconfigs'", '--disable-rpath', "--sourcepath='/users/schreinb/EasyBuild/sources:/appl/lumi/sources/easybuild:/appl/local/containers/easybuild-sif-images'", "--sourcepath-data='/users/schreinb/EasyBuild/sources'", "--suffix-modules-path=''", "--tmpdir='/run/user/10035206/easybuild/tmp'", "--umask='002'", 'Kokkos-kernels-4.6.02-cpeAMD-25.03-rocm.eb'],
+    "core_count": 256,
+    "cpu_arch": "x86_64",
+    "cpu_arch_name": "zen2",
+    "cpu_model": "AMD EPYC 7742 64-Core Processor",
+    "cpu_speed": 2250.0,
+    "cpu_vendor": "AMD",
+    "easybuild-easyblocks_version": "5.1.2",
+    "easybuild-framework_version": "5.1.2",
+    "gcc_version": "Using built-in specs.; COLLECT_GCC=gcc; COLLECT_LTO_WRAPPER=/usr/lib64/gcc/x86_64-suse-linux/7/lto-wrapper; OFFLOAD_TARGET_NAMES=hsa:nvptx-none; Target: x86_64-suse-linux; Configured with: ../configure --prefix=/usr --infodir=/usr/share/info --mandir=/usr/share/man --libdir=/usr/lib64 --libexecdir=/usr/lib64 --enable-languages=c,c++,objc,fortran,obj-c++,ada,go --enable-offload-targets=hsa,nvptx-none, --without-cuda-driver --enable-checking=release --disable-werror --with-gxx-include-dir=/usr/include/c++/7 --enable-ssp --disable-libssp --disable-libvtv --disable-libcc1 --disable-plugin --with-bugurl=https://bugs.opensuse.org/ --with-pkgversion='SUSE Linux' --with-slibdir=/lib64 --with-system-zlib --enable-libstdcxx-allocator=new --disable-libstdcxx-pch --enable-version-specific-runtime-libs --with-gcc-major-version-only --enable-linker-build-id --enable-linux-futex --enable-gnu-indirect-function --program-suffix=-7 --without-system-libunwind --enable-multilib --with-arch-32=x86-64 --with-tune=generic --build=x86_64-suse-linux --host=x86_64-suse-linux; Thread model: posix; gcc version 7.5.0 (SUSE Linux) ; ",
+    "glibc_version": "2.38",
+    "hostname": "uan03",
+    "install_size": 125568761,
+    "modules_tool": ('Lmod', '/opt/cray/pe/lmod/lmod/libexec/lmod', '8.7.55'),
+    "os_name": "SLES",
+    "os_type": "Linux",
+    "os_version": "15-SP6",
+    "platform_name": "x86_64-unknown-linux",
+    "python_version": "3.11.7 (main, Jun 17 2024, 15:36:19) [GCC 12.3.0]",
+    "system_gcc_path": "/usr/bin/gcc",
+    "system_python_path": None,
+    "timestamp": 1777759564,
+    "total_memory": 1030907,
+},
+]
