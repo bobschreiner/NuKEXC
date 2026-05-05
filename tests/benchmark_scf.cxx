@@ -90,7 +90,10 @@ TEST_CASE("Benchmark SCF", "[benchmark_scf]") {
 
 #ifdef KOKKOS_ENABLE_HIP
   molecule_names.push_back("taxol");
+  molecule_names.push_back("ubiquitin");
+
   molecules.push_back(make_taxol());
+  molecules.push_back(make_ubiquitin());
 #endif
 
   static std::vector<std::unordered_map<std::string, double>> timings;
