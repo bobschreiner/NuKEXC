@@ -386,7 +386,7 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
   int n_basis = basis.nbf();
 
   // 1. Prepare Batched Views on Device
-  DeviceView2DLeft H("mo_coeffs", n_basis, n_basis);
+  DeviceView2DLeft H("Hamiltonian", n_basis, n_basis);
   DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, n_basis);
   DeviceView1D mo_energies("mo_energies", n_basis);
 
@@ -403,6 +403,92 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
   NuKEXC::Diagonalizer diagonalizer(n_basis);
   diagonalizer.compute_transformation(S);
   diagonalizer.solve(H, mo_coeffs, mo_energies);
+
+  Kokkos::deep_copy(mo_coeffs_h, mo_coeffs);
+  Kokkos::deep_copy(mo_energies_h, mo_energies);
+
+  for (int i = 0; i < n_basis; ++i) {
+    for (int j = 0; j < n_basis; ++j) {
+      double orthogonality_sum = 0.0;
+      for (int a = 0; a < n_basis; ++a) {
+        for (int b = 0; b < n_basis; ++b) {
+          orthogonality_sum +=
+              mo_coeffs_h(a, i) * S_h(a, b) * mo_coeffs_h(b, j);
+        }
+      }
+      double expected = (i == j) ? 1.0 : 0.0;
+      // Use Abs tolerance because off-diagonals should be near zero
+      REQUIRE_THAT(orthogonality_sum,
+                   Catch::Matchers::WithinAbs(expected, 1e-8));
+    }
+  }
+
+  // 6. Verify Energy Ordering (Ascending)
+  for (int i = 0; i < n_basis - 1; ++i) {
+    CHECK(mo_energies_h(i) <= mo_energies_h(i + 1));
+  }
+
+  // 7. Verify the Ground State Energy (sigma_g)
+  // For H2+ at R=1.0 bohr, the exact electronic energy is roughly -1.45 au
+  // Depending on your basis set quality, we check if it's in the ballpark.
+  double e_ground = mo_energies_h(0);
+  REQUIRE(e_ground < 0.0); // Must be bound
+
+  // Optional: print out the spectrum for debugging
+  std::cout << "H2+ Spectrum (R=" << R << ")" << std::endl;
+  for (int i = 0; i < n_basis; ++i)
+    std::cout << mo_energies_h(i) << std::endl;
+  std::cout << std::endl;
+}
+
+// ============================================================
+//  TEST % — H2+ Energies Fused Hamiltonian
+// ============================================================
+//
+// Two H atoms R bohr apart along x.  Basis: one 1s STO (zeta=1) per atom.
+//
+// The off-diagonal overlap integral is known exactly for unnormalized STOs
+// and reduces to:
+//
+//   S_AB(zeta=1, R) = e^{-R} (1 + R + R^2/3)
+//
+// At R = 1 bohr:  S_AB = e^{-1} * 7/3 ≈ 0.85836...
+//
+// All matrices must be symmetric, and the on-diagonal elements are 1
+// (each function is normalized by construction).
+
+TEST_CASE("H2+ Energies Fused Hamiltonian",
+          "[h2_plus][energies][fused hamiltonian]") {
+
+  const double R = 1.0; // bond length in bohr
+
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}, {R, 0., 0.}},
+               std::vector<unsigned>{1u, 1u});
+
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 50);
+
+  // Build the basis explicitly so the zeta value is unambiguous.
+  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P");
+
+  int n_basis = basis.nbf();
+
+  CoreHamiltonianResult hamiltonian;
+  hamiltonian = compute_core_hamiltonian(basis, grid.quad_points, grid.weights,
+                                         grid.atom_centers, grid.Z);
+
+  // 1. Prepare Batched Views on Device
+  DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, n_basis);
+  DeviceView1D mo_energies("mo_energies", n_basis);
+
+  auto mo_coeffs_h = Kokkos::create_mirror_view(mo_coeffs);
+  auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
+
+  auto S_h = Kokkos::create_mirror_view(hamiltonian.overlap);
+  Kokkos::deep_copy(S_h, hamiltonian.overlap);
+
+  NuKEXC::Diagonalizer diagonalizer(n_basis);
+  diagonalizer.compute_transformation(hamiltonian.overlap);
+  diagonalizer.solve(hamiltonian.hamiltonian, mo_coeffs, mo_energies);
 
   Kokkos::deep_copy(mo_coeffs_h, mo_coeffs);
   Kokkos::deep_copy(mo_energies_h, mo_energies);

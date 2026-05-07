@@ -302,7 +302,7 @@ compute_core_hamiltonian(STOBasisSet &basis,
   ExecSpace space_a, space_b;
 
   for (size_t start = 0; start < total_quad_points; start += CHUNK_SIZE) {
-    int cur = std::min(CHUNK_SIZE, total_quad_points - start);
+    int current_batch_size = std::min(CHUNK_SIZE, total_quad_points - start);
     bool even = (start / CHUNK_SIZE) % 2 == 0;
 
     auto &col_cur = even ? col_a : col_b;
@@ -316,21 +316,21 @@ compute_core_hamiltonian(STOBasisSet &basis,
     auto &space_prev = even ? space_b : space_a;
 
     auto batch_pts = Kokkos::subview(
-        quadrature_points, std::make_pair(start, start + cur), Kokkos::ALL);
+        quadrature_points, std::make_pair(start, start + current_batch_size), Kokkos::ALL);
     auto batch_wts =
-        Kokkos::subview(quadrature_weights, std::make_pair(start, start + cur));
+        Kokkos::subview(quadrature_weights, std::make_pair(start, start + current_batch_size));
 
     auto col_view =
-        Kokkos::subview(col_cur, Kokkos::ALL, std::make_pair(0, cur));
+        Kokkos::subview(col_cur, Kokkos::ALL, std::make_pair(0, current_batch_size));
     auto wt_ov_view =
-        Kokkos::subview(wt_ov_cur, Kokkos::ALL, std::make_pair(0, cur));
+        Kokkos::subview(wt_ov_cur, Kokkos::ALL, std::make_pair(0, current_batch_size));
     auto wt_nuc_view =
-        Kokkos::subview(wt_nuc_cur, Kokkos::ALL, std::make_pair(0, cur));
+        Kokkos::subview(wt_nuc_cur, Kokkos::ALL, std::make_pair(0, current_batch_size));
     auto grad_view = Kokkos::subview(grad_cur, Kokkos::ALL,
-                                     std::make_pair(0, cur), Kokkos::ALL);
-    auto Gx_view = Kokkos::subview(Gx_cur, Kokkos::ALL, std::make_pair(0, cur));
-    auto Gy_view = Kokkos::subview(Gy_cur, Kokkos::ALL, std::make_pair(0, cur));
-    auto Gz_view = Kokkos::subview(Gz_cur, Kokkos::ALL, std::make_pair(0, cur));
+                                     std::make_pair(0, current_batch_size), Kokkos::ALL);
+    auto Gx_view = Kokkos::subview(Gx_cur, Kokkos::ALL, std::make_pair(0, current_batch_size));
+    auto Gy_view = Kokkos::subview(Gy_cur, Kokkos::ALL, std::make_pair(0, current_batch_size));
+    auto Gz_view = Kokkos::subview(Gz_cur, Kokkos::ALL, std::make_pair(0, current_batch_size));
 
     // Single collocation evaluation — used by overlap AND nuclear
     fill_collocation(space_cur, basis, batch_pts, col_view);
@@ -346,7 +346,7 @@ compute_core_hamiltonian(STOBasisSet &basis,
     Kokkos::parallel_for(
         "Fused scale",
         Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>(space_cur, {0, 0},
-                                                          {N, cur}),
+                                                          {N, current_batch_size}),
         KOKKOS_LAMBDA(int i, int g) {
           double phi_ig = col_view(i, g);
           double w_g = batch_wts(g);
