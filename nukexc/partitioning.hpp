@@ -22,7 +22,7 @@
 
 #include "kokkos_config.hpp"
 #include "nukexc_utils.hpp"
-// #include <iostream>
+#include <iostream>
 
 namespace NuKEXC {
 
@@ -128,19 +128,61 @@ void partition_becke_team(const Kokkos::View<double *[3]> &atom_centers,
                Kokkos::MemoryTraits<Kokkos::RandomAccess>>
       R_ij("R_ij", natoms, natoms);
 
-  Kokkos::parallel_for(
-      "Precompute R_ij",
-      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>({0, 0},
-                                                        {natoms, natoms}),
+  // Precompute: for each atom i, which atoms j are "close enough" to matter?
+  // Threshold: if R_ij > R_screen, s(p(p(p(mu)))) is indistinguishable from 1
+  // A value of ~8-10 bohr is typically sufficient for Becke + Laqua screening
+  //
+  // neighbor_list(i, k) = index of k-th neighbor of atom i
+  // n_neighbors(i)      = number of neighbors of atom i
+  Kokkos::View<int *> n_neighbors("n_neighbors", natoms);
 
-      KOKKOS_LAMBDA(const int i, const int j) {
-        if (i != j) {
+  const double R_screen = 10.0;
+
+  // --- Pass 1: count neighbors only ---
+  Kokkos::parallel_for(
+      "Precompute R_ij", natoms, KOKKOS_LAMBDA(const int i) {
+        for (int j = 0; j < natoms; ++j) {
+          if (i == j)
+            continue;
           double d2 = 0;
           for (int k = 0; k < 3; ++k) {
             double d = atom_centers(i, k) - atom_centers(j, k);
             d2 += d * d;
           }
           R_ij(i, j) = sqrt(d2) + epsilon_shift;
+          if (R_ij(i, j) < R_screen) {
+            n_neighbors(i) += 1;
+          }
+        }
+      });
+
+  // --- Reduce to find max_n, then allocate with correct size ---
+  int max_n = 0;
+  Kokkos::parallel_reduce(
+      "Find maximum number of neighbors", natoms,
+      KOKKOS_LAMBDA(const int &i, int &lmax) {
+        if (lmax < n_neighbors(i))
+          lmax = n_neighbors(i);
+      },
+      Kokkos::Max<int>(max_n));
+
+  Kokkos::View<int **> neighbor_list("neighbors", natoms, max_n);
+  Kokkos::deep_copy(neighbor_list, -1);
+
+  // Reset counters to reuse as fill indices in pass 2
+  Kokkos::deep_copy(n_neighbors, 0);
+
+  // --- Pass 2: fill neighbor list ---
+  Kokkos::parallel_for(
+      "Fill neighbor list", natoms, KOKKOS_LAMBDA(const int i) {
+        for (int j = 0; j < natoms; ++j) {
+          if (i == j)
+            continue;
+          if (R_ij(i, j) < R_screen) {
+            int idx = n_neighbors(i);
+            neighbor_list(i, idx) = j;
+            n_neighbors(i) += 1;
+          }
         }
       });
 
@@ -178,17 +220,18 @@ void partition_becke_team(const Kokkos::View<double *[3]> &atom_centers,
                     Kokkos::subview(atom_centers, i, Kokkos::ALL());
                 r_cache(i) = rad_dist(subView_pg, subView_i);
               }
-
               double w_p;
               double normalization = 0.0;
-              for (size_t i = 0; i < natoms; ++i) {
+              for (int i = 0; i < natoms; ++i) {
                 double w_i = 1.0;
-                for (size_t j = 0; j < natoms; ++j) {
-                  if (i == j)
+                // Only loop over neighborhood
+                for (int k = 0; k < max_n; ++k) {
+                  int j = neighbor_list(i, k);
+                  if (j < 0)
                     continue;
 
-                  double mu = (r_cache(i) - r_cache(j)) / R_ij(i, j);
-                  mu = mu > 1.0 ? 1.0 : mu < -1.0 ? -1.0 : mu;
+                  double mu =
+                      compute_mu_laqua(r_cache(i), r_cache(j), R_ij(i, j));
                   double poly = compute_p(compute_p(compute_p(mu)));
 
                   w_i *= compute_s(poly);

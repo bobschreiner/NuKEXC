@@ -27,6 +27,7 @@
 #pragma once
 #include "kokkos_config.hpp"
 #include "nukexc_utils.hpp"
+#include <iostream>
 
 namespace NuKEXC {
 
@@ -230,8 +231,8 @@ void grad_poly_P(double r, double z, int l, int m, double &dP_dr,
 
     // Handle n-m scaling if using standard normalization
     if (abs_m > 0) {
-      coeff *=
-          (double)factorial(l - 2 * k) / (double)factorial(l - 2 * k - abs_m);
+      double log_ratio = log_factorial_ratio(l - 2 * k, l - 2 * k - abs_m);
+      coeff *= Kokkos::exp(log_ratio);
     }
 
     int p_r = 2 * k;
@@ -247,8 +248,8 @@ void grad_poly_P(double r, double z, int l, int m, double &dP_dr,
   }
 
   if (abs_m > 0) {
-    double f = Kokkos::sqrt((double)factorial(l - abs_m) /
-                            (double)factorial(l + abs_m));
+    double log_ratio = -log_factorial_ratio(l + abs_m, l - abs_m);
+    double f = Kokkos::exp(0.5 * log_ratio);
     dP_dr *= f;
     dP_dz *= f;
   }
@@ -261,11 +262,11 @@ void grad_poly_A(double x, double y, unsigned m, double &dx, double &dy) {
   for (int p = 0; p < m + 1; ++p) {
     int cos_val = ((m - p) % 2 == 0) ? (((m - p) / 2) % 2 == 0 ? 1 : -1) : 0;
     if (p > 0)
-      dx += p * binomial(m, p) * Kokkos::pow(x, p - 1) * Kokkos::pow(y, m - p) *
+      dx += p * binomial(m, p) * Kokkos::pow(x, p - 1) * pow(y, m - p) *
             cos_val;
     if (m - p > 0)
-      dy += (m - p) * binomial(m, p) * Kokkos::pow(x, p) *
-            Kokkos::pow(y, m - p - 1) * cos_val;
+      dy += (m - p) * binomial(m, p) * Kokkos::pow(x, p) * Kokkos::pow(y, m - p - 1) *
+            cos_val;
   }
 }
 

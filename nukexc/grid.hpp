@@ -34,6 +34,8 @@
 #include <nukexc/partitioning.hpp>
 #include <nukexc/stobasis.hpp>
 
+#include "octree.hpp"
+
 #include <vector>
 
 //
@@ -41,7 +43,7 @@
 //  Flat integration grid
 // ============================================================
 //
-// Builds a Becke+Lebedev spherical grid for `mol`, applies Becke
+// Builds a spherical grid for `mol`, applies Becke
 // partitioning, and returns flattened 1D arrays ready for the
 // overlap/kinetic/potential integrals.  All the repetitive Kokkos
 // boilerplate lives here so test cases stay readable.
@@ -57,6 +59,7 @@ struct FlatGrid {
 template <typename radial_type, typename angular_type>
 FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 120,
                         size_t nang_order = 40) {
+
   using namespace IntegratorXX;
   using angular_traits = quadrature_traits<angular_type>;
 

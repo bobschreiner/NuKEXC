@@ -64,4 +64,23 @@ long int binomial(int n, int k) {
   long int result = factorial(n) / (factorial(k) * factorial(n - k));
   return result;
 }
+
+KOKKOS_INLINE_FUNCTION
+double log_factorial_ratio(int top, int bottom) {
+  // Computes log(top! / bottom!) = log(bottom+1) + ... + log(top)
+  // Assumes top >= bottom >= 0
+  double result = 0.0;
+  for (int i = bottom + 1; i <= top; ++i)
+    result += Kokkos::log((double)i);
+  return result;
+}
+
+KOKKOS_INLINE_FUNCTION
+double safe_pow(double base, int exp) {
+  if (exp == 0)
+    return 1.0; // always 1 regardless of base
+  if (base == 0.0)
+    return 0.0; // 0^positive = 0
+  return Kokkos::pow(base, (double)exp);
+}
 } // namespace NuKEXC

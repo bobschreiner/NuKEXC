@@ -68,6 +68,7 @@ add_library(${nxc}::NuKEXC ALIAS libnukexc)
 include( nukexc-integratorxx ) # finds package integratorxx
 include( nukexc-kokkos) # finds package Kokkos 
 include( nukexc-kokkos-kernels) # finds package Kokkos-kernels
+include( nukexc-arborx) # finds package arborx
 
 
 set(export_properties

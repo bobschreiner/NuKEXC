@@ -9,9 +9,11 @@ add_executable(test_molecule test_molecule.cxx)
 add_executable(test_basisset test_basisset.cxx)
 add_executable(test_integration test_integration.cxx standards.cxx)
 add_executable(test_hydrogen test_hydrogen.cxx)
+# add_executable(test_arborx test_arborx.cxx)
 
 add_executable(convergence_integration convergence_integration.cxx standards.cxx)
 add_executable(convergence_h2plus convergence_h2plus.cxx)
+add_executable(convergence_coreH convergence_coreH.cxx)
 
 add_executable(benchmark_partition  standards.cxx benchmark_partition.cxx )
 add_executable(benchmark_scf standards.cxx benchmark_scf.cxx )
@@ -31,10 +33,13 @@ set(ALL_TEST_TARGETS
     test_basisset 
     test_integration 
     test_hydrogen
+    #    test_arborx
     convergence_integration
     convergence_h2plus
+    convergence_coreH
     benchmark_partition
     benchmark_scf
+    
 
 )
 
@@ -53,5 +58,5 @@ add_test( NAME BASISSET_TEST COMMAND $<TARGET_FILE:test_basisset> )
 add_test( NAME INTEGRATION_TEST COMMAND $<TARGET_FILE:test_integration> )
 add_test( NAME HYDROGEN_TEST COMMAND $<TARGET_FILE:test_hydrogen> )
 add_test( NAME H2PLUS_CONVERGENCE_TEST COMMAND $<TARGET_FILE:convergence_h2plus> )
-
+add_test( NAME COREH_CONVERGENCE_TEST COMMAND $<TARGET_FILE:convergence_coreH> )
 

@@ -74,10 +74,9 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
   molecule_names.push_back("ubiquitin");
 #endif
 
-  size_t nrad = 10;
+  size_t nrad = 120;
   size_t nang = angular_traits::npts_by_algebraic_order(
-      angular_traits::next_algebraic_order(
-          5)); // Smallest possible angular grid
+      angular_traits::next_algebraic_order(40));
 
   // Generate via runtime API
   auto rad_spec = radial_from_type<radial_type>();
@@ -135,18 +134,19 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
                       weights_device);
       time = timer.seconds();
 
-      std::cout << std::setw(50) << "Partitioning " << std::setw(15)
-                << molecule_names[mol_ind] << " took " << std::setw(15)
-                << std::setprecision(10) << time << " seconds" << std::endl;
+      std::cout << std::left << std::setw(50) << "Partitioning "
+                << std::setw(15) << molecule_names[mol_ind] << " took "
+                << std::setw(15) << std::setprecision(10) << time << " seconds"
+                << std::endl;
       timer.reset();
 
       partition_becke_team(atom_centers_device, quadrature_points_device,
                            weights_device);
       time = timer.seconds();
-      std::cout << std::setw(50) << "Partitioning using thread teams "
-                << std::setw(15) << molecule_names[mol_ind] << " took "
-                << std::setw(15) << std::setprecision(10) << time << " seconds"
-                << std::endl;
+      std::cout << std::left << std::setw(50)
+                << "Partitioning using thread teams " << std::setw(15)
+                << molecule_names[mol_ind] << " took " << std::setw(15)
+                << std::setprecision(10) << time << " seconds" << std::endl;
     }
   }
 }

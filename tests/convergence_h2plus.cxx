@@ -185,6 +185,7 @@ TEST_CASE("H2+ S_AB radial convergence", "[convergence][radial]") {
   data.reserve(nrad_sweep.size());
 
   for (size_t nrad : nrad_sweep) {
+
     auto grid = make_flat_grid<bk_type, ll_type>(mol, nrad, nang_order_fixed);
 
     // npts_actual = natoms * nrad * nang
@@ -228,7 +229,7 @@ TEST_CASE("H2+ S_AB angular convergence", "[convergence][angular]") {
 
   // Sweep through Lebedev algebraic orders.  next_algebraic_order ensures
   // we always land on a valid Lebedev grid.
-  const std::vector<size_t> nang_order_sweep = {5, 11, 17, 23, 29, 35, 41, 53};
+  const std::vector<size_t> nang_order_sweep = {5, 10, 17, 23, 29, 35, 41, 53};
   const size_t nrad_fixed = 200;
 
   auto mol = make_h2_mol();

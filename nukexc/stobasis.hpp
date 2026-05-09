@@ -37,14 +37,15 @@ namespace NuKEXC {
 
 struct STOBasisSet {
 
-  Kokkos::View<int *> n_;
-  Kokkos::View<int *> l_;
-  Kokkos::View<int *> m_;
-  Kokkos::View<double *> norm_;
-  Kokkos::View<double *> zeta_;
-  Kokkos::View<double *[3]> O_;
+  Kokkos::View<int *> n;
+  Kokkos::View<int *> l;
+  Kokkos::View<int *> m;
+  Kokkos::View<double *> norm;
+  Kokkos::View<double *> zeta;
+  Kokkos::View<double *[3]> O;
+  Kokkos::View<double *> cutoff_radii;
 
-  size_t nbf() const { return O_.extent(0); };
+  size_t nbf() const { return O.extent(0); };
 };
 
 // Map shell labels to l values
@@ -72,30 +73,36 @@ struct STOFunc {
   double ox, oy, oz;
 };
 
-STOBasisSet make_manual_basis(const std::vector<STOFunc> &funcs) {
+STOBasisSet make_manual_basis(const std::vector<STOFunc> &funcs,
+                              double cutoff_tol = 1e-10) {
   const size_t nbf = funcs.size();
 
   STOBasisSet basis;
-  basis.n_ = Kokkos::View<int *>("n", nbf);
-  basis.l_ = Kokkos::View<int *>("l", nbf);
-  basis.m_ = Kokkos::View<int *>("m", nbf);
-  basis.zeta_ = Kokkos::View<double *>("zeta", nbf);
-  basis.norm_ = Kokkos::View<double *>("coeff", nbf);
-  basis.O_ = Kokkos::View<double *[3]>("centers", nbf);
+  basis.n = Kokkos::View<int *>("n", nbf);
+  basis.l = Kokkos::View<int *>("l", nbf);
+  basis.m = Kokkos::View<int *>("m", nbf);
+  basis.zeta = Kokkos::View<double *>("zeta", nbf);
+  basis.norm = Kokkos::View<double *>("coeff", nbf);
+  basis.O = Kokkos::View<double *[3]>("centers", nbf);
+  basis.cutoff_radii = Kokkos::View<double *>("cutoff radii", nbf);
 
-  auto n_h = Kokkos::create_mirror_view(basis.n_);
-  auto l_h = Kokkos::create_mirror_view(basis.l_);
-  auto m_h = Kokkos::create_mirror_view(basis.m_);
-  auto zeta_h = Kokkos::create_mirror_view(basis.zeta_);
-  auto norm_h = Kokkos::create_mirror_view(basis.norm_);
-  auto O_h = Kokkos::create_mirror_view(basis.O_);
-
+  auto n_h = Kokkos::create_mirror_view(basis.n);
+  auto l_h = Kokkos::create_mirror_view(basis.l);
+  auto m_h = Kokkos::create_mirror_view(basis.m);
+  auto zeta_h = Kokkos::create_mirror_view(basis.zeta);
+  auto norm_h = Kokkos::create_mirror_view(basis.norm);
+  auto O_h = Kokkos::create_mirror_view(basis.O);
+  auto cutoff_radii_h = Kokkos::create_mirror_view(basis.cutoff_radii);
   for (size_t i = 0; i < nbf; ++i) {
     const auto &f = funcs[i];
     // Matches the normalization used by load_sto_basis:
     //   N = (2*zeta)^{n+0.5} / sqrt((2n)!)
     const double norm = std::pow(2.0 * f.zeta, f.n + 0.5) /
                         std::sqrt(static_cast<double>(factorial(2 * f.n)));
+    const double cutoff_guess = (std::log(norm / cutoff_tol) / f.zeta) * 1.2;
+    double poly_factor = std::pow(cutoff_guess, f.n - 1);
+    const double cutoff = std::log((norm * poly_factor) / cutoff_tol) / f.zeta;
+
     n_h(i) = f.n;
     l_h(i) = f.l;
     m_h(i) = f.m;
@@ -104,21 +111,22 @@ STOBasisSet make_manual_basis(const std::vector<STOFunc> &funcs) {
     O_h(i, 0) = f.ox;
     O_h(i, 1) = f.oy;
     O_h(i, 2) = f.oz;
+    cutoff_radii_h(i) = cutoff;
   }
 
-  Kokkos::deep_copy(basis.n_, n_h);
-  Kokkos::deep_copy(basis.l_, l_h);
-  Kokkos::deep_copy(basis.m_, m_h);
-  Kokkos::deep_copy(basis.zeta_, zeta_h);
-  Kokkos::deep_copy(basis.norm_, norm_h);
-  Kokkos::deep_copy(basis.O_, O_h);
+  Kokkos::deep_copy(basis.n, n_h);
+  Kokkos::deep_copy(basis.l, l_h);
+  Kokkos::deep_copy(basis.m, m_h);
+  Kokkos::deep_copy(basis.zeta, zeta_h);
+  Kokkos::deep_copy(basis.norm, norm_h);
+  Kokkos::deep_copy(basis.O, O_h);
 
   return basis;
 }
 
-STOBasisSet
-load_adf_basis(const Molecule &mol,
-               const std::string &data_dir = "input/zorabasis/TZP") {
+STOBasisSet load_adf_basis(const Molecule &mol,
+                           const std::string &data_dir = "input/zorabasis/TZP",
+                           double cutoff_tol = 1e-10) {
 
   std::vector<STOFunc> temp_basis;
 
@@ -180,7 +188,8 @@ load_adf_basis(const Molecule &mol,
 
 STOBasisSet
 load_thakkar_basis(const Molecule &mol,
-                   const std::string &data_dir = "input/k99light/neutral") {
+                   const std::string &data_dir = "input/k99light/neutral",
+                   const double cutoff_tol = 1e-10) {
 
   std::vector<STOFunc> temp_basis;
 
@@ -254,6 +263,78 @@ load_thakkar_basis(const Molecule &mol,
   return make_manual_basis(temp_basis);
 }
 
+KOKKOS_INLINE_FUNCTION
+double basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
+                  const double y, const double z) {
+
+  const int n_val = basis.n(basis_idx);
+  const int l_val = basis.l(basis_idx);
+  const int m_val = basis.m(basis_idx);
+  const double norm = basis.norm(basis_idx);
+  const double zeta = basis.zeta(basis_idx);
+
+  // radial part of the shell
+  // radial_part = R_nl(r) = r^(n-1) * C_nl * exp(-⍺ * r))
+
+  double dx = x - basis.O(basis_idx, 0);
+  double dy = y - basis.O(basis_idx, 1);
+  double dz = z - basis.O(basis_idx, 2);
+  double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
+             epsilon_shift; // Avoid pow(0,0)
+
+  double radial_part;
+
+  radial_part =
+      norm * Kokkos::pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
+
+  // Angular part of the shell
+  // https://en.wikipedia.org/wiki/Spherical_harmonics
+  double angular_part = real_solid_harmonic_cart(l_val, m_val, dx, dy, dz);
+
+  return radial_part * angular_part;
+}
+
+KOKKOS_INLINE_FUNCTION
+void basis_eval_grad(const STOBasisSet basis, const int basis_idx,
+                     const double x, const double y, const double z, double &gx,
+                     double &gy, double &gz) {
+
+  const int n_val = basis.n(basis_idx);
+  const int l_val = basis.l(basis_idx);
+  const int m_val = basis.m(basis_idx);
+  const double norm = basis.norm(basis_idx);
+  const double zeta = basis.zeta(basis_idx);
+
+  double dx = x - basis.O(basis_idx, 0);
+  double dy = y - basis.O(basis_idx, 1);
+  double dz = z - basis.O(basis_idx, 2);
+  double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
+             epsilon_shift; // Avoid pow(0,0)
+
+  // Angular part
+  double S_val;
+  S_val = real_solid_harmonic_cart(l_val, m_val, dx, dy, dz);
+
+  double dS_dx;
+  double dS_dy;
+  double dS_dz;
+
+  grad_real_solid_harmonic_cart(l_val, m_val, dx, dy, dz, dS_dx, dS_dy, dS_dz);
+
+  // Radial part
+  double pow_term = safe_pow(r, n_val - l_val - 1);
+  double exp_term = Kokkos::exp(-zeta * r);
+  double R_pre = norm * pow_term * exp_term;
+
+  double dR_dr = ((n_val - l_val - 1) / r - zeta) * R_pre;
+
+  double common_R = dR_dr / r;
+
+  gx = R_pre * dS_dx + S_val * (dx * common_R);
+  gy = R_pre * dS_dy + S_val * (dy * common_R);
+  gz = R_pre * dS_dz + S_val * (dz * common_R);
+}
+
 template <typename PointsView, typename ValuesView>
 void fill_collocation(
     ExecSpace &space, const STOBasisSet &basis, PointsView collocation_points,
@@ -266,18 +347,17 @@ void fill_collocation(
       Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>(space, {0, 0}, {N, G}),
       KOKKOS_LAMBDA(int i, int j) {
         // same math as before, written directly into col(i,j)
-        const int n_val = basis.n_(i);
-        const int l_val = basis.l_(i);
-        const int m_val = basis.m_(i);
-        const double norm = basis.norm_(i);
-        const double zeta = basis.zeta_(i);
+        const int n_val = basis.n(i);
+        const int l_val = basis.l(i);
+        const int m_val = basis.m(i);
+        const double norm = basis.norm(i);
+        const double zeta = basis.zeta(i);
 
         // radial part of the shell
         // radial_part = R_nl(r) = r^(n-1) * C_nl * exp(-⍺ * r))
-
-        double dx = collocation_points(j, 0) - basis.O_(i, 0);
-        double dy = collocation_points(j, 1) - basis.O_(i, 1);
-        double dz = collocation_points(j, 2) - basis.O_(i, 2);
+        double dx = collocation_points(j, 0) - basis.O(i, 0);
+        double dy = collocation_points(j, 1) - basis.O(i, 1);
+        double dz = collocation_points(j, 2) - basis.O(i, 2);
         double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
                    epsilon_shift; // Avoid pow(0,0)
 
@@ -309,15 +389,15 @@ void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
   Kokkos::parallel_for(
       "Fill collocation grad", md_policy,
       KOKKOS_LAMBDA(const int &i, const int &j) {
-        const int n_val = basis_set.n_(i);
-        const int l_val = basis_set.l_(i);
-        const int m_val = basis_set.m_(i);
-        const double norm = basis_set.norm_(i);
-        const double zeta = basis_set.zeta_(i);
+        const int n_val = basis_set.n(i);
+        const int l_val = basis_set.l(i);
+        const int m_val = basis_set.m(i);
+        const double norm = basis_set.norm(i);
+        const double zeta = basis_set.zeta(i);
 
-        double dx = collocation_points(j, 0) - basis_set.O_(i, 0);
-        double dy = collocation_points(j, 1) - basis_set.O_(i, 1);
-        double dz = collocation_points(j, 2) - basis_set.O_(i, 2);
+        double dx = collocation_points(j, 0) - basis_set.O(i, 0);
+        double dy = collocation_points(j, 1) - basis_set.O(i, 1);
+        double dz = collocation_points(j, 2) - basis_set.O(i, 2);
         double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
                    epsilon_shift; // Avoid pow(0,0)
 
@@ -333,13 +413,11 @@ void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
                                       dS_dz);
 
         // Radial part
-
-        double pow_term = Kokkos::pow(r, n_val - l_val - 1);
+        double pow_term = safe_pow(r, n_val - l_val - 1);
         double exp_term = Kokkos::exp(-zeta * r);
         double R_pre = norm * pow_term * exp_term;
 
         double dR_dr = ((n_val - l_val - 1) / r - zeta) * R_pre;
-
         double common_R = dR_dr / r;
 
         collocation_values(i, j, 0) = R_pre * dS_dx + S_val * (dx * common_R);

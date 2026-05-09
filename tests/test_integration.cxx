@@ -32,12 +32,14 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
+#include <nukexc/grid.hpp>
 #include <nukexc/integration.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/partitioning.hpp>
 #include <nukexc/stobasis.hpp>
 
 #include "nukexc/kokkos_config.hpp"
+#include "nukexc/octree.hpp"
 #include "standards.hpp"
 
 using namespace NuKEXC;
@@ -62,10 +64,10 @@ TEST_CASE("H20", "[h20_weights]") {
 
   using spherical_type = SphericalQuadrature<radial_type, angular_type>;
 
-  size_t nrad = 120;
+  size_t nrad = 100;
   size_t nang = angular_traits::npts_by_algebraic_order(
       angular_traits::next_algebraic_order(
-          40)); // Smallest possible angular grid
+          26)); // Smallest possible angular grid
 
   // Generate via runtime API
   auto rad_spec = radial_from_type<radial_type>();
@@ -83,12 +85,10 @@ TEST_CASE("H20", "[h20_weights]") {
   STOBasisSet stobasis = load_adf_basis(mol);
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3]> atom_centers_device(
-      "atom centers", natoms);
-  Kokkos::View<double **[3]> quadrature_points_device(
-      "quadrature_points", natoms, npts);
-  Kokkos::View<double **> weights_device("weights", natoms,
-                                                            npts);
+  Kokkos::View<double *[3]> atom_centers_device("atom centers", natoms);
+  Kokkos::View<double **[3]> quadrature_points_device("quadrature_points",
+                                                      natoms, npts);
+  Kokkos::View<double **> weights_device("weights", natoms, npts);
 
   // Create all the Kokkos Mirror Views on Execution device
   auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
@@ -114,7 +114,7 @@ TEST_CASE("H20", "[h20_weights]") {
   Kokkos::deep_copy(weights_device, weights_h);
 
   // Compute the adjusted weights
-  partition_becke(atom_centers_device, quadrature_points_device,
+  partition_becke_team(atom_centers_device, quadrature_points_device,
                        weights_device);
 
   // Flatten the weights and quadrature_points
@@ -140,8 +140,7 @@ TEST_CASE("H20", "[h20_weights]") {
         quad_points_1d(flat_idx, 2) = quadrature_points_device(i, j, 2);
       });
 
-  DeviceView2DLeft S =
-      overlap_integral(stobasis, quad_points_1d, weights_1d);
+  DeviceView2DLeft S = overlap_integral(stobasis, quad_points_1d, weights_1d);
 
   auto S_h = Kokkos::create_mirror_view(S);
   Kokkos::deep_copy(S_h, S);
@@ -151,6 +150,18 @@ TEST_CASE("H20", "[h20_weights]") {
   }
 }
 
+TEST_CASE("H2O overlap w/ octree screening", "[h2o][screening][overlap]") {
+  using namespace IntegratorXX;
+  using radial_type = bk_type;
+  using angular_type = ll_type;
+
+  Molecule mol = make_water();
+  STOBasisSet stobasis = load_adf_basis(mol);
+  int nbf = stobasis.nbf();
+
+  FlatGrid grid = make_flat_grid<radial_type, angular_type>(mol);
+  // Octree coming soon
+}
 int main() {
 
   Kokkos::initialize();
