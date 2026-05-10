@@ -95,9 +95,9 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
       int natoms = mol.natoms;
 
       // Create all the Kokkos Views on host device
-      Kokkos::View<double *[3]> atom_centers_device("atom centers", natoms);
-      Kokkos::View<double **[3]> quadrature_points_device("quadrature_points",
-                                                          natoms, npts);
+      Kokkos::View<Point *> atom_centers_device("atom centers", natoms);
+      Kokkos::View<Point **> quadrature_points_device("quadrature_points",
+                                                      natoms, npts);
       Kokkos::View<double **> weights_device("weights", natoms, npts);
 
       // Create all the Kokkos Mirror Views on Execution device
@@ -109,12 +109,12 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
       Kokkos::deep_copy(atom_centers_h, mol.atom_centers);
       for (int i = 0; i < natoms; ++i) {
         for (int j = 0; j < npts; ++j) {
-          quadrature_points_h(i, j, 0) =
-              atom_centers_h(i, 0) + sph->points()[j][0];
-          quadrature_points_h(i, j, 1) =
-              atom_centers_h(i, 1) + sph->points()[j][1];
-          quadrature_points_h(i, j, 2) =
-              atom_centers_h(i, 2) + sph->points()[j][2];
+          quadrature_points_h(i, j)[0] =
+              atom_centers_h(i)[0] + sph->points()[j][0];
+          quadrature_points_h(i, j)[1] =
+              atom_centers_h(i)[1] + sph->points()[j][1];
+          quadrature_points_h(i, j)[2] =
+              atom_centers_h(i)[2] + sph->points()[j][2];
 
           // weights(i,j) = sph->weights()[i];
           weights_h(i, j) = 1.0;

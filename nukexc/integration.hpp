@@ -36,8 +36,7 @@ namespace NuKEXC {
 const size_t CHUNK_SIZE = 50000;
 
 DeviceView2DLeft
-overlap_integral(STOBasisSet &basis,
-                 Kokkos::View<double *[3], ExecSpace> quadrature_points,
+overlap_integral(STOBasisSet &basis, Kokkos::View<Point *> quadrature_points,
                  Kokkos::View<double *, ExecSpace> quadrature_weights) {
 
   int N = basis.nbf();
@@ -62,8 +61,7 @@ overlap_integral(STOBasisSet &basis,
     auto &space_prev = even ? space_b : space_a;
 
     auto batch_pts = Kokkos::subview(
-        quadrature_points, std::make_pair(start, start + current_batch_size),
-        Kokkos::ALL);
+        quadrature_points, std::make_pair(start, start + current_batch_size));
     auto batch_wts = Kokkos::subview(
         quadrature_weights, std::make_pair(start, start + current_batch_size));
     auto col_view = Kokkos::subview(col_cur, Kokkos::ALL,
@@ -98,7 +96,7 @@ overlap_integral(STOBasisSet &basis,
 
 DeviceView2DLeft
 diag_overlap_integral(STOBasisSet &basis,
-                      Kokkos::View<double *[3]> quadrature_points,
+                      Kokkos::View<Point *> quadrature_points,
                       Kokkos::View<double *> quadrature_weights) {
 
   size_t N = basis.nbf();
@@ -123,9 +121,9 @@ diag_overlap_integral(STOBasisSet &basis,
 }
 
 DeviceView2DLeft nuclear_potential_integral(
-    STOBasisSet &basis, Kokkos::View<double *[3]> quadrature_points,
+    STOBasisSet &basis, Kokkos::View<Point *> quadrature_points,
     Kokkos::View<double *> quadrature_weights,
-    Kokkos::View<double *[3]> atom_centers, Kokkos::View<unsigned *> Z) {
+    Kokkos::View<Point *> atom_centers, Kokkos::View<unsigned *> Z) {
 
   int N = basis.nbf();
   int total_quad_points = quadrature_points.extent(0);
@@ -150,8 +148,7 @@ DeviceView2DLeft nuclear_potential_integral(
     auto &space_prev = even ? space_b : space_a;
 
     auto batch_pts = Kokkos::subview(
-        quadrature_points, std::make_pair(start, start + current_batch_size),
-        Kokkos::ALL);
+        quadrature_points, std::make_pair(start, start + current_batch_size));
     auto batch_wts = Kokkos::subview(
         quadrature_weights, std::make_pair(start, start + current_batch_size));
     auto col_view = Kokkos::subview(col_cur, Kokkos::ALL,
@@ -168,11 +165,7 @@ DeviceView2DLeft nuclear_potential_integral(
             space_cur, {0, 0}, {N, current_batch_size}),
         KOKKOS_LAMBDA(int i, int g) {
           for (unsigned int k = 0; k < atom_centers.extent(0); ++k) {
-            double dx = batch_pts(g, 0) - atom_centers(k, 0);
-            double dy = batch_pts(g, 1) - atom_centers(k, 1);
-            double dz = batch_pts(g, 2) - atom_centers(k, 2);
-            double r =
-                Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + epsilon_shift;
+            double r = dist(batch_pts(g), atom_centers(k)) + epsilon_shift;
 
             wt_view(i, g) -= (Z(k) / r) * batch_wts(g) * col_view(i, g);
           }
@@ -191,7 +184,7 @@ DeviceView2DLeft nuclear_potential_integral(
 
 DeviceView2DLeft
 kinetic_integral(STOBasisSet &basis,
-                 Kokkos::View<double *[3], ExecSpace> quadrature_points,
+                 Kokkos::View<Point *, ExecSpace> quadrature_points,
                  Kokkos::View<double *, ExecSpace> quadrature_weights) {
 
   int N = basis.nbf();
@@ -221,8 +214,8 @@ kinetic_integral(STOBasisSet &basis,
     auto &space_cur = even ? space_a : space_b;
     auto &space_prev = even ? space_b : space_a;
 
-    auto batch_pts = Kokkos::subview(
-        quadrature_points, std::make_pair(start, start + cur), Kokkos::ALL);
+    auto batch_pts =
+        Kokkos::subview(quadrature_points, std::make_pair(start, start + cur));
     auto batch_wts =
         Kokkos::subview(quadrature_weights, std::make_pair(start, start + cur));
 
@@ -275,9 +268,9 @@ struct CoreHamiltonianResult {
 
 CoreHamiltonianResult
 compute_core_hamiltonian(STOBasisSet &basis,
-                         Kokkos::View<double *[3], ExecSpace> quadrature_points,
+                         Kokkos::View<Point *, ExecSpace> quadrature_points,
                          Kokkos::View<double *, ExecSpace> quadrature_weights,
-                         Kokkos::View<double *[3], ExecSpace> atom_centers,
+                         Kokkos::View<Point *, ExecSpace> atom_centers,
                          Kokkos::View<unsigned *, ExecSpace> Z) {
 
   int N = basis.nbf();
@@ -321,8 +314,7 @@ compute_core_hamiltonian(STOBasisSet &basis,
     auto &space_prev = even ? space_b : space_a;
 
     auto batch_pts = Kokkos::subview(
-        quadrature_points, std::make_pair(start, start + current_batch_size),
-        Kokkos::ALL);
+        quadrature_points, std::make_pair(start, start + current_batch_size));
     auto batch_wts = Kokkos::subview(
         quadrature_weights, std::make_pair(start, start + current_batch_size));
 
@@ -367,11 +359,7 @@ compute_core_hamiltonian(STOBasisSet &basis,
           // Nuclear weight — accumulate over atoms
           double v_nuc = 0.0;
           for (unsigned k = 0; k < atom_centers.extent(0); ++k) {
-            double dx = batch_pts(g, 0) - atom_centers(k, 0);
-            double dy = batch_pts(g, 1) - atom_centers(k, 1);
-            double dz = batch_pts(g, 2) - atom_centers(k, 2);
-            double r =
-                Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + epsilon_shift;
+            double r = dist(batch_pts(g), atom_centers(k)) + epsilon_shift;
             v_nuc -= double(Z(k)) / r;
           }
           wt_nuc_view(i, g) = v_nuc * w_g * phi_ig;

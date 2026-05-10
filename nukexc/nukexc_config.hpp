@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <ArborX.hpp>
 #include <Kokkos_Core.hpp>
 
 namespace NuKEXC {
@@ -57,5 +58,9 @@ using DeviceView1D = Kokkos::View<double *, ExecSpace>;
 using HostView2DLeft = Kokkos::View<double **, Kokkos::LayoutLeft, HostSpace>;
 using HostView2DRight = Kokkos::View<double **, Kokkos::LayoutRight, HostSpace>;
 using HostView1D = Kokkos::View<double *, HostSpace>;
+
+// Geometry definintions
+using Point = ArborX::Point<3, double>;
+using Box = ArborX::Box<3, double>;
 
 } // namespace NuKEXC

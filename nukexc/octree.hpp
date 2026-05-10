@@ -43,20 +43,13 @@ create_bounding_boxes(FlatGrid grid, const int max_points_per_bb) {
   const int num_points = grid.quad_points.extent(0);
 
   // ── Copy grid coordinates into ArborX points ─────────────────────────
-  Kokkos::View<Point *, ExecSpace> points("points", num_points);
-  Kokkos::parallel_for(
-      "copy_grid_to_points", Kokkos::RangePolicy<ExecSpace>(0, num_points),
-      KOKKOS_LAMBDA(int i) {
-        points(i)._coords[0] = grid.quad_points(i, 0);
-        points(i)._coords[1] = grid.quad_points(i, 1);
-        points(i)._coords[2] = grid.quad_points(i, 2);
-      });
-
   // ── Wrap each point as a degenerate box for BVH construction ─────────
   Kokkos::View<Box *, ExecSpace> boxes("boxes", num_points);
   Kokkos::parallel_for(
       "copy_points_to_boxes", Kokkos::RangePolicy<ExecSpace>(0, num_points),
-      KOKKOS_LAMBDA(int i) { boxes(i) = {points(i), points(i)}; });
+      KOKKOS_LAMBDA(int i) {
+        boxes(i) = {grid.quad_points(i), grid.quad_points(i)};
+      });
 
   // ── Build BVH over per-point boxes ───────────────────────────────────
   ArborX::BoundingVolumeHierarchy bvh{
@@ -71,7 +64,9 @@ create_bounding_boxes(FlatGrid grid, const int max_points_per_bb) {
                                                             n_queries);
   Kokkos::parallel_for(
       "initialize_queries", Kokkos::RangePolicy(ExecSpace{}, 0, n_queries),
-      KOKKOS_LAMBDA(int i) { queries(i) = ArborX::nearest(points(i), 1); });
+      KOKKOS_LAMBDA(int i) {
+        queries(i) = ArborX::nearest(grid.quad_points(i), 1);
+      });
 
   auto permute = ArborX::Details::computeSpaceFillingCurvePermutation(
       ExecSpace{},
@@ -81,9 +76,7 @@ create_bounding_boxes(FlatGrid grid, const int max_points_per_bb) {
   // ── Apply permutation to all three arrays in lock-step ───────────────
   // NOTE: `boxes` and `bvh` are now stale (they reflect the old ordering).
   //       Do not use `bvh` for spatial queries after this point.
-  ArborX::Details::applyPermutation(ExecSpace{}, permute, points);
-  // ArborX::Details::applyPermutation(ExecSpace{}, permute,
-  // grid.quad_points);
+  ArborX::Details::applyPermutation(ExecSpace{}, permute, grid.quad_points);
   ArborX::Details::applyPermutation(ExecSpace{}, permute, grid.weights);
 
   // ── Build tiling: group the Morton-sorted points into blocks of N ────
@@ -101,9 +94,10 @@ create_bounding_boxes(FlatGrid grid, const int max_points_per_bb) {
 
         const int count = Kokkos::min(max_points_per_bb, num_points - start);
 
-        Box tile_box{points(start), points(start)}; // init: min==max
+        Box tile_box{grid.quad_points(start),
+                     grid.quad_points(start)}; // init: min==max
         for (int k = 1; k < count; ++k) {
-          const auto &p = points(start + k);
+          const auto &p = grid.quad_points(start + k);
           for (int d = 0; d < 3; ++d) {
             tile_box.minCorner()._coords[d] =
                 Kokkos::min(tile_box.minCorner()._coords[d], p._coords[d]);

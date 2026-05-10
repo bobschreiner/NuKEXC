@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "nukexc/nukexc_config.hpp"
 #include <Kokkos_Core.hpp>
 
 namespace NuKEXC {
@@ -29,9 +30,27 @@ double rad_dist(const Kokkos::View<double *, Kokkos::LayoutStride> &a,
                 const Kokkos::View<double *, Kokkos::LayoutStride> &b) {
   double dist = 0;
   for (int i = 0; i < a.extent(0); ++i) {
-    dist += std::pow(a(i) - b(i), 2);
+    dist += Kokkos::pow(a(i) - b(i), 2);
   }
   dist = std::sqrt(dist);
+  return dist;
+}
+
+KOKKOS_INLINE_FUNCTION
+double dist(const Point a, const Point b) {
+  double dist = 0;
+  dist += Kokkos::pow(a[0] - b[0], 2);
+  dist += Kokkos::pow(a[1] - b[1], 2);
+  dist += Kokkos::pow(a[2] - b[2], 2);
+  return Kokkos::sqrt(dist);
+}
+
+KOKKOS_INLINE_FUNCTION
+double dist_squared(const Point a, const Point b) {
+  double dist = 0;
+  dist += Kokkos::pow(a[0] - b[0], 2);
+  dist += Kokkos::pow(a[1] - b[1], 2);
+  dist += Kokkos::pow(a[2] - b[2], 2);
   return dist;
 }
 

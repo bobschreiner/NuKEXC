@@ -42,7 +42,7 @@ struct STOBasisSet {
   Kokkos::View<int *> m;
   Kokkos::View<double *> norm;
   Kokkos::View<double *> zeta;
-  Kokkos::View<double *[3]> O;
+  Kokkos::View<Point *> O;
   Kokkos::View<double *> cutoff_radii;
 
   size_t nbf() const { return O.extent(0); };
@@ -83,7 +83,7 @@ STOBasisSet make_manual_basis(const std::vector<STOFunc> &funcs,
   basis.m = Kokkos::View<int *>("m", nbf);
   basis.zeta = Kokkos::View<double *>("zeta", nbf);
   basis.norm = Kokkos::View<double *>("coeff", nbf);
-  basis.O = Kokkos::View<double *[3]>("centers", nbf);
+  basis.O = Kokkos::View<Point *>(" centers ", nbf);
   basis.cutoff_radii = Kokkos::View<double *>("cutoff radii", nbf);
 
   auto n_h = Kokkos::create_mirror_view(basis.n);
@@ -95,22 +95,57 @@ STOBasisSet make_manual_basis(const std::vector<STOFunc> &funcs,
   auto cutoff_radii_h = Kokkos::create_mirror_view(basis.cutoff_radii);
   for (size_t i = 0; i < nbf; ++i) {
     const auto &f = funcs[i];
+
     // Matches the normalization used by load_sto_basis:
     //   N = (2*zeta)^{n+0.5} / sqrt((2n)!)
     const double norm = std::pow(2.0 * f.zeta, f.n + 0.5) /
                         std::sqrt(static_cast<double>(factorial(2 * f.n)));
-    const double cutoff_guess = (std::log(norm / cutoff_tol) / f.zeta) * 1.2;
-    double poly_factor = std::pow(cutoff_guess, f.n - 1);
-    const double cutoff = std::log((norm * poly_factor) / cutoff_tol) / f.zeta;
+
+    // Compute cutoff radius, with the Newton-Raphson method
+    double radial;
+    double radial_deriv;
+
+    // 1. Setup constants in log-space
+    const double ln_tol = Kokkos::log(cutoff_tol);
+    const double ln_norm = Kokkos::log(norm);
+
+    // 2. Guaranteed safe initial guess:
+    // Start at the peak (n-1)/zeta plus a buffer based on the decay rate
+    double peak = (f.n > 1) ? (f.n - 1) / f.zeta : 0.0;
+    double r = peak + (ln_norm - ln_tol) / f.zeta;
+
+    for (int k = 0; k < 100; ++k) {
+      // g(r) = ln(f(r)) - ln(tol)
+      double g = ln_norm + (f.n - 1) * Kokkos::log(r) - f.zeta * r - ln_tol;
+
+      // g'(r) = (n-1)/r - zeta
+      double g_prime = (f.n - 1) / r - f.zeta;
+
+      // Newton step
+      double delta = g / g_prime;
+      r = r - delta;
+
+      // Safety: don't let Newton jump to the left of the peak
+      // or into negative territory.
+      if (r <= peak)
+        r = peak + 1.0;
+
+      // Convergence check
+      if (Kokkos::abs(delta) < 1e-7)
+        break;
+    }
+
+    // Now r is the cutoff radius
+    const double cutoff = std::max(r, 20.);
 
     n_h(i) = f.n;
     l_h(i) = f.l;
     m_h(i) = f.m;
     zeta_h(i) = f.zeta;
     norm_h(i) = norm;
-    O_h(i, 0) = f.ox;
-    O_h(i, 1) = f.oy;
-    O_h(i, 2) = f.oz;
+    O_h(i)[0] = f.ox;
+    O_h(i)[1] = f.oy;
+    O_h(i)[2] = f.oz;
     cutoff_radii_h(i) = cutoff;
   }
 
@@ -175,9 +210,9 @@ STOBasisSet load_adf_basis(const Molecule &mol,
           // 4. Expand for each m component (-l to +l)
           // This accounts for the degeneracy of higher l states
           for (int m = -l; m <= l; ++m) {
-            temp_basis.push_back({n, l, m, zeta, mol.atom_centers(i, 0),
-                                  mol.atom_centers(i, 1),
-                                  mol.atom_centers(i, 2)});
+            temp_basis.push_back({n, l, m, zeta, mol.atom_centers(i)[0],
+                                  mol.atom_centers(i)[1],
+                                  mol.atom_centers(i)[2]});
           }
         }
       }
@@ -252,9 +287,9 @@ load_thakkar_basis(const Molecule &mol,
         // 4. Expand for each m component (-l to +l)
         // This accounts for the degeneracy of higher l states
         for (int m = -current_l; m <= current_l; ++m) {
-          temp_basis.push_back({n, current_l, m, zeta, mol.atom_centers(i, 0),
-                                mol.atom_centers(i, 1),
-                                mol.atom_centers(i, 2)});
+          temp_basis.push_back({n, current_l, m, zeta, mol.atom_centers(i)[0],
+                                mol.atom_centers(i)[1],
+                                mol.atom_centers(i)[2]});
         }
       }
     }
@@ -276,9 +311,9 @@ double basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
   // radial part of the shell
   // radial_part = R_nl(r) = r^(n-1) * C_nl * exp(-⍺ * r))
 
-  double dx = x - basis.O(basis_idx, 0);
-  double dy = y - basis.O(basis_idx, 1);
-  double dz = z - basis.O(basis_idx, 2);
+  double dx = x - basis.O(basis_idx)[0];
+  double dy = y - basis.O(basis_idx)[0];
+  double dz = z - basis.O(basis_idx)[0];
   double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
              epsilon_shift; // Avoid pow(0,0)
 
@@ -305,9 +340,9 @@ void basis_eval_grad(const STOBasisSet basis, const int basis_idx,
   const double norm = basis.norm(basis_idx);
   const double zeta = basis.zeta(basis_idx);
 
-  double dx = x - basis.O(basis_idx, 0);
-  double dy = y - basis.O(basis_idx, 1);
-  double dz = z - basis.O(basis_idx, 2);
+  double dx = x - basis.O(basis_idx)[0];
+  double dy = y - basis.O(basis_idx)[0];
+  double dz = z - basis.O(basis_idx)[0];
   double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
              epsilon_shift; // Avoid pow(0,0)
 
@@ -355,9 +390,9 @@ void fill_collocation(
 
         // radial part of the shell
         // radial_part = R_nl(r) = r^(n-1) * C_nl * exp(-⍺ * r))
-        double dx = collocation_points(j, 0) - basis.O(i, 0);
-        double dy = collocation_points(j, 1) - basis.O(i, 1);
-        double dz = collocation_points(j, 2) - basis.O(i, 2);
+        double dx = collocation_points(j)[0] - basis.O(i)[0];
+        double dy = collocation_points(j)[1] - basis.O(i)[1];
+        double dz = collocation_points(j)[2] - basis.O(i)[2];
         double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
                    epsilon_shift; // Avoid pow(0,0)
 
@@ -395,9 +430,9 @@ void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
         const double norm = basis_set.norm(i);
         const double zeta = basis_set.zeta(i);
 
-        double dx = collocation_points(j, 0) - basis_set.O(i, 0);
-        double dy = collocation_points(j, 1) - basis_set.O(i, 1);
-        double dz = collocation_points(j, 2) - basis_set.O(i, 2);
+        double dx = collocation_points(j)[0] - basis_set.O(i)[0];
+        double dy = collocation_points(j)[1] - basis_set.O(i)[1];
+        double dz = collocation_points(j)[2] - basis_set.O(i)[2];
         double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
                    epsilon_shift; // Avoid pow(0,0)
 

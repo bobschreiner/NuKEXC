@@ -78,9 +78,9 @@ TEST_CASE("H20", "[h20_weights]") {
   unsigned int natoms = mol.natoms;
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3]> atom_centers_device("atom centers", natoms);
-  Kokkos::View<double **[3]> quadrature_points_device("quadrature_points",
-                                                      natoms, npts);
+  Kokkos::View<Point *> atom_centers_device("atom centers", natoms);
+  Kokkos::View<Point **> quadrature_points_device("quadrature_points", natoms,
+                                                  npts);
   Kokkos::View<double **> weights_device("weights", natoms, npts);
 
   // Create all the Kokkos Mirror Views on Execution device
@@ -93,9 +93,9 @@ TEST_CASE("H20", "[h20_weights]") {
 
   for (int i = 0; i < natoms; ++i) {
     for (int j = 0; j < npts; ++j) {
-      quadrature_points_h(i, j, 0) = atom_centers_h(i, 0) + sph->points()[j][0];
-      quadrature_points_h(i, j, 1) = atom_centers_h(i, 1) + sph->points()[j][1];
-      quadrature_points_h(i, j, 2) = atom_centers_h(i, 2) + sph->points()[j][2];
+      quadrature_points_h(i, j)[0] = atom_centers_h(i)[0] + sph->points()[j][0];
+      quadrature_points_h(i, j)[1] = atom_centers_h(i)[1] + sph->points()[j][1];
+      quadrature_points_h(i, j)[2] = atom_centers_h(i)[2] + sph->points()[j][2];
 
       weights_h(i, j) = sph->weights()[i];
     }
@@ -121,12 +121,13 @@ TEST_CASE("H20", "[h20_weights]") {
 TEST_CASE("one-half", "[weights_one_half]") {
 
   int natoms = 2;
+  const int ngrid = 10;
   int npts = 10 * 10;
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3]> atom_centers_device("atom centers", natoms);
-  Kokkos::View<double **[3]> quadrature_points_device("quadrature_points",
-                                                      natoms, npts);
+  Kokkos::View<Point *> atom_centers_device("atom centers", natoms);
+  Kokkos::View<Point **> quadrature_points_device("quadrature_points", natoms,
+                                                  npts);
   Kokkos::View<double **> weights_device("weights", natoms, npts);
 
   // Create all the Kokkos Mirror Views on Execution device
@@ -136,16 +137,17 @@ TEST_CASE("one-half", "[weights_one_half]") {
   auto weights_h = Kokkos::create_mirror_view(weights_device);
 
   for (int i = 0; i < natoms; ++i) {
-    atom_centers_h(i, 0) = (2 * i - 1);
-    atom_centers_h(i, 1) = 0;
-    atom_centers_h(i, 2) = 0;
+    atom_centers_h(i)[0] = (2 * i - 1);
+    atom_centers_h(i)[1] = 0;
+    atom_centers_h(i)[2] = 0;
 
     for (int j = 0; j < 10; ++j) {
 
       for (int k = 0; k < 10; ++k) {
-        quadrature_points_h(i, j * 10 + k, 0) = 0;
-        quadrature_points_h(i, j * 10 + k, 1) = j / 10.;
-        quadrature_points_h(i, j * 10 + k, 2) = k / 10.;
+        int idx = j * ngrid + k;
+        quadrature_points_h(i, idx)[0] = 0;
+        quadrature_points_h(i, idx)[1] = j / 10.;
+        quadrature_points_h(i, idx)[2] = k / 10.;
 
         weights_h(i, j * 10 + k) = 1.0;
       }
@@ -158,8 +160,8 @@ TEST_CASE("one-half", "[weights_one_half]") {
   Kokkos::deep_copy(weights_device, weights_h);
 
   // Compute the adjusted weights
-  partition_becke_team(atom_centers_device, quadrature_points_device,
-                       weights_device);
+  partition_becke(atom_centers_device, quadrature_points_device,
+                  weights_device);
 
   // Copy weights back to the host device
   Kokkos::deep_copy(weights_h, weights_device);
@@ -177,9 +179,9 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
   int npts = 10 * 10;
 
   // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3]> atom_centers_device("atom centers", natoms);
-  Kokkos::View<double **[3]> quadrature_points_device("quadrature_points",
-                                                      natoms, npts);
+  Kokkos::View<Point *> atom_centers_device("atom centers", natoms);
+  Kokkos::View<Point **> quadrature_points_device("quadrature_points", natoms,
+                                                  npts);
   Kokkos::View<double **> weights_device("weights", natoms, npts);
 
   // Create all the Kokkos Mirror Views on Execution device
@@ -190,15 +192,16 @@ TEST_CASE("SUM_TO_ONE", "[weights_sum_to_one]") {
 
   // Place Atoms semi-randomly
   for (int i = 0; i < natoms; ++i) {
-    atom_centers_h(i, 0) = i;
-    atom_centers_h(i, 1) = i % 2;
-    atom_centers_h(i, 2) = i % 3;
+    atom_centers_h(i)[0] = i;
+    atom_centers_h(i)[1] = i % 2;
+    atom_centers_h(i)[2] = i % 3;
 
     for (int j = 0; j < 10; ++j) {
+
       for (int k = 0; k < 10; ++k) {
-        quadrature_points_h(i, j * 10 + k, 0) = 0;
-        quadrature_points_h(i, j * 10 + k, 1) = j / 10.;
-        quadrature_points_h(i, j * 10 + k, 2) = k / 10.;
+        quadrature_points_h(i, j * 10 + k)[0] = 0;
+        quadrature_points_h(i, j * 10 + k)[1] = j / 10.;
+        quadrature_points_h(i, j * 10 + k)[2] = k / 10.;
 
         weights_h(i, j * 10 + k) = 1.0;
       }

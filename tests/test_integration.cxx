@@ -83,64 +83,10 @@ TEST_CASE("H20", "[h20_weights]") {
   Molecule mol = make_water();
   unsigned int natoms = mol.natoms;
   STOBasisSet stobasis = load_adf_basis(mol);
+  FlatGrid grid = make_flat_grid<bk_type, ll_type>(mol);
 
-  // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3]> atom_centers_device("atom centers", natoms);
-  Kokkos::View<double **[3]> quadrature_points_device("quadrature_points",
-                                                      natoms, npts);
-  Kokkos::View<double **> weights_device("weights", natoms, npts);
-
-  // Create all the Kokkos Mirror Views on Execution device
-  auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
-  auto quadrature_points_h =
-      Kokkos::create_mirror_view(quadrature_points_device);
-  auto weights_h = Kokkos::create_mirror_view(weights_device);
-
-  Kokkos::deep_copy(atom_centers_h, mol.atom_centers);
-
-  for (int i = 0; i < natoms; ++i) {
-    for (int j = 0; j < npts; ++j) {
-      quadrature_points_h(i, j, 0) = atom_centers_h(i, 0) + sph->points()[j][0];
-      quadrature_points_h(i, j, 1) = atom_centers_h(i, 1) + sph->points()[j][1];
-      quadrature_points_h(i, j, 2) = atom_centers_h(i, 2) + sph->points()[j][2];
-
-      weights_h(i, j) = sph->weights()[j];
-    }
-  }
-
-  // Copy the views from host device to the execution device
-  Kokkos::deep_copy(atom_centers_device, atom_centers_h);
-  Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
-  Kokkos::deep_copy(weights_device, weights_h);
-
-  // Compute the adjusted weights
-  partition_becke_team(atom_centers_device, quadrature_points_device,
-                       weights_device);
-
-  // Flatten the weights and quadrature_points
-
-  Kokkos::View<double *> weights_1d("Weights 1D", weights_device.extent(0) *
-                                                      weights_device.extent(1));
-
-  Kokkos::View<double *[3]> quad_points_1d(
-      "Quadrature points 1D",
-      quadrature_points_device.extent(0) * quadrature_points_device.extent(1));
-
-  Kokkos::parallel_for(
-      "FlattenViews",
-      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>({0, 0}, {natoms, npts}),
-      KOKKOS_LAMBDA(const int i, const int j) {
-        // Calculate the logical 1D index
-        int flat_idx = i * npts + j;
-
-        weights_1d(flat_idx) = weights_device(i, j);
-
-        quad_points_1d(flat_idx, 0) = quadrature_points_device(i, j, 0);
-        quad_points_1d(flat_idx, 1) = quadrature_points_device(i, j, 1);
-        quad_points_1d(flat_idx, 2) = quadrature_points_device(i, j, 2);
-      });
-
-  DeviceView2DLeft S = overlap_integral(stobasis, quad_points_1d, weights_1d);
+  DeviceView2DLeft S =
+      overlap_integral(stobasis, grid.quad_points, grid.weights);
 
   auto S_h = Kokkos::create_mirror_view(S);
   Kokkos::deep_copy(S_h, S);

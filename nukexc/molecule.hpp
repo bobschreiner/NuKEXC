@@ -32,7 +32,7 @@ namespace NuKEXC {
 
 struct Molecule {
 
-  Kokkos::View<double *[3], Kokkos::HostSpace>
+  Kokkos::View<Point *, Kokkos::HostSpace>
       atom_centers; // Atom centers in cartesian coordinates (bohr)
   Kokkos::View<unsigned *, Kokkos::HostSpace> Z; // atomic numbers
   unsigned natoms; // number of atoms in the molecule
@@ -53,16 +53,16 @@ struct Molecule {
     // Initialize datastructures
     natoms = Z_v.size();
     atom_centers =
-        Kokkos::View<double *[3], Kokkos::HostSpace>("Atom centers", natoms);
+        Kokkos::View<Point *, Kokkos::HostSpace>("Atom centers", natoms);
     Z = Kokkos::View<unsigned *, Kokkos::HostSpace>("Atomic numbers ", natoms);
 
     element_list = std::set<unsigned>(Z_v.begin(), Z_v.end());
 
     // Fill Kokkos::View with data
     for (size_t i = 0; i < natoms; ++i) {
-      atom_centers(i, 0) = atom_centers_v[i][0];
-      atom_centers(i, 1) = atom_centers_v[i][1];
-      atom_centers(i, 2) = atom_centers_v[i][2];
+      atom_centers(i)[0] = atom_centers_v[i][0];
+      atom_centers(i)[1] = atom_centers_v[i][1];
+      atom_centers(i)[2] = atom_centers_v[i][2];
       Z(i) = Z_v[i];
     }
   };
@@ -113,7 +113,7 @@ inline bool operator==(const Molecule &m1, const Molecule &m2) {
     if (m1.Z(i) != m2.Z(i))
       return false;
     for (unsigned int j = 0; j < 3; ++j) {
-      if (m1.atom_centers(i, j) != m2.atom_centers(i, j))
+      if (m1.atom_centers(i)[j] != m2.atom_centers(i)[3])
         return false;
     }
   }

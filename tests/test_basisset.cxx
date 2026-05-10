@@ -65,7 +65,7 @@ TEST_CASE("H2O_thakkar", "[h20_thakkar]") {
     std::cout << "zeta " << zeta_h(i) << std::endl;
     std::cout << "norm " << norm_h(i) << std::endl;
     std::cout << "cutoff " << cutoff_h(i) << std::endl;
-    std::cout << "O_h " << O_h(i, 0) << " " << O_h(i, 1) << " " << O_h(i, 2)
+    std::cout << "O_h " << O_h(i)[0] << " " << O_h(i)[0] << " " << O_h(i)[2]
               << " " << std::endl
               << std::endl;
   }
@@ -105,7 +105,7 @@ TEST_CASE("H2O_adf_regular", "[h20][adf]") {
     std::cout << "zeta " << zeta_h(i) << std::endl;
     std::cout << "norm " << norm_h(i) << std::endl;
     std::cout << "cutoff " << cutoff_h(i) << std::endl;
-    std::cout << "O_h " << O_h(i, 0) << " " << O_h(i, 1) << " " << O_h(i, 2)
+    std::cout << "O_h " << O_h(i)[0] << " " << O_h(i)[0] << " " << O_h(i)[2]
               << " " << std::endl
               << std::endl;
   }
@@ -146,7 +146,7 @@ TEST_CASE("H2O_adf_QZ4P", "[h20][adf]") {
     std::cout << "zeta " << zeta_h(i) << std::endl;
     std::cout << "norm " << norm_h(i) << std::endl;
     std::cout << "cutoff " << cutoff_h(i) << std::endl;
-    std::cout << "O_h " << O_h(i, 0) << " " << O_h(i, 1) << " " << O_h(i, 2)
+    std::cout << "O_h " << O_h(i)[0] << " " << O_h(i)[0] << " " << O_h(i)[2]
               << " " << std::endl
               << std::endl;
   }
@@ -175,13 +175,10 @@ TEST_CASE("Basis Cutoff", "[h20][cutoff]") {
   Kokkos::parallel_for(
       "Evaluate basis", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N, G}),
       KOKKOS_LAMBDA(const int i, const int g) {
-        double x = basis.O(i, 0) - grid.quad_points(g, 0);
-        double y = basis.O(i, 1) - grid.quad_points(g, 1);
-        double z = basis.O(i, 2) - grid.quad_points(g, 2);
-        double r = Kokkos::sqrt(x * x + y * y + z * z);
+        double r = dist(basis.O(i), grid.quad_points(g));
         grid_values(i, g) =
-            basis_eval(basis, i, grid.quad_points(g, 0), grid.quad_points(g, 1),
-                       grid.quad_points(g, 2));
+            basis_eval(basis, i, grid.quad_points(g)[0], grid.quad_points(g)[1],
+                       grid.quad_points(g)[2]);
         grid_r(i, g) = r;
       });
 

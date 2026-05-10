@@ -47,8 +47,8 @@ double compute_p(const double x) { return (1.5 * x) - (0.5 * std::pow(x, 3)); }
 KOKKOS_INLINE_FUNCTION
 double compute_s(const double f) { return 0.5 * (1.0 - f); }
 
-void partition_becke(const Kokkos::View<double *[3]> &atom_centers,
-                     const Kokkos::View<double **[3]> &quadrature_points,
+void partition_becke(const Kokkos::View<Point *> &atom_centers,
+                     const Kokkos::View<Point **> &quadrature_points,
                      Kokkos::View<double **> &weights) {
 
   size_t natoms = atom_centers.extent(0);
@@ -70,9 +70,7 @@ void partition_becke(const Kokkos::View<double *[3]> &atom_centers,
   Kokkos::parallel_for(
       "Compute inter-atomic distances", range_natoms_natoms,
       KOKKOS_LAMBDA(const int &i, const int &j) {
-        auto subView_i = Kokkos::subview(atom_centers, i, Kokkos::ALL());
-        auto subView_j = Kokkos::subview(atom_centers, j, Kokkos::ALL());
-        R(i, j) = rad_dist(subView_i, subView_j) + epsilon_shift;
+        R(i, j) = dist(atom_centers(i), atom_centers(j)) + epsilon_shift;
       });
 
   Kokkos::fence();
@@ -81,10 +79,8 @@ void partition_becke(const Kokkos::View<double *[3]> &atom_centers,
   Kokkos::parallel_for(
       "Compute atomic distances to quad_points", range_quad_points_natoms,
       KOKKOS_LAMBDA(const int &p, const int &g, const int &i) {
-        auto subView_pg =
-            Kokkos::subview(quadrature_points, p, g, Kokkos::ALL());
-        auto subView_i = Kokkos::subview(atom_centers, i, Kokkos::ALL());
-        r(p, g, i) = rad_dist(subView_pg, subView_i);
+        auto subView_pg = r(p, g, i) =
+            dist(quadrature_points(p, g), atom_centers(i));
       });
 
   Kokkos::fence();
@@ -117,8 +113,8 @@ void partition_becke(const Kokkos::View<double *[3]> &atom_centers,
 using TeamPolicy = Kokkos::TeamPolicy<ExecSpace>;
 using MemberType = typename TeamPolicy::member_type;
 
-void partition_becke_team(const Kokkos::View<double *[3]> &atom_centers,
-                          const Kokkos::View<double **[3]> &quadrature_points,
+void partition_becke_team(const Kokkos::View<Point *> &atom_centers,
+                          const Kokkos::View<Point **> &quadrature_points,
                           Kokkos::View<double **> &weights) {
 
   size_t natoms = atom_centers.extent(0);
@@ -144,12 +140,8 @@ void partition_becke_team(const Kokkos::View<double *[3]> &atom_centers,
         for (int j = 0; j < natoms; ++j) {
           if (i == j)
             continue;
-          double d2 = 0;
-          for (int k = 0; k < 3; ++k) {
-            double d = atom_centers(i, k) - atom_centers(j, k);
-            d2 += d * d;
-          }
-          R_ij(i, j) = sqrt(d2) + epsilon_shift;
+          double d = NuKEXC::dist(atom_centers(i), atom_centers(j));
+          R_ij(i, j) = d + epsilon_shift;
           if (R_ij(i, j) < R_screen) {
             n_neighbors(i) += 1;
           }
@@ -214,11 +206,8 @@ void partition_becke_team(const Kokkos::View<double *[3]> &atom_centers,
             [&](const size_t g) {
               // Cache distances for quadrature point g to all atoms i
               for (size_t i = 0; i < natoms; ++i) {
-                auto subView_pg =
-                    Kokkos::subview(quadrature_points, p, g, Kokkos::ALL());
-                auto subView_i =
-                    Kokkos::subview(atom_centers, i, Kokkos::ALL());
-                r_cache(i) = rad_dist(subView_pg, subView_i);
+                r_cache(i) =
+                    NuKEXC::dist(quadrature_points(p, g), atom_centers(i));
               }
               double w_p;
               double normalization = 0.0;

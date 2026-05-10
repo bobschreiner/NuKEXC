@@ -47,9 +47,10 @@
 
 namespace NuKEXC {
 struct FlatGrid {
-  Kokkos::View<double *[3]> quad_points;
+
+  Kokkos::View<Point *> quad_points;
   Kokkos::View<double *> weights;
-  Kokkos::View<double *[3]> atom_centers;
+  Kokkos::View<Point *> atom_centers;
   Kokkos::View<unsigned *> Z;
 };
 
@@ -72,9 +73,9 @@ FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 120,
 
   const unsigned npts = sph->npts();
 
-  Kokkos::View<double *[3]> ac_dev("atom centers", natoms);
+  Kokkos::View<Point *> ac_dev("atom centers", natoms);
   Kokkos::View<unsigned *> Z_dev("Z", natoms);
-  Kokkos::View<double **[3]> qp_2d("quadrature points", natoms, npts);
+  Kokkos::View<Point **> qp_2d("quadrature points", natoms, npts);
   Kokkos::View<double **> wt_2d("weights", natoms, npts);
 
   auto ac_h = Kokkos::create_mirror_view(ac_dev);
@@ -87,9 +88,9 @@ FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 120,
 
   for (unsigned i = 0; i < natoms; ++i)
     for (unsigned j = 0; j < npts; ++j) {
-      qp_h(i, j, 0) = ac_h(i, 0) + sph->points()[j][0];
-      qp_h(i, j, 1) = ac_h(i, 1) + sph->points()[j][1];
-      qp_h(i, j, 2) = ac_h(i, 2) + sph->points()[j][2];
+      qp_h(i, j)[0] = ac_h(i)[0] + sph->points()[j][0];
+      qp_h(i, j)[1] = ac_h(i)[1] + sph->points()[j][1];
+      qp_h(i, j)[2] = ac_h(i)[2] + sph->points()[j][2];
       wt_h(i, j) = sph->weights()[j];
     }
 
@@ -100,7 +101,7 @@ FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 120,
 
   partition_becke_team(ac_dev, qp_2d, wt_2d);
 
-  Kokkos::View<double *[3]> qp_1d("quad points 1D", natoms * npts);
+  Kokkos::View<Point *> qp_1d("quad points 1D", natoms * npts);
   Kokkos::View<double *> wt_1d("weights 1D", natoms * npts);
 
   Kokkos::parallel_for(
@@ -110,9 +111,9 @@ FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 120,
       KOKKOS_LAMBDA(const int i, const int j) {
         const int idx = i * npts + j;
         wt_1d(idx) = wt_2d(i, j);
-        qp_1d(idx, 0) = qp_2d(i, j, 0);
-        qp_1d(idx, 1) = qp_2d(i, j, 1);
-        qp_1d(idx, 2) = qp_2d(i, j, 2);
+        qp_1d(idx)[0] = qp_2d(i, j)[0];
+        qp_1d(idx)[1] = qp_2d(i, j)[1];
+        qp_1d(idx)[2] = qp_2d(i, j)[2];
       });
 
   return {qp_1d, wt_1d, ac_dev, Z_dev};
