@@ -28,8 +28,8 @@
 #include <vector>
 
 #include "atomic_properties.hpp"
-#include "kokkos_config.hpp"
 #include "molecule.hpp"
+#include "nukexc_config.hpp"
 #include "nukexc_utils.hpp"
 #include "spherical_harmonics.hpp"
 

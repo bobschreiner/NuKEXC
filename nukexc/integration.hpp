@@ -19,8 +19,8 @@
  */
 
 #pragma once
-#include "kokkos_config.hpp"
 #include "molecule.hpp"
+#include "nukexc_config.hpp"
 #include "octree.hpp"
 #include "partitioning.hpp"
 #include "stobasis.hpp"

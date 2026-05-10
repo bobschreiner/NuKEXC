@@ -17,7 +17,7 @@
  *
  */
 
-#include "nukexc/kokkos_config.hpp"
+#include "nukexc/nukexc_config.hpp"
 #include <Kokkos_Core.hpp>
 #include <catch2/catch_all.hpp>
 #include <catch2/matchers/catch_matchers.hpp>

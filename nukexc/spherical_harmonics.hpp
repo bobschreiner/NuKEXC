@@ -25,7 +25,7 @@
  */
 
 #pragma once
-#include "kokkos_config.hpp"
+#include "nukexc_config.hpp"
 #include "nukexc_utils.hpp"
 #include <iostream>
 
@@ -262,11 +262,11 @@ void grad_poly_A(double x, double y, unsigned m, double &dx, double &dy) {
   for (int p = 0; p < m + 1; ++p) {
     int cos_val = ((m - p) % 2 == 0) ? (((m - p) / 2) % 2 == 0 ? 1 : -1) : 0;
     if (p > 0)
-      dx += p * binomial(m, p) * Kokkos::pow(x, p - 1) * pow(y, m - p) *
-            cos_val;
+      dx +=
+          p * binomial(m, p) * Kokkos::pow(x, p - 1) * pow(y, m - p) * cos_val;
     if (m - p > 0)
-      dy += (m - p) * binomial(m, p) * Kokkos::pow(x, p) * Kokkos::pow(y, m - p - 1) *
-            cos_val;
+      dy += (m - p) * binomial(m, p) * Kokkos::pow(x, p) *
+            Kokkos::pow(y, m - p - 1) * cos_val;
   }
 }
 

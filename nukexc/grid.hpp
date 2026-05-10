@@ -29,12 +29,9 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
-#include <nukexc/integration.hpp>
-#include <nukexc/molecule.hpp>
-#include <nukexc/partitioning.hpp>
-#include <nukexc/stobasis.hpp>
-
-#include "octree.hpp"
+#include "molecule.hpp"
+#include "partitioning.hpp"
+#include "stobasis.hpp"
 
 #include <vector>
 

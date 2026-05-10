@@ -38,7 +38,7 @@
 #include <nukexc/partitioning.hpp>
 #include <nukexc/stobasis.hpp>
 
-#include "nukexc/kokkos_config.hpp"
+#include "nukexc/nukexc_config.hpp"
 #include "nukexc/octree.hpp"
 #include "standards.hpp"
 

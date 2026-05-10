@@ -20,7 +20,7 @@
 #pragma once
 
 #include "atomic_properties.hpp"
-#include "kokkos_config.hpp"
+#include "nukexc_config.hpp"
 #include <decl/Kokkos_Declare_OPENMP.hpp>
 #include <fstream>
 #include <iostream>

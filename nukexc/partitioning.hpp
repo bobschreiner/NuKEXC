@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include "kokkos_config.hpp"
+#include "nukexc_config.hpp"
 #include "nukexc_utils.hpp"
 #include <iostream>
 

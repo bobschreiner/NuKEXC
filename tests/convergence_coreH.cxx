@@ -33,8 +33,6 @@
  *   (a) The error at the finest grid meets a tight absolute tolerance.
  */
 
-#include "nukexc/diagonalizer.hpp"
-#include "nukexc/kokkos_config.hpp"
 #include <Kokkos_Core.hpp>
 #include <catch2/catch_all.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -45,9 +43,11 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
+#include <nukexc/diagonalizer.hpp>
 #include <nukexc/grid.hpp> // make_flat_grid
 #include <nukexc/integration.hpp>
 #include <nukexc/molecule.hpp>
+#include <nukexc/nukexc_config.hpp>
 #include <nukexc/partitioning.hpp>
 #include <nukexc/stobasis.hpp> // make_manual_basis, overlap_integral
 
@@ -145,20 +145,47 @@ TEST_CASE("H2+ Core Hamiltonian radial convergence", "[convergence][radial]") {
 
   using namespace IntegratorXX;
 
-  const double ref_energy = -1.4517863;
-
   std::vector<int> nrad_sweep;
-  std::vector<int> nang_order_sweep;
-  for (int i = 20; i < 2000; i += 20) {
+  int nrad_max = 500;
+  for (int i = 20; i < nrad_max; i += 20) {
     nrad_sweep.push_back(i);
   }
-  const size_t nang_order_fixed = 40; // high enough to be negligible
+
+  const size_t nang_order_fixed = 50; // high enough to be negligible
 
   auto mol = make_h2_mol();
   auto basis = load_adf_basis(mol, "input/zorabasis/QZ4P");
 
   std::vector<ConvergencePoint> data;
   data.reserve(nrad_sweep.size());
+
+  // Compute reference
+  double ref_energy;
+  {
+    auto grid =
+        make_flat_grid<bk_type, ll_type>(mol, nrad_max, nang_order_fixed);
+    // npts_actual = natoms * nrad * nang
+    const size_t npts = grid.quad_points.extent(0);
+
+    // Compute the core Hamiltonian
+    CoreHamiltonianResult coreH = compute_core_hamiltonian(
+        basis, grid.quad_points, grid.weights, grid.atom_centers, grid.Z);
+
+    // Initialize the mo_coeff and mo_energies
+    DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), basis.nbf());
+    DeviceView1D mo_energies("mo energies", basis.nbf());
+
+    // Diagonalise the Hamiltonian
+    Diagonalizer digaonalizer(basis.nbf());
+    digaonalizer.compute_transformation(coreH.overlap);
+    digaonalizer.solve(coreH.hamiltonian, mo_coeff, mo_energies);
+
+    auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
+    Kokkos::deep_copy(mo_energies_h, mo_energies);
+    double gs_energy = mo_energies_h(0);
+
+    ref_energy = gs_energy;
+  }
 
   for (size_t nrad : nrad_sweep) {
     auto grid = make_flat_grid<bk_type, ll_type>(mol, nrad, nang_order_fixed);
@@ -210,9 +237,9 @@ TEST_CASE("H2+ Core Hamiltonian angular convergence",
   using namespace IntegratorXX;
   using angular_traits = quadrature_traits<ll_type>;
 
-  const double ref_energy = -1.4517863;
   std::vector<int> nang_order_sweep;
-  for (int i = 3; i < 30; ++i) {
+  int nang_max = 50;
+  for (int i = 5; i < nang_max; i += 5) {
     if (i == 12 or i == 13 or i == 24 or i == 25 or i == 26 or i == 27)
       continue;
 
@@ -223,6 +250,33 @@ TEST_CASE("H2+ Core Hamiltonian angular convergence",
 
   auto mol = make_h2_mol();
   auto basis = load_adf_basis(mol, "input/zorabasis/QZ4P");
+
+  // Compute reference
+  double ref_energy;
+  {
+    auto grid = make_flat_grid<bk_type, ll_type>(mol, nrad_fixed, nang_max);
+    // npts_actual = natoms * nrad * nang
+    const size_t npts = grid.quad_points.extent(0);
+
+    // Compute the core Hamiltonian
+    CoreHamiltonianResult coreH = compute_core_hamiltonian(
+        basis, grid.quad_points, grid.weights, grid.atom_centers, grid.Z);
+
+    // Initialize the mo_coeff and mo_energies
+    DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), basis.nbf());
+    DeviceView1D mo_energies("mo energies", basis.nbf());
+
+    // Diagonalise the Hamiltonian
+    Diagonalizer digaonalizer(basis.nbf());
+    digaonalizer.compute_transformation(coreH.overlap);
+    digaonalizer.solve(coreH.hamiltonian, mo_coeff, mo_energies);
+
+    auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
+    Kokkos::deep_copy(mo_energies_h, mo_energies);
+    double gs_energy = mo_energies_h(0);
+
+    ref_energy = gs_energy;
+  }
 
   std::vector<ConvergencePoint> data;
   data.reserve(nang_order_sweep.size());

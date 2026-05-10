@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include "kokkos_config.hpp"
+#include "nukexc_config.hpp"
 
 #include <KokkosBlas3_gemm.hpp>
 #include <KokkosBlas3_trsm.hpp>
