@@ -52,7 +52,7 @@ TEST_CASE("Basis Cutoff", "[cutoff]") {
     int N = basis.nbf();
     int G = grid.quad_points.extent(0);
 
-    Kokkos::View<int> counter("counter");
+    Kokkos::View<int64_t> counter("counter");
 
     Kokkos::parallel_for(
         "Count points outside cutoff",
@@ -60,13 +60,13 @@ TEST_CASE("Basis Cutoff", "[cutoff]") {
         KOKKOS_LAMBDA(const int i, const int g) {
           double r = dist(basis.O(i), grid.quad_points(g));
           if (r > basis.cutoff_radii(i))
-            Kokkos::atomic_fetch_add(&counter(), 1);
+            Kokkos::atomic_fetch_add(&counter(), int64_t(1));
         });
 
     Kokkos::fence();
     auto count_h = Kokkos::create_mirror_view(counter);
     Kokkos::deep_copy(count_h, counter);
-    double percent = (double)count_h() / (N * G) * 100;
+    double percent = (double)count_h() / (double)(N * G) * 100;
     std::cout << "Quad notes outside of cutoff radius:  " << std::setw(4)
               << std::setprecision(4) << percent
               << "\%     tol = " << cutoff_tol << "\n";
