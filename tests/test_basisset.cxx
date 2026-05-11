@@ -19,14 +19,15 @@
  */
 
 #include <Kokkos_Core.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <impl/Kokkos_CheckUsage.hpp>
+
 #include <integratorxx/quadratures/radial/treutlerahlrichs.hpp>
 #include <iomanip>
 #include <iostream>
-#include <nukexc/grid.hpp>
 
+#include <nukexc/grid.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/stobasis.hpp>
 
