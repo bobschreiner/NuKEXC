@@ -16,6 +16,7 @@
 
 using namespace NuKEXC;
 using bk_type = IntegratorXX::Becke<double, double>;
+using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 
 // ─── Visualization helpers ──────────────────────────────────────────
@@ -45,7 +46,7 @@ void visualize_bounding_boxes(Kokkos::View<Box *> bb_dev) {
       << "DATASET UNSTRUCTURED_GRID\n\n";
 
   // ── Points: 8 corners per hexahedron ────────────────────────────────────
-  out << "POINTS " << n * 8 << " rdouble\n";
+  out << "POINTS " << n * 8 << " double\n";
   for (int i = 0; i < n; ++i) {
     const double x0 = bb(i).minCorner()._coords[0];
     const double y0 = bb(i).minCorner()._coords[1];
@@ -176,17 +177,15 @@ void visualize_points_with_tiles(Kokkos::View<Point *, ExecSpace> points_dev,
 int main(int argc, char *argv[]) {
   Kokkos::initialize(argc, argv);
   {
-    Molecule mol = make_benzene();
-    FlatGrid grid = make_flat_grid<bk_type, ll_type>(mol);
-    int max_points_per_bb = 512;
+    Molecule mol = make_taxol();
+    FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, 40, 10);
+    int max_points_per_bb = 32;
     // Create bounding boxes
     auto bb = create_bounding_boxes(grid, max_points_per_bb);
-    // TODO remove
-    Kokkos::View<Point *, ExecSpace> points;
 
     // ── Visualize ────────────────────────────────────────────────────────
     visualize_bounding_boxes(bb);
-    visualize_points_with_tiles(points, max_points_per_bb);
+    visualize_points_with_tiles(grid.quad_points, max_points_per_bb);
   }
   Kokkos::finalize();
   return 0;

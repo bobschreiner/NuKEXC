@@ -17,6 +17,7 @@ add_executable(convergence_coreH convergence_coreH.cxx)
 
 add_executable(benchmark_partition  standards.cxx benchmark_partition.cxx )
 add_executable(benchmark_scf standards.cxx benchmark_scf.cxx )
+add_executable(benchmark_cutoff standards.cxx benchmark_cutoff.cxx )
 
 add_custom_target(copy_test_inputs 
     COMMAND  ${CMAKE_COMMAND} -E copy_directory
@@ -39,6 +40,7 @@ set(ALL_TEST_TARGETS
     convergence_coreH
     benchmark_partition
     benchmark_scf
+    benchmark_cutoff
 
 )
 

@@ -22,6 +22,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <impl/Kokkos_CheckUsage.hpp>
+#include <integratorxx/quadratures/radial/treutlerahlrichs.hpp>
+#include <iomanip>
 #include <iostream>
 #include <nukexc/grid.hpp>
 
@@ -30,6 +32,7 @@
 
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_assertion_info.hpp>
+#include <vector>
 
 using namespace NuKEXC;
 
@@ -56,6 +59,7 @@ TEST_CASE("H2O_thakkar", "[h20_thakkar]") {
   Kokkos::deep_copy(O_h, basis.O);
   Kokkos::deep_copy(cutoff_h, basis.cutoff_radii);
 
+#if 0
   std::cout << "Thakkar Basis" << std::endl;
   for (int i = 0; i < basis.nbf(); ++i) {
     std::cout << "Basis function " << i << std::endl;
@@ -71,6 +75,7 @@ TEST_CASE("H2O_thakkar", "[h20_thakkar]") {
   }
   std::cout << "--------------------------------------------------"
             << std::endl;
+#endif
 };
 
 TEST_CASE("H2O_adf_regular", "[h20][adf]") {
@@ -96,6 +101,7 @@ TEST_CASE("H2O_adf_regular", "[h20][adf]") {
   Kokkos::deep_copy(O_h, basis.O);
   Kokkos::deep_copy(cutoff_h, basis.cutoff_radii);
 
+#if 0
   std::cout << "ADF TZP" << std::endl;
   for (int i = 0; i < basis.nbf(); ++i) {
     std::cout << "Basis function " << i << std::endl;
@@ -111,6 +117,7 @@ TEST_CASE("H2O_adf_regular", "[h20][adf]") {
   }
   std::cout << "--------------------------------------------------"
             << std::endl;
+#endif
 };
 
 TEST_CASE("H2O_adf_QZ4P", "[h20][adf]") {
@@ -136,6 +143,7 @@ TEST_CASE("H2O_adf_QZ4P", "[h20][adf]") {
   Kokkos::deep_copy(O_h, basis.O);
   Kokkos::deep_copy(cutoff_h, basis.cutoff_radii);
 
+#if 0 
   std::cout << "ADF QZ4P" << std::endl;
 
   for (int i = 0; i < basis.nbf(); ++i) {
@@ -152,19 +160,21 @@ TEST_CASE("H2O_adf_QZ4P", "[h20][adf]") {
   }
   std::cout << "--------------------------------------------------"
             << std::endl;
+#endif
 };
 
 TEST_CASE("Basis Cutoff", "[h20][cutoff]") {
 
   using bk_type = IntegratorXX::Becke<double, double>;
+  using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
   using ll_type = IntegratorXX::LebedevLaikov<double>;
 
-  double cutoff_tol = 1e-10;
+  double cutoff_tol = 1e-15;
   Molecule mol;
-  read_xyz("input/water.xyz", mol);
+  read_xyz("input/benzene.xyz", mol);
   STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", cutoff_tol);
 
-  FlatGrid grid = make_flat_grid<bk_type, ll_type>(mol);
+  FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, 100, 50);
 
   int N = basis.nbf();
   int G = grid.quad_points.extent(0);
@@ -186,14 +196,18 @@ TEST_CASE("Basis Cutoff", "[h20][cutoff]") {
   auto grid_r_h = Kokkos::create_mirror_view(grid_r);
   auto cutoff_radii_h = Kokkos::create_mirror_view(basis.cutoff_radii);
 
+  Kokkos::fence();
   Kokkos::deep_copy(grid_values_h, grid_values);
   Kokkos::deep_copy(grid_r_h, grid_r);
   Kokkos::deep_copy(cutoff_radii_h, basis.cutoff_radii);
 
+  int count = 0;
   for (unsigned int i = 0; i < N; ++i) {
     for (unsigned int g = 0; g < G; ++g) {
       if (cutoff_radii_h(i) < grid_r_h(i, g)) {
-        REQUIRE(grid_values_h(i, g) < cutoff_tol);
+        ++count;
+        REQUIRE_THAT(grid_values_h(i, g),
+                     Catch::Matchers::WithinAbs(0., cutoff_tol));
       }
     }
   }

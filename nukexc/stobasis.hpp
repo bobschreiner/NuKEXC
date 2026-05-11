@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <Kokkos_Core.hpp>
 #include <cctype>
 #include <fstream>
 #include <map>
@@ -72,6 +73,90 @@ struct STOFunc {
   double zeta;
   double ox, oy, oz;
 };
+double compute_cutoff(STOFunc f, const double norm, const double cutoff_tol) {
+  // Preconditions
+  KOKKOS_ASSERT(f.n >= 1);
+  KOKKOS_ASSERT(f.zeta > 0.0);
+  KOKKOS_ASSERT(cutoff_tol > 0.0);
+
+  // If the function is already everywhere below tolerance, cutoff is at origin
+  if (norm <= cutoff_tol)
+    return 0.0;
+
+  const double ln_tol = Kokkos::log(cutoff_tol);
+  const double ln_norm = Kokkos::log(norm);
+
+  // g(r) = ln_norm + (n-1)*ln(r) - zeta*r - ln_tol = 0
+  // g'(r) = (n-1)/r - zeta
+  // The unique root we want is on the far side of the peak, i.e. r > peak,
+  // where g'(r) < 0 so the function is strictly decreasing.
+  const double peak = (f.n > 1) ? (f.n - 1) / f.zeta : 0.0;
+
+  // Initial guess: asymptotically correct when the log(r) term is negligible.
+  // Guaranteed to be >= peak for reasonable inputs (norm >> tol).
+  double r = Kokkos::max(peak + (ln_norm - ln_tol) / f.zeta, peak + 1e-6);
+
+  // Safe interval: we stay in (peak, +inf) where g is monotone decreasing,
+  // so there is exactly one root and Newton steps are well-defined.
+  // We track an upper bound via the interval [r_lo, r_hi] and fall back to
+  // bisection whenever a Newton step would leave (peak, r_hi].
+  double r_lo = peak + 1e-10;
+  double r_hi = r;
+
+  // Ensure r_hi is actually above the root (g(r_hi) <= 0)
+  // If not, double r_hi until it is.
+  for (int k = 0; k < 64; ++k) {
+    double g_hi =
+        ln_norm + (f.n - 1) * Kokkos::log(r_hi) - f.zeta * r_hi - ln_tol;
+    if (g_hi <= 0.0)
+      break;
+    r_hi *= 2.0;
+  }
+  r = r_hi;
+
+  for (int k = 0; k < 50; ++k) {
+    double g = ln_norm + (f.n - 1) * Kokkos::log(r) - f.zeta * r - ln_tol;
+
+    // Update bracket
+    if (g > 0.0)
+      r_lo = r;
+    else
+      r_hi = r;
+
+    double g_prime = (f.n - 1) / r - f.zeta;
+
+    // g_prime < 0 everywhere in (peak, +inf); if somehow we're at the peak
+    // itself, fall back to bisection immediately.
+    double r_next;
+    if (g_prime >= 0.0) {
+      r_next = 0.5 * (r_lo + r_hi); // bisection fallback
+    } else {
+      r_next = r - g / g_prime; // Newton step
+      // Reject step if it leaves the safe interval
+      if (r_next <= r_lo || r_next >= r_hi)
+        r_next = 0.5 * (r_lo + r_hi); // bisection fallback
+    }
+
+    double delta = Kokkos::abs(r_next - r);
+    r = r_next;
+
+    if (delta < 1e-10 * r)
+      break;
+
+#ifndef NDEBUG
+    // In debug builds, assert we haven't diverged
+    KOKKOS_ASSERT(r > 0.0);
+#endif
+  }
+
+#ifndef NDEBUG
+  {
+    double g_final = ln_norm + (f.n - 1) * Kokkos::log(r) - f.zeta * r - ln_tol;
+    KOKKOS_ASSERT(Kokkos::abs(g_final) < 1e-6);
+  }
+#endif
+  return r;
+}
 
 STOBasisSet make_manual_basis(const std::vector<STOFunc> &funcs,
                               double cutoff_tol = 1e-10) {
@@ -102,42 +187,7 @@ STOBasisSet make_manual_basis(const std::vector<STOFunc> &funcs,
                         std::sqrt(static_cast<double>(factorial(2 * f.n)));
 
     // Compute cutoff radius, with the Newton-Raphson method
-    double radial;
-    double radial_deriv;
-
-    // 1. Setup constants in log-space
-    const double ln_tol = Kokkos::log(cutoff_tol);
-    const double ln_norm = Kokkos::log(norm);
-
-    // 2. Guaranteed safe initial guess:
-    // Start at the peak (n-1)/zeta plus a buffer based on the decay rate
-    double peak = (f.n > 1) ? (f.n - 1) / f.zeta : 0.0;
-    double r = peak + (ln_norm - ln_tol) / f.zeta;
-
-    for (int k = 0; k < 100; ++k) {
-      // g(r) = ln(f(r)) - ln(tol)
-      double g = ln_norm + (f.n - 1) * Kokkos::log(r) - f.zeta * r - ln_tol;
-
-      // g'(r) = (n-1)/r - zeta
-      double g_prime = (f.n - 1) / r - f.zeta;
-
-      // Newton step
-      double delta = g / g_prime;
-      r = r - delta;
-
-      // Safety: don't let Newton jump to the left of the peak
-      // or into negative territory.
-      if (r <= peak)
-        r = peak + 1.0;
-
-      // Convergence check
-      if (Kokkos::abs(delta) < 1e-7)
-        break;
-    }
-
-    // Now r is the cutoff radius
-    const double cutoff = std::max(r, 20.);
-
+    //
     n_h(i) = f.n;
     l_h(i) = f.l;
     m_h(i) = f.m;
@@ -146,7 +196,7 @@ STOBasisSet make_manual_basis(const std::vector<STOFunc> &funcs,
     O_h(i)[0] = f.ox;
     O_h(i)[1] = f.oy;
     O_h(i)[2] = f.oz;
-    cutoff_radii_h(i) = cutoff;
+    cutoff_radii_h(i) = compute_cutoff(f, norm, cutoff_tol);
   }
 
   Kokkos::deep_copy(basis.n, n_h);
@@ -155,6 +205,7 @@ STOBasisSet make_manual_basis(const std::vector<STOFunc> &funcs,
   Kokkos::deep_copy(basis.zeta, zeta_h);
   Kokkos::deep_copy(basis.norm, norm_h);
   Kokkos::deep_copy(basis.O, O_h);
+  Kokkos::deep_copy(basis.cutoff_radii, cutoff_radii_h);
 
   return basis;
 }
@@ -218,7 +269,7 @@ STOBasisSet load_adf_basis(const Molecule &mol,
       }
     }
   }
-  return make_manual_basis(temp_basis);
+  return make_manual_basis(temp_basis, cutoff_tol);
 }
 
 STOBasisSet
@@ -295,7 +346,7 @@ load_thakkar_basis(const Molecule &mol,
     }
   }
 
-  return make_manual_basis(temp_basis);
+  return make_manual_basis(temp_basis, cutoff_tol);
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -312,8 +363,8 @@ double basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
   // radial_part = R_nl(r) = r^(n-1) * C_nl * exp(-⍺ * r))
 
   double dx = x - basis.O(basis_idx)[0];
-  double dy = y - basis.O(basis_idx)[0];
-  double dz = z - basis.O(basis_idx)[0];
+  double dy = y - basis.O(basis_idx)[1];
+  double dz = z - basis.O(basis_idx)[2];
   double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
              epsilon_shift; // Avoid pow(0,0)
 
