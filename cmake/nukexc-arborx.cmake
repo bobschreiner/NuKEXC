@@ -8,7 +8,7 @@ else()
     FetchContent_Declare(
         ArborX
         GIT_REPOSITORY https://github.com/arborx/ArborX.git
-        GIT_TAG        v2.0.1
+        GIT_TAG        v2.1.99
     )
     FetchContent_MakeAvailable(ArborX)
 endif()
