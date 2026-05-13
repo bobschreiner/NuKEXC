@@ -67,7 +67,7 @@ TEST_CASE("Basis Cutoff", "[cutoff]") {
     auto count_h = Kokkos::create_mirror_view(counter);
     Kokkos::deep_copy(count_h, counter);
     double percent = (double)count_h() / (double)(N * G) * 100;
-    std::cout << "Quad notes outside of cutoff radius:  " << std::setw(4)
+    std::cout << "Quad nodes outside of cutoff radius:  " << std::setw(4)
               << std::setprecision(4) << percent
               << "\%     tol = " << cutoff_tol << "\n";
   }

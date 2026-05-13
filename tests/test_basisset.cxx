@@ -187,9 +187,8 @@ TEST_CASE("Basis Cutoff", "[h20][cutoff]") {
       "Evaluate basis", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N, G}),
       KOKKOS_LAMBDA(const int i, const int g) {
         double r = dist(basis.O(i), grid.quad_points(g));
-        grid_values(i, g) =
-            basis_eval(basis, i, grid.quad_points(g)[0], grid.quad_points(g)[1],
-                       grid.quad_points(g)[2]);
+        basis_eval(basis, i, grid.quad_points(g)[0], grid.quad_points(g)[1],
+                   grid.quad_points(g)[2], grid_values(i, g));
         grid_r(i, g) = r;
       });
 

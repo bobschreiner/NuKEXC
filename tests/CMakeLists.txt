@@ -10,6 +10,7 @@ add_executable(test_basisset test_basisset.cxx)
 add_executable(test_integration test_integration.cxx standards.cxx)
 add_executable(test_hydrogen test_hydrogen.cxx)
 add_executable(test_arborx test_arborx.cxx standards.cxx)
+add_executable(test_neighborlist test_neighborlist.cxx standards.cxx)
 
 add_executable(convergence_integration convergence_integration.cxx standards.cxx)
 add_executable(convergence_h2plus convergence_h2plus.cxx)
@@ -35,6 +36,7 @@ set(ALL_TEST_TARGETS
     test_integration 
     test_hydrogen
     test_arborx
+    test_neighborlist
     convergence_integration
     convergence_h2plus
     convergence_coreH
@@ -58,6 +60,7 @@ add_test( NAME MOLECULE_TEST COMMAND $<TARGET_FILE:test_molecule> )
 add_test( NAME BASISSET_TEST COMMAND $<TARGET_FILE:test_basisset> )
 add_test( NAME INTEGRATION_TEST COMMAND $<TARGET_FILE:test_integration> )
 add_test( NAME HYDROGEN_TEST COMMAND $<TARGET_FILE:test_hydrogen> )
+add_test( NAME NEIGHBORLIST_TEST COMMAND $<TARGET_FILE:test_neighborlist> )
 add_test( NAME H2PLUS_CONVERGENCE_TEST COMMAND $<TARGET_FILE:convergence_h2plus> )
 add_test( NAME COREH_CONVERGENCE_TEST COMMAND $<TARGET_FILE:convergence_coreH> )
 

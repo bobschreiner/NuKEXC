@@ -1,3 +1,23 @@
+/*
+ *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    Copyright (C) 2026 Bob Schreiner
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ *
+ */
+
 #include "standards.hpp"
 
 #include <ArborX.hpp>
@@ -173,6 +193,7 @@ void visualize_points_with_tiles(Kokkos::View<Point *, ExecSpace> points_dev,
             << "           matching tile_id colours confirm points are\n"
             << "           correctly contained within their boxes.\n\n";
 }
+
 // ─── Main --------------------------------------
 int main(int argc, char *argv[]) {
   Kokkos::initialize(argc, argv);

@@ -350,8 +350,8 @@ load_thakkar_basis(const Molecule &mol,
 }
 
 KOKKOS_INLINE_FUNCTION
-double basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
-                  const double y, const double z) {
+void basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
+                const double y, const double z, double &val) {
 
   const int n_val = basis.n(basis_idx);
   const int l_val = basis.l(basis_idx);
@@ -377,7 +377,7 @@ double basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
   // https://en.wikipedia.org/wiki/Spherical_harmonics
   double angular_part = real_solid_harmonic_cart(l_val, m_val, dx, dy, dz);
 
-  return radial_part * angular_part;
+  val = radial_part * angular_part;
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -392,8 +392,8 @@ void basis_eval_grad(const STOBasisSet basis, const int basis_idx,
   const double zeta = basis.zeta(basis_idx);
 
   double dx = x - basis.O(basis_idx)[0];
-  double dy = y - basis.O(basis_idx)[0];
-  double dz = z - basis.O(basis_idx)[0];
+  double dy = y - basis.O(basis_idx)[1];
+  double dz = z - basis.O(basis_idx)[2];
   double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
              epsilon_shift; // Avoid pow(0,0)
 
@@ -408,7 +408,7 @@ void basis_eval_grad(const STOBasisSet basis, const int basis_idx,
   grad_real_solid_harmonic_cart(l_val, m_val, dx, dy, dz, dS_dx, dS_dy, dS_dz);
 
   // Radial part
-  double pow_term = safe_pow(r, n_val - l_val - 1);
+  double pow_term = Kokkos::pow(r, n_val - l_val - 1);
   double exp_term = Kokkos::exp(-zeta * r);
   double R_pre = norm * pow_term * exp_term;
 
@@ -510,5 +510,54 @@ void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
         collocation_values(i, j, 1) = R_pre * dS_dy + S_val * (dy * common_R);
         collocation_values(i, j, 2) = R_pre * dS_dz + S_val * (dz * common_R);
       });
+}
+
+struct VG {
+  double val; // Value
+  double dx;  // d/dx
+  double dy;  // d/dy
+  double dz;  // d/dz
+};
+
+KOKKOS_INLINE_FUNCTION
+VG evaluate_with_gradient(const STOBasisSet &basis_set, int i, const Point &p) {
+
+  const int n_val = basis_set.n(i);
+  const int l_val = basis_set.l(i);
+  const int m_val = basis_set.m(i);
+  const double norm = basis_set.norm(i);
+  const double zeta = basis_set.zeta(i);
+
+  double dx = p[0] - basis_set.O(i)[0];
+  double dy = p[1] - basis_set.O(i)[1];
+  double dz = p[2] - basis_set.O(i)[2];
+  double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
+             epsilon_shift; // Avoid pow(0,0)
+
+  // Angular part
+  double S_val;
+  S_val = real_solid_harmonic_cart(l_val, m_val, dx, dy, dz);
+
+  double dS_dx;
+  double dS_dy;
+  double dS_dz;
+
+  grad_real_solid_harmonic_cart(l_val, m_val, dx, dy, dz, dS_dx, dS_dy, dS_dz);
+
+  // Radial part
+  double pow_term = safe_pow(r, n_val - l_val - 1);
+  double exp_term = Kokkos::exp(-zeta * r);
+  double R_pre = norm * pow_term * exp_term;
+
+  double dR_dr = ((n_val - l_val - 1) / r - zeta) * R_pre;
+  double common_R = dR_dr / r;
+
+  VG result;
+  result.val = R_pre * S_val;
+  result.dx = R_pre * dS_dx + S_val * (dx * common_R);
+  result.dy = R_pre * dS_dy + S_val * (dy * common_R);
+  result.dz = R_pre * dS_dz + S_val * (dz * common_R);
+
+  return result;
 }
 } // namespace NuKEXC

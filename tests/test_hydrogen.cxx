@@ -467,8 +467,7 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
   int n_basis = basis.nbf();
 
   CoreHamiltonianResult hamiltonian;
-  hamiltonian = compute_core_hamiltonian(basis, grid.quad_points, grid.weights,
-                                         grid.atom_centers, grid.Z);
+  hamiltonian = compute_core_hamiltonian(basis, grid);
 
   // 1. Prepare Batched Views on Device
   DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, n_basis);

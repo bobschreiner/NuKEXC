@@ -168,8 +168,7 @@ TEST_CASE("H2+ Core Hamiltonian radial convergence", "[convergence][radial]") {
     const size_t npts = grid.quad_points.extent(0);
 
     // Compute the core Hamiltonian
-    CoreHamiltonianResult coreH = compute_core_hamiltonian(
-        basis, grid.quad_points, grid.weights, grid.atom_centers, grid.Z);
+    CoreHamiltonianResult coreH = compute_core_hamiltonian(basis, grid);
 
     // Initialize the mo_coeff and mo_energies
     DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), basis.nbf());
@@ -194,8 +193,7 @@ TEST_CASE("H2+ Core Hamiltonian radial convergence", "[convergence][radial]") {
     const size_t npts = grid.quad_points.extent(0);
 
     // Compute the core Hamiltonian
-    CoreHamiltonianResult coreH = compute_core_hamiltonian(
-        basis, grid.quad_points, grid.weights, grid.atom_centers, grid.Z);
+    CoreHamiltonianResult coreH = compute_core_hamiltonian(basis, grid);
 
     // Initialize the mo_coeff and mo_energies
     DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), basis.nbf());
@@ -259,8 +257,7 @@ TEST_CASE("H2+ Core Hamiltonian angular convergence",
     const size_t npts = grid.quad_points.extent(0);
 
     // Compute the core Hamiltonian
-    CoreHamiltonianResult coreH = compute_core_hamiltonian(
-        basis, grid.quad_points, grid.weights, grid.atom_centers, grid.Z);
+    CoreHamiltonianResult coreH = compute_core_hamiltonian(basis, grid);
 
     // Initialize the mo_coeff and mo_energies
     DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), basis.nbf());
@@ -288,8 +285,7 @@ TEST_CASE("H2+ Core Hamiltonian angular convergence",
     const size_t npts = grid.quad_points.extent(0);
 
     // Compute the core Hamiltonian
-    CoreHamiltonianResult coreH = compute_core_hamiltonian(
-        basis, grid.quad_points, grid.weights, grid.atom_centers, grid.Z);
+    CoreHamiltonianResult coreH = compute_core_hamiltonian(basis, grid);
 
     // Initialize the mo_coeff and mo_energies
     DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), basis.nbf());

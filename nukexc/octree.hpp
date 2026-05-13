@@ -21,16 +21,11 @@
 #include <ArborX.hpp>
 
 #include "grid.hpp"
-#include "molecule.hpp"
 #include "nukexc_config.hpp"
-#include "nukexc_utils.hpp"
-#include "stobasis.hpp"
 
 #include <detail/ArborX_SpaceFillingCurves.hpp>
 #include <detail/ArborX_TreeVisualization.hpp>
-#include <fstream>
 #include <integratorxx/quadratures/s2/lebedev_laikov.hpp>
-#include <iostream>
 
 namespace NuKEXC {
 
@@ -38,7 +33,7 @@ using Point = ArborX::Point<3, double>;
 using Box = ArborX::Box<3, double>;
 
 Kokkos::View<Box *, ExecSpace>
-create_bounding_boxes(FlatGrid grid, const int max_points_per_bb) {
+create_bounding_boxes(FlatGrid &grid, const int max_points_per_bb) {
 
   const int num_points = grid.quad_points.extent(0);
 
@@ -74,8 +69,6 @@ create_bounding_boxes(FlatGrid grid, const int max_points_per_bb) {
       ArborX::Experimental::Morton64{}, bvh.bounds());
 
   // ── Apply permutation to all three arrays in lock-step ───────────────
-  // NOTE: `boxes` and `bvh` are now stale (they reflect the old ordering).
-  //       Do not use `bvh` for spatial queries after this point.
   ArborX::Details::applyPermutation(ExecSpace{}, permute, grid.quad_points);
   ArborX::Details::applyPermutation(ExecSpace{}, permute, grid.weights);
 
@@ -99,16 +92,89 @@ create_bounding_boxes(FlatGrid grid, const int max_points_per_bb) {
         for (int k = 1; k < count; ++k) {
           const auto &p = grid.quad_points(start + k);
           for (int d = 0; d < 3; ++d) {
-            tile_box.minCorner()._coords[d] =
-                Kokkos::min(tile_box.minCorner()._coords[d], p._coords[d]);
-            tile_box.maxCorner()._coords[d] =
-                Kokkos::max(tile_box.maxCorner()._coords[d], p._coords[d]);
+            tile_box.minCorner()[d] =
+                Kokkos::min(tile_box.minCorner()[d], p[d]);
+            tile_box.maxCorner()[d] =
+                Kokkos::max(tile_box.maxCorner()[d], p[d]);
           }
         }
         bounding_boxes(i) = tile_box;
       });
   ExecSpace{}.fence();
   return bounding_boxes;
+}
+
+// Data structure that will later be used to compute batched Dgemm and scalings
+struct NeighborList {
+  Kokkos::View<int *> neighbors; // flat list of basis function indices
+  Kokkos::View<int *>
+      offsets; // offsets(i)..offsets(i+1) gives neighbors of box i
+  int max_points_per_box;
+  int total_points;
+};
+
+template <typename BASIS>
+void build_neighbor_list(const BASIS basis,
+                         const Kokkos::View<Box *, ExecSpace> &bounding_boxes,
+                         const int max_points_per_box, const int total_points,
+                         NeighborList &neighbor_list) {
+
+  auto basis_origins = basis.O;
+  auto cutoff_radii = basis.cutoff_radii;
+
+  const int N = basis_origins.extent(0);
+  const int num_boxes = bounding_boxes.extent(0);
+
+  // ── Build a sphere for each basis function ────────────────────────────
+  // The sphere has the center at the basis origin and radius = cutoff radius.
+  // A grid tile needs this basis function iff its bounding box intersects
+  // the sphere.
+  using Sphere = ArborX::Sphere<3, double>;
+  Kokkos::View<Sphere *, ExecSpace> spheres("spheres", N);
+  Kokkos::parallel_for(
+      "build_basis_spheres", Kokkos::RangePolicy<ExecSpace>(0, N),
+      KOKKOS_LAMBDA(int i) {
+        spheres(i) = Sphere{basis_origins(i), cutoff_radii(i)};
+      });
+
+  // ── BVH over bounding boxes ──────────────────────────────────
+  // attach_indices so the query results carry the original bounding_box index.
+  ArborX::BoundingVolumeHierarchy bvh{
+      ExecSpace{}, ArborX::Experimental::attach_indices(spheres)};
+
+  // ── One intersects(sphere) query per basis function ───────────────────
+  // ArborX will return all spheres whose bounding volume overlaps the box.
+  Kokkos::View<ArborX::Intersects<Box> *, ExecSpace> queries("queries",
+                                                             num_boxes);
+  Kokkos::parallel_for(
+      "build_box_queries", Kokkos::RangePolicy<ExecSpace>(0, num_boxes),
+      KOKKOS_LAMBDA(int i) {
+        queries(i) = ArborX::intersects(bounding_boxes(i));
+      });
+
+  // ── Execute queries ───────────────────────────────────────────────────
+  // offsets is length num_boxes+1 (CSR row pointers).
+  // values contains PairValueIndex{sphere_value, basis_index}.
+
+  Kokkos::View<int *, ExecSpace> offsets("offsets", 0);
+  Kokkos::View<int *, ExecSpace> neighbors("neighbors", 0);
+
+  // Use a custom callback to extract the index from PairValueIndex
+  bvh.query(
+      ExecSpace{}, queries,
+      KOKKOS_LAMBDA(auto const &query, auto const &value, auto const &out) {
+        // 'value' is the PairValueIndex{Speh, Index}
+        // 'out' is the internal mechanism that fills your 'neighbors' view
+        out(value.index);
+      },
+      neighbors, offsets);
+
+  ExecSpace{}.fence();
+
+  neighbor_list.neighbors = neighbors;
+  neighbor_list.offsets = offsets;
+  neighbor_list.max_points_per_box = max_points_per_box;
+  neighbor_list.total_points = total_points;
 }
 
 } // namespace NuKEXC
