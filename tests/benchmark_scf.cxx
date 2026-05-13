@@ -14,364 +14,304 @@
  *
  *    You should have received a copy of the GNU General Public License
  *    along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- *
  */
+
+#include <Kokkos_Core.hpp>
+#include <iomanip>
+#include <iostream>
+#include <stdexcept>
+#include <string>
 
 #include <integratorxx/quadratures/radial/treutlerahlrichs.hpp>
 #include <integratorxx/quadratures/s2/lebedev_laikov.hpp>
-#include <iomanip>
-#include <iostream>
-
-#include <catch2/catch_all.hpp>
 
 #include <nukexc/diagonalizer.hpp>
 #include <nukexc/grid.hpp>
 #include <nukexc/integration.hpp>
 #include <nukexc/molecule.hpp>
-#include <nukexc/partitioning.hpp>
+#include <nukexc/octree.hpp>
+#include <nukexc/stobasis.hpp>
 
-#include <integratorxx/composite_quadratures/pruned_spherical_quadrature.hpp>
-#include <integratorxx/composite_quadratures/spherical_quadrature.hpp>
-#include <integratorxx/generators/radial_factory.hpp>
-#include <integratorxx/generators/spherical_factory.hpp>
-#include <integratorxx/quadratures/radial.hpp>
-#include <integratorxx/quadratures/s2.hpp>
-
-#include "nukexc/octree.hpp"
-#include "nukexc/stobasis.hpp"
 #include "standards.hpp"
-#include <Kokkos_Core.hpp>
 
 using namespace NuKEXC;
 
-void print_timing_table(
-    const std::vector<std::string> &molecules,
-    const std::vector<std::unordered_map<std::string, double>> &timings) {
-  // Header setup
-  const int w = 15; // column width
+// ── Config
+// ────────────────────────────────────────────────────────────────────
 
-  // print header
-  std::cout << std::string(w * 7, '-') << std::endl;
-  std::cout << std::left << std::setw(w) << "Molecule" << std::setw(w)
-            << "Grid (s)" << std::setw(w) << "Overlap (s)" << std::setw(w)
-            << "Kinetic (s)" << std::setw(w) << "Nuclear (s)" << std::setw(w)
-            << "Diag (s)" << std::setw(w) << "Total (s)" << std::endl;
-  std::cout << std::string(w * 7, '-') << std::endl;
+struct Config {
+  std::string basis_dir = "input/zorabasis/TZP";
+  int nrad = 100;
+  int nang = 50;
+  double screening_tol = 1e-6;
+  int max_points_per_box = 64;
+};
 
-  // Row data
-  for (int i = 0; i < molecules.size(); ++i) {
-    std::string mol_name = molecules[i];
-    auto mol_timing = timings[i];
-    std::cout << std::fixed << std::setprecision(4) << std::left << std::setw(w)
-              << mol_name << std::setw(w) << mol_timing.at("grid")
-              << std::setw(w) << mol_timing.at("overlap") << std::setw(w)
-              << mol_timing.at("kinetic") << std::setw(w)
-              << mol_timing.at("nuclear") << std::setw(w)
-              << mol_timing.at("diag") << std::setw(w) << mol_timing.at("total")
-              << std::endl;
+Config parse_args(int argc, char *argv[]) {
+  Config cfg;
+  for (int i = 1; i < argc; ++i) {
+    std::string arg = argv[i];
+
+    auto parse_string = [&](const std::string &prefix, std::string &out) {
+      if (arg.rfind(prefix, 0) == 0) {
+        out = arg.substr(prefix.size());
+        return true;
+      }
+      return false;
+    };
+    auto parse_int = [&](const std::string &prefix, int &out) {
+      if (arg.rfind(prefix, 0) == 0) {
+        out = std::stoi(arg.substr(prefix.size()));
+        return true;
+      }
+      return false;
+    };
+    auto parse_double = [&](const std::string &prefix, double &out) {
+      if (arg.rfind(prefix, 0) == 0) {
+        out = std::stod(arg.substr(prefix.size()));
+        return true;
+      }
+      return false;
+    };
+
+    if (arg == "--help" || arg == "-h") {
+      std::cout
+          << "Usage: " << argv[0] << " [options]\n"
+          << "  --basis=<dir>          Basis set directory       (default: "
+          << cfg.basis_dir << ")\n"
+          << "  --nrad=<int>           Radial grid points        (default: "
+          << cfg.nrad << ")\n"
+          << "  --nang=<int>           Angular grid points       (default: "
+          << cfg.nang << ")\n"
+          << "  --tol=<float>          Screening tolerance       (default: "
+          << cfg.screening_tol << ")\n"
+          << "  --box-size=<int>       Max points per box        (default: "
+          << cfg.max_points_per_box << ")\n";
+      std::exit(0);
+    } else if (!parse_string("--basis=", cfg.basis_dir) &&
+               !parse_int("--nrad=", cfg.nrad) &&
+               !parse_int("--nang=", cfg.nang) &&
+               !parse_double("--tol=", cfg.screening_tol) &&
+               !parse_int("--box-size=", cfg.max_points_per_box)) {
+      throw std::runtime_error("Unknown argument: " + arg + " (try --help)");
+    }
   }
-  std::cout << std::string(w * 7, '-') << std::endl;
+  if (cfg.nrad <= 0 || cfg.nang <= 0)
+    throw std::runtime_error("--nrad and --nang must be positive");
+  return cfg;
+}
+
+// ── Helpers
+// ───────────────────────────────────────────────────────────────────
+
+auto repeat(const std::string &s, int n) {
+  std::string r;
+  for (int i = 0; i < n; ++i)
+    r += s;
+  return r;
+}
+
+void print_config(const Config &cfg) {
+  int width = std::max(cfg.basis_dir.size(), size_t(20));
+  std::string h = repeat("─", width + 2);
+
+  std::cout << "\n";
+  std::cout << "┌───────────────────────" << h << "┐\n";
+  std::cout << "│    SCF Benchmark Configuration" << repeat(" ", width - 6)
+            << "│\n";
+  std::cout << "├───────────────────────" << h << "┤\n";
+  std::cout << "│ Basis directory      │ " << std::setw(width) << cfg.basis_dir
+            << " │\n";
+  std::cout << "│ Radial points        │ " << std::setw(width) << cfg.nrad
+            << " │\n";
+  std::cout << "│ Angular points       │ " << std::setw(width) << cfg.nang
+            << " │\n";
+  std::cout << "│ Screening tolerance  │ " << std::setw(width)
+            << cfg.screening_tol << " │\n";
+  std::cout << "│ Max points per box   │ " << std::setw(width)
+            << cfg.max_points_per_box << " │\n";
+  std::cout << "└──────────────────────┴" << h << "┘\n\n";
   std::cout << std::flush;
 }
 
-void print_timing_table_fused(
-    const std::vector<std::string> &molecules,
-    const std::vector<std::unordered_map<std::string, double>> &timings) {
-  const int w = 15;
-  std::cout << std::string(w * 7, '-') << std::endl;
-  std::cout << std::left << std::setw(w) << "Molecule" << std::setw(w)
-            << "Grid (s)" << std::setw(w) << "H_el (s)" << std::setw(w)
-            << "Diag (s)" << std::setw(w) << "Total (s)" << std::endl;
-  std::cout << std::string(w * 7, '-') << std::endl;
+struct BenchmarkResult {
+  std::string molecule;
+  int nbf;
+  int grid_points;
+  double t_grid;
+  double t_neighbors; // 0 if not applicable
+  double t_hamiltonian;
+  double t_diag;
+  double t_total;
+};
 
-  for (int i = 0; i < molecules.size(); ++i) {
-    auto &t = timings[i];
-    std::cout << std::fixed << std::setprecision(4) << std::left << std::setw(w)
-              << molecules[i] << std::setw(w) << t.at("grid") << std::setw(w)
-              << t.at("hamiltonian") << std::setw(w) << t.at("diag")
-              << std::setw(w) << t.at("total") << std::endl;
+void print_results(const std::vector<BenchmarkResult> &results, bool screened) {
+  const int w = 14;
+  const int wm = 12;
+
+  auto hline_top = [&](const std::string &left, const std::string &mid,
+                       const std::string &right, const std::string &fill) {
+    std::cout << left;
+    std::cout << repeat(fill, wm + 2) << mid;
+    std::cout << repeat(fill, 6 + 2) << mid;
+    std::cout << repeat(fill, 8 + 2) << mid;
+    if (screened)
+      std::cout << repeat(fill, w + 2) << mid;
+    std::cout << repeat(fill, w + 2) << mid;
+    std::cout << repeat(fill, w + 2) << mid;
+    std::cout << repeat(fill, w + 2) << right << "\n";
+  };
+
+  hline_top("┌", "┬", "┐", "─");
+  std::cout << "│ " << std::setw(wm) << std::left << "Molecule"
+            << " │ " << std::setw(6) << "N"
+            << " │ " << std::setw(8) << "Grid pts";
+  if (screened)
+    std::cout << " │ " << std::setw(w) << "Neighbors (s)";
+  std::cout << " │ " << std::setw(w) << "H_el (s)"
+            << " │ " << std::setw(w) << "Diag (s)"
+            << " │ " << std::setw(w) << "Total (s)"
+            << " │\n";
+  hline_top("├", "┼", "┤", "─");
+
+  for (auto &r : results) {
+    std::cout << std::fixed << std::setprecision(4);
+    std::cout << "│ " << std::setw(wm) << std::left << r.molecule << " │ "
+              << std::setw(6) << r.nbf << " │ " << std::setw(8)
+              << r.grid_points;
+    if (screened)
+      std::cout << " │ " << std::setw(w) << r.t_neighbors;
+    std::cout << " │ " << std::setw(w) << r.t_hamiltonian << " │ "
+              << std::setw(w) << r.t_diag << " │ " << std::setw(w) << r.t_total
+              << " │\n";
   }
-
-  std::cout << std::string(w * 7, '-') << std::endl;
+  hline_top("└", "┴", "┘", "─");
   std::cout << std::flush;
 }
 
-void print_timing_table_screened(
-    const std::vector<std::string> &molecules,
-    const std::vector<std::unordered_map<std::string, double>> &timings) {
-  const int w = 15;
-  std::cout << std::string(w * 7, '-') << std::endl;
-  std::cout << std::left << std::setw(w) << "Molecule" << std::setw(w)
-            << "Grid (s)" << std::setw(w) << "Neighbors (s)" << std::setw(w)
-            << "H_el (s)" << std::setw(w) << "Diag (s)" << std::setw(w)
-            << "Total (s)" << std::endl;
-  std::cout << std::string(w * 7, '-') << std::endl;
+// ── Molecules
+// ─────────────────────────────────────────────────────────────────
 
-  for (int i = 0; i < molecules.size(); ++i) {
-    auto &t = timings[i];
-    std::cout << std::fixed << std::setprecision(4) << std::left << std::setw(w)
-              << molecules[i] << std::setw(w) << t.at("grid") << std::setw(w)
-              << t.at("neighborlist") << std::setw(w) << t.at("hamiltonian")
-              << std::setw(w) << t.at("diag") << std::setw(w) << t.at("total")
-              << std::endl;
-  }
-  std::cout << std::string(w * 7, '-') << std::endl;
-  std::cout << std::flush;
-}
-TEST_CASE("Benchmark Core Hamiltonian Separate Kernels",
-          "[benchmark_scf][separate kernels]") {
-
-  using namespace IntegratorXX;
-
-  using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
-
-  using ll_type = IntegratorXX::LebedevLaikov<double>;
-
-  std::vector<std::string> molecule_names;
-  std::vector<Molecule> molecules;
-
-  molecules.push_back(make_water());
-  molecules.push_back(make_benzene());
-
-  molecule_names.push_back("water");
-  molecule_names.push_back("benzene");
-
+std::vector<std::pair<std::string, Molecule>> make_molecules() {
+  std::vector<std::pair<std::string, Molecule>> mol_list;
+  mol_list.push_back({"water", make_water()});
+  mol_list.push_back({"benzene", make_benzene()});
 #ifdef KOKKOS_ENABLE_HIP
-  molecule_names.push_back("taxol");
-  molecules.push_back(make_taxol());
+  mol_list.push_back({"taxol", make_taxol()});
 #endif
-
-  static std::vector<std::unordered_map<std::string, double>> timings;
-  for (int mol_ind = 0; mol_ind < molecule_names.size(); ++mol_ind) {
-    SECTION(
-
-        molecule_names[mol_ind]) {
-      std::unordered_map<std::string, double> mol_timing;
-      // Generate molecule
-      Molecule mol = molecules[mol_ind];
-      int natoms = mol.natoms;
-      STOBasisSet basis = load_adf_basis(mol);
-
-      Kokkos::Timer grid_construction_timer, overlap_integral_timer,
-          kinetic_integral_timer, nuclear_potential_timer, diag_timer,
-          total_timer;
-      total_timer.reset();
-
-      // Generate the grid
-      grid_construction_timer.reset();
-      FlatGrid quadrature_grid = make_flat_grid<ta_type, ll_type>(mol);
-      mol_timing["grid"] = grid_construction_timer.seconds();
-
-      // Compute all integrals
-      overlap_integral_timer.reset();
-      auto S = overlap_integral(basis, quadrature_grid.quad_points,
-                                quadrature_grid.weights);
-      mol_timing["overlap"] = overlap_integral_timer.seconds();
-
-      kinetic_integral_timer.reset();
-      auto T = kinetic_integral(basis, quadrature_grid.quad_points,
-                                quadrature_grid.weights);
-      mol_timing["kinetic"] = kinetic_integral_timer.seconds();
-
-      nuclear_potential_timer.reset();
-      auto V = nuclear_potential_integral(
-          basis, quadrature_grid.quad_points, quadrature_grid.weights,
-          quadrature_grid.atom_centers, quadrature_grid.Z);
-      mol_timing["nuclear"] = nuclear_potential_timer.seconds();
-
-      const int N = S.extent(0);
-      DeviceView2DLeft F("Fock Matrix", N, N);
-      DeviceView2DLeft mo_coeff("Molecular Orbital Coefficients", N, N);
-      DeviceView1D mo_energies("Molecular Orbital Energies", N);
-      // Add all contribution to create the Hamiltonian
-      Kokkos::parallel_for(
-          "Create Fock Matrix",
-          Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N, N}),
-          KOKKOS_LAMBDA(const int &i, const int &j) {
-            F(i, j) = T(i, j) + V(i, j);
-          });
-
-      // Diagonalize Hamiltonian
-      diag_timer.reset();
-      Diagonalizer diagonalizer(N);
-      diagonalizer.compute_transformation(S);
-      diagonalizer.solve(F, mo_coeff, mo_energies);
-      mol_timing["diag"] = diag_timer.seconds();
-      mol_timing["total"] = total_timer.seconds();
-
-      timings.push_back(mol_timing);
-    }
-  }
-  // Print only after all sections have been executed
-  if (timings.size() == molecule_names.size()) {
-    print_timing_table(molecule_names, timings);
-    timings.clear(); // Clear so it's fresh if the test is run again in the same
-                     // session
-  }
+  return mol_list;
 }
 
-TEST_CASE("Benchmark Fused Core Hamiltonian Fused", "[benchmark_scf][fused]") {
+// ── Benchmarks
+// ────────────────────────────────────────────────────────────────
 
-  using namespace IntegratorXX;
+void run_benchmark_fused(const Config &cfg) {
   using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
   using ll_type = IntegratorXX::LebedevLaikov<double>;
 
-  std::vector<std::string> molecule_names;
-  std::vector<Molecule> molecules;
+  std::cout << "\n── Fused Core Hamiltonian ──\n";
 
-  molecules.push_back(make_water());
-  molecules.push_back(make_benzene());
-  molecule_names.push_back("water");
-  molecule_names.push_back("benzene");
+  std::vector<BenchmarkResult> results;
+  for (auto &[name, mol] : make_molecules()) {
+    STOBasisSet basis = load_adf_basis(mol, cfg.basis_dir, cfg.screening_tol);
 
-#ifdef KOKKOS_ENABLE_HIP
-  molecule_names.push_back("taxol");
-  molecules.push_back(make_taxol());
-#endif
+    Kokkos::Timer total_timer, grid_timer, hamiltonian_timer, diag_timer;
+    total_timer.reset();
 
-  static std::vector<std::unordered_map<std::string, double>> timings;
+    grid_timer.reset();
+    FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, cfg.nrad, cfg.nang);
+    double t_grid = grid_timer.seconds();
 
-  for (int mol_ind = 0; mol_ind < molecule_names.size(); ++mol_ind) {
-    SECTION(molecule_names[mol_ind]) {
-      std::unordered_map<std::string, double> mol_timing;
+    hamiltonian_timer.reset();
+    auto hcore = compute_core_hamiltonian(basis, grid);
+    double t_hamiltonian = hamiltonian_timer.seconds();
 
-      Molecule mol = molecules[mol_ind];
-      STOBasisSet basis = load_adf_basis(mol);
+    const int N = hcore.overlap.extent(0);
+    DeviceView2DLeft mo_coeff("mo_coeff", N, N);
+    DeviceView1D mo_energies("mo_energies", N);
 
-      Kokkos::Timer grid_timer, hamiltonian_timer, diag_timer, total_timer;
-      total_timer.reset();
+    diag_timer.reset();
+    Diagonalizer diag(N);
+    diag.compute_transformation(hcore.overlap);
+    diag.solve(hcore.hamiltonian, mo_coeff, mo_energies);
+    double t_diag = diag_timer.seconds();
 
-      // Generate the grid
-      grid_timer.reset();
-      FlatGrid quadrature_grid = make_flat_grid<ta_type, ll_type>(mol);
-      mol_timing["grid"] = grid_timer.seconds();
-
-      // Compute all integrals in a single fused pass
-      hamiltonian_timer.reset();
-      auto result = compute_core_hamiltonian(basis, quadrature_grid);
-      double hamiltonian_time = hamiltonian_timer.seconds();
-
-      // Report individual integral times as N/A — they are now fused.
-      // The total hamiltonian time is what matters for benchmarking.
-      mol_timing["overlap"] = 0.0; // fused
-      mol_timing["kinetic"] = 0.0; // fused
-      mol_timing["nuclear"] = 0.0; // fused
-      mol_timing["hamiltonian"] = hamiltonian_time;
-
-      const int N = result.overlap.extent(0);
-      DeviceView2DLeft mo_coeff("Molecular Orbital Coefficients", N, N);
-      DeviceView1D mo_energies("Molecular Orbital Energies", N);
-
-      // Diagonalize — F is already T + V_n from the fused result
-      diag_timer.reset();
-      Diagonalizer diagonalizer(N);
-      diagonalizer.compute_transformation(result.overlap);
-      diagonalizer.solve(result.hamiltonian, mo_coeff, mo_energies);
-      mol_timing["diag"] = diag_timer.seconds();
-      mol_timing["total"] = total_timer.seconds();
-
-      timings.push_back(mol_timing);
-    }
+    results.push_back({name, N, (int)grid.quad_points.extent(0), t_grid, 0.0,
+                       t_hamiltonian, t_diag, total_timer.seconds()});
   }
-
-  if (timings.size() == molecule_names.size()) {
-    print_timing_table_fused(molecule_names, timings);
-    timings.clear();
-  }
+  print_results(results, false);
 }
 
-TEST_CASE("Benchmark Fused Core Hamiltonian Screened",
-          "[benchmark_scf][screened]") {
-
-  using namespace IntegratorXX;
+void run_benchmark_screened(const Config &cfg) {
   using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
   using ll_type = IntegratorXX::LebedevLaikov<double>;
 
-  std::vector<std::string> molecule_names;
-  std::vector<Molecule> molecules;
+  std::cout << "\n── Screened Core Hamiltonian ──\n";
 
-  molecules.push_back(make_water());
-  molecules.push_back(make_benzene());
-  molecule_names.push_back("water");
-  molecule_names.push_back("benzene");
+  std::vector<BenchmarkResult> results;
+  for (auto &[name, mol] : make_molecules()) {
+    STOBasisSet basis = load_adf_basis(mol, cfg.basis_dir, cfg.screening_tol);
 
-#ifdef KOKKOS_ENABLE_HIP
-  molecule_names.push_back("taxol");
-  molecules.push_back(make_taxol());
+    Kokkos::Timer total_timer, grid_timer, nl_timer, hamiltonian_timer,
+        diag_timer;
+    total_timer.reset();
+
+    grid_timer.reset();
+    FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, cfg.nrad, cfg.nang);
+    double t_grid = grid_timer.seconds();
+
+    nl_timer.reset();
+    auto bb = create_bounding_boxes(grid, cfg.max_points_per_box);
+    NeighborList nl;
+    build_neighbor_list(basis, bb, cfg.max_points_per_box,
+                        grid.quad_points.extent(0), nl);
+    double t_neighbors = nl_timer.seconds();
+
+    hamiltonian_timer.reset();
+#if defined(KOKKOS_ENABLE_HIP)
+    auto hcore = compute_core_hamiltonian_screened<8>(basis, grid, nl);
+#else
+    auto hcore = compute_core_hamiltonian_screened<64>(basis, grid, nl);
 #endif
 
-  static std::vector<std::unordered_map<std::string, double>> timings;
+    double t_hamiltonian = hamiltonian_timer.seconds();
 
-  for (int mol_ind = 0; mol_ind < molecule_names.size(); ++mol_ind) {
-    SECTION(molecule_names[mol_ind]) {
-      std::unordered_map<std::string, double> mol_timing;
+    const int N = hcore.overlap.extent(0);
+    DeviceView2DLeft mo_coeff("mo_coeff", N, N);
+    DeviceView1D mo_energies("mo_energies", N);
 
-      Molecule mol = molecules[mol_ind];
+    diag_timer.reset();
+    Diagonalizer diag(N);
+    diag.compute_transformation(hcore.overlap);
+    diag.solve(hcore.hamiltonian, mo_coeff, mo_energies);
+    double t_diag = diag_timer.seconds();
 
-      double screening_tol = 1e-6;
-      STOBasisSet basis =
-          load_adf_basis(mol, "input/zorabasis/TZP", screening_tol);
-
-      Kokkos::Timer grid_timer, nl_timer, hamiltonian_timer, diag_timer,
-          total_timer;
-      total_timer.reset();
-
-      // Generate the grid
-      grid_timer.reset();
-      FlatGrid quadrature_grid = make_flat_grid<ta_type, ll_type>(mol);
-      mol_timing["grid"] = grid_timer.seconds();
-
-      // Generate the grid
-      nl_timer.reset();
-      const int max_points_per_box = 64;
-      auto bb = create_bounding_boxes(quadrature_grid, max_points_per_box);
-      NeighborList nl;
-      build_neighbor_list(basis, bb, max_points_per_box,
-                          quadrature_grid.quad_points.extent(0), nl);
-
-      mol_timing["neighborlist"] = nl_timer.seconds();
-
-      // Compute all integrals in a single fused pass
-      hamiltonian_timer.reset();
-      auto result =
-          compute_core_hamiltonian_screened(basis, quadrature_grid, nl);
-      double hamiltonian_time = hamiltonian_timer.seconds();
-
-      // Report individual integral times as N/A — they are now fused.
-      // The total hamiltonian time is what matters for benchmarking.
-      mol_timing["overlap"] = 0.0; // fused
-      mol_timing["kinetic"] = 0.0; // fused
-      mol_timing["nuclear"] = 0.0; // fused
-      mol_timing["hamiltonian"] = hamiltonian_time;
-
-      const int N = result.overlap.extent(0);
-      DeviceView2DLeft mo_coeff("Molecular Orbital Coefficients", N, N);
-      DeviceView1D mo_energies("Molecular Orbital Energies", N);
-
-      // Diagonalize — F is already T + V_n from the fused result
-      diag_timer.reset();
-      Diagonalizer diagonalizer(N);
-      diagonalizer.compute_transformation(result.overlap);
-      diagonalizer.solve(result.hamiltonian, mo_coeff, mo_energies);
-      mol_timing["diag"] = diag_timer.seconds();
-      mol_timing["total"] = total_timer.seconds();
-
-      timings.push_back(mol_timing);
-    }
+    results.push_back({name, N, (int)grid.quad_points.extent(0), t_grid,
+                       t_neighbors, t_hamiltonian, t_diag,
+                       total_timer.seconds()});
   }
-
-  if (timings.size() == molecule_names.size()) {
-    print_timing_table_screened(molecule_names, timings);
-    timings.clear();
-  }
+  print_results(results, true);
 }
 
-int main() {
+// ── Main
+// ──────────────────────────────────────────────────────────────────────
+
+int main(int argc, char *argv[]) {
+  Config cfg;
+  try {
+    cfg = parse_args(argc, argv);
+  } catch (const std::exception &e) {
+    std::cerr << "Error: " << e.what() << "\n";
+    return 1;
+  }
 
   Kokkos::initialize();
-  int result = Catch::Session().run();
+  {
+    print_config(cfg);
+    run_benchmark_fused(cfg);
+    run_benchmark_screened(cfg);
+    std::cout << "\n";
+  }
   Kokkos::finalize();
-
-  return result;
+  return 0;
 }
