@@ -412,30 +412,40 @@ CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
   return result;
 }
 
-// Define the custom reduction container
 struct CoreHamiltonianReducer {
-  double s; // Overlap
-  double v; // Nuclear
-  double t; // Kinetic
+  double s = 0.0, v = 0.0, t = 0.0;
 
-  // Kokkos reduction requirements
-  KOKKOS_INLINE_FUNCTION void init(CoreHamiltonianReducer &update) const {
-    update.s = 0.0;
-    update.v = 0.0;
-    update.t = 0.0;
+  KOKKOS_INLINE_FUNCTION
+  CoreHamiltonianReducer &operator+=(const CoreHamiltonianReducer &rhs) {
+    s += rhs.s;
+    v += rhs.v;
+    t += rhs.t;
+    return *this;
   }
-  KOKKOS_INLINE_FUNCTION void join(CoreHamiltonianReducer &update,
-                                   const CoreHamiltonianReducer &input) const {
-    update.s += input.s;
-    update.v += input.v;
-    update.t += input.t;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator+(const CoreHamiltonianReducer &rhs) volatile {}
+
+  KOKKOS_INLINE_FUNCTION static void
+  join(volatile CoreHamiltonianReducer &dst,
+       const volatile CoreHamiltonianReducer &src) {
+    dst.s += src.s;
+    dst.v += src.v;
+    dst.t += src.t;
+  }
+
+  KOKKOS_INLINE_FUNCTION static void init(CoreHamiltonianReducer &val) {
+    val.s = 0.0;
+    val.v = 0.0;
+    val.t = 0.0;
   }
 };
 
+template<int CHUNK_SIZE=8>
 CoreHamiltonianResult compute_core_hamiltonian_screened(
     const STOBasisSet &basis, const FlatGrid &grid, const NeighborList &nl) {
 
-  const int MAX_NEIGHBOUR_CHUNK_SIZE = 8;
+  const int MAX_NEIGHBOUR_CHUNK_SIZE = CHUNK_SIZE;
 
   int N = basis.nbf();
   auto Z = grid.Z;
@@ -534,7 +544,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened(
   std::cout << "Available L1 size     : " << policy.scratch_size_max(1) << "\n";
   std::cout << "Allocated L1 size     : " << policy.scratch_size(1) << "\n";
   std::cout << "Scratch size needed for 1d: " << scratch_size << "\n";
-  std::cout << "Scratch size needed for 2d: " << scratch_size_basis << "\n";
+  std::cout << "Scratch size needed for 2d: " << scratch_size_basis << "\n\n";
 #endif
 
   Kokkos::parallel_for(

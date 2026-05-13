@@ -112,7 +112,7 @@ TEST_CASE("Compute core Hamiltonian with screening",
 
   // Create bounding boxes for screeing
   const int total_points = grid.quad_points.extent(0);
-  const int max_points_per_box = 32;
+  const int max_points_per_box = 512;
 
   Kokkos::View<Box *, ExecSpace> bounding_boxes =
       create_bounding_boxes(grid, max_points_per_box);
