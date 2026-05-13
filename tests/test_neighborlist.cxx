@@ -240,6 +240,7 @@ TEST_CASE("NeighborList: benezene regression",
 
   CHECK(offsets_h(num_boxes) > 0);
 }
+
 TEST_CASE("NeighborList: taxol regression",
           "[octree][neighborlist][regression]") {
   // Checks that the neighbor list on a real molecule is strictly smaller

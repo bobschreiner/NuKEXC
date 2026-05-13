@@ -56,7 +56,7 @@ struct FlatGrid {
 
 template <typename radial_type, typename angular_type>
 FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 50,
-                        size_t nang_order = 20) {
+                        size_t nang_order = 30) {
 
   using namespace IntegratorXX;
   using angular_traits = quadrature_traits<angular_type>;

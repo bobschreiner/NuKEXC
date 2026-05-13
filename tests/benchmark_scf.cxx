@@ -295,6 +295,7 @@ TEST_CASE("Benchmark Fused Core Hamiltonian Screened",
   molecule_names.push_back("water");
   molecule_names.push_back("benzene");
 
+
   molecule_names.push_back("taxol");
   molecules.push_back(make_taxol());
 
@@ -347,12 +348,10 @@ TEST_CASE("Benchmark Fused Core Hamiltonian Screened",
       DeviceView1D mo_energies("Molecular Orbital Energies", N);
 
       // Diagonalize — F is already T + V_n from the fused result
-      if (molecule_names[mol_ind] != "taxol") {
-        diag_timer.reset();
-        Diagonalizer diagonalizer(N);
-        diagonalizer.compute_transformation(result.overlap);
-        diagonalizer.solve(result.hamiltonian, mo_coeff, mo_energies);
-      }
+      diag_timer.reset();
+      Diagonalizer diagonalizer(N);
+      diagonalizer.compute_transformation(result.overlap);
+      diagonalizer.solve(result.hamiltonian, mo_coeff, mo_energies);
       mol_timing["diag"] = diag_timer.seconds();
       mol_timing["total"] = total_timer.seconds();
 

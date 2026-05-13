@@ -30,53 +30,162 @@
 #include <nukexc/molecule.hpp>
 #include <nukexc/stobasis.hpp>
 
-#include <catch2/catch_all.hpp>
-#include <catch2/catch_assertion_info.hpp>
-#include <vector>
+#include <cstdlib>
+#include <iostream>
+#include <stdexcept>
+#include <string>
 
-using namespace NuKEXC;
+struct Config {
+  std::string xyz_file = "input/water.xyz";
+  std::string basis_dir = "input/zorabasis/QZ4P";
+  int nrad = 30;
+  int nang = 10;
+  double tol_start = 1e-6;
+  double tol_end = 1e-15;
+};
 
-TEST_CASE("Basis Cutoff", "[cutoff]") {
+Config parse_args(int argc, char *argv[]) {
+  Config cfg;
+  for (int i = 1; i < argc; ++i) {
+    std::string arg = argv[i];
 
-  using bk_type = IntegratorXX::Becke<double, double>;
-  using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
-  using ll_type = IntegratorXX::LebedevLaikov<double>;
+    auto parse_string = [&](const std::string &prefix, std::string &out) {
+      if (arg.rfind(prefix, 0) == 0) {
+        out = arg.substr(prefix.size());
+        return true;
+      }
+      return false;
+    };
+    auto parse_int = [&](const std::string &prefix, int &out) {
+      if (arg.rfind(prefix, 0) == 0) {
+        out = std::stoi(arg.substr(prefix.size()));
+        return true;
+      }
+      return false;
+    };
+    auto parse_double = [&](const std::string &prefix, double &out) {
+      if (arg.rfind(prefix, 0) == 0) {
+        out = std::stod(arg.substr(prefix.size()));
+        return true;
+      }
+      return false;
+    };
 
-  for (double cutoff_tol = 1e-6; cutoff_tol > 1e-15; cutoff_tol /= 10) {
-    Molecule mol;
-    read_xyz("input/taxol.xyz", mol);
-    STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", cutoff_tol);
+    if (arg == "--help" || arg == "-h") {
+      std::cout << "Usage: " << argv[0] << " [options]\n"
+                << "  --xyz=<file>        XYZ input file          (default: "
+                << cfg.xyz_file << ")\n"
+                << "  --basis=<dir>       Basis set directory     (default: "
+                << cfg.basis_dir << ")\n"
+                << "  --nrad=<int>        Radial grid points      (default: "
+                << cfg.nrad << ")\n"
+                << "  --nang=<int>        Angular grid points     (default: "
+                << cfg.nang << ")\n"
+                << "  --tol-start=<float> Starting cutoff tol     (default: "
+                << cfg.tol_start << ")\n"
+                << "  --tol-end=<float>   Ending cutoff tol       (default: "
+                << cfg.tol_end << ")\n";
+      std::exit(0);
 
-    FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, 40, 10);
-
-    int N = basis.nbf();
-    int G = grid.quad_points.extent(0);
-
-    Kokkos::View<int64_t> counter("counter");
-
-    Kokkos::parallel_for(
-        "Count points outside cutoff",
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N, G}),
-        KOKKOS_LAMBDA(const int i, const int g) {
-          double r = dist(basis.O(i), grid.quad_points(g));
-          if (r > basis.cutoff_radii(i))
-            Kokkos::atomic_fetch_add(&counter(), int64_t(1));
-        });
-
-    Kokkos::fence();
-    auto count_h = Kokkos::create_mirror_view(counter);
-    Kokkos::deep_copy(count_h, counter);
-    double percent = (double)count_h() / (double)(N * G) * 100;
-    std::cout << "Quad nodes outside of cutoff radius:  " << std::setw(4)
-              << std::setprecision(4) << percent
-              << "\%     tol = " << cutoff_tol << "\n";
+    } else if (!parse_string("--xyz=", cfg.xyz_file) &&
+               !parse_string("--basis=", cfg.basis_dir) &&
+               !parse_int("--nrad=", cfg.nrad) &&
+               !parse_int("--nang=", cfg.nang) &&
+               !parse_double("--tol-start=", cfg.tol_start) &&
+               !parse_double("--tol-end=", cfg.tol_end)) {
+      throw std::runtime_error("Unknown argument: " + arg + " (try --help)");
+    }
   }
+
+  if (cfg.tol_start <= cfg.tol_end)
+    throw std::runtime_error("--tol-start must be greater than --tol-end");
+  if (cfg.nrad <= 0 || cfg.nang <= 0)
+    throw std::runtime_error("--nrad and --nang must be positive");
+
+  return cfg;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+
+  using namespace NuKEXC;
+  Config cfg;
+  try {
+    cfg = parse_args(argc, argv);
+  } catch (const std::exception &e) {
+    std::cerr << "Error: " << e.what() << "\n";
+    return 1;
+  }
+
   Kokkos::initialize();
   {
-    int result = Catch::Session().run();
+    using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
+    using ll_type = IntegratorXX::LebedevLaikov<double>;
+
+    Molecule mol;
+    read_xyz(cfg.xyz_file, mol);
+    FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, cfg.nrad, cfg.nang);
+    int G = grid.quad_points.extent(0);
+
+    int width = std::max(cfg.basis_dir.size(), cfg.xyz_file.size());
+
+    auto repeat = [](const std::string &s, int n) {
+      std::string result;
+      for (int i = 0; i < n; ++i)
+        result += s;
+      return result;
+    };
+    std::string h = repeat("─", width + 2); // padding around value column
+                                            //
+    std::cout << "\n";
+    std::cout << "┌───────────────────────" << h << "┐\n";
+    std::cout << "│           Benchmark Configuration" << repeat(" ", width - 9)
+              << "|\n";
+
+    std::cout << "├───────────────────────" << h << "┤\n";
+    std::cout << "│ XYZ file             │ " << std::setw(width) << cfg.xyz_file
+              << " │\n";
+    std::cout << "│ Basis directory      │ " << std::setw(width)
+              << cfg.basis_dir << " │\n";
+    std::cout << "│ Radial points        │ " << std::setw(width) << cfg.nrad
+              << " │\n";
+    std::cout << "│ Angular points       │ " << std::setw(width) << cfg.nang
+              << " │\n";
+    std::cout << "│ Tolerance start      │ " << std::setw(width)
+              << cfg.tol_start << " │\n";
+    std::cout << "│ Tolerance end        │ " << std::setw(width) << cfg.tol_end
+              << " │\n";
+    std::cout << "│ Grid points          │ " << std::setw(width) << G << " │\n";
+
+    std::cout << "└──────────────────────┴" << h << "┘\n";
+    std::cout << "\n";
+    std::cout << "┌─────────────────┬───────────────┬───────────────┐\n";
+    std::cout << "│   Tolerance     │  Basis Fns    │  % Outside    │\n";
+    std::cout << "├─────────────────┼───────────────┼───────────────┤\n";
+
+    for (double tol = cfg.tol_start; tol > cfg.tol_end; tol /= 10) {
+      STOBasisSet basis = load_adf_basis(mol, cfg.basis_dir, tol);
+      int N = basis.nbf();
+
+      Kokkos::View<int64_t> counter("counter");
+      Kokkos::parallel_for(
+          "Count points outside cutoff",
+          Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N, G}),
+          KOKKOS_LAMBDA(const int i, const int g) {
+            double r = dist(basis.O(i), grid.quad_points(g));
+            if (r > basis.cutoff_radii(i))
+              Kokkos::atomic_fetch_add(&counter(), int64_t(1));
+          });
+      Kokkos::fence();
+
+      auto count_h = Kokkos::create_mirror_view(counter);
+      Kokkos::deep_copy(count_h, counter);
+      double percent = (double)count_h() / (double)(N * G) * 100;
+      std::cout << "│ " << std::setw(15) << std::scientific
+                << std::setprecision(2) << tol << " │ " << std::setw(13)
+                << std::fixed << N << " │ " << std::setw(12)
+                << std::setprecision(4) << percent << "% │\n";
+    }
+    std::cout << "└─────────────────┴───────────────┴───────────────┘\n";
   }
   Kokkos::finalize();
   return 0;

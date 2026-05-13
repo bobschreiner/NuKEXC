@@ -99,20 +99,20 @@ TEST_CASE("H20", "[h20_weights]") {
 TEST_CASE("Compute core Hamiltonian with screening",
           "[h2o][screening][coreH]") {
   using namespace IntegratorXX;
-  using radial_type = bk_type;
+  using radial_type = ta_type;
   using angular_type = ll_type;
 
   Molecule mol = make_water();
   STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", 1e-10);
-  FlatGrid grid = make_flat_grid<radial_type, angular_type>(mol, 100, 50);
-  FlatGrid grid_ref = make_flat_grid<radial_type, angular_type>(mol, 100, 50);
+  FlatGrid grid = make_flat_grid<radial_type, angular_type>(mol, 50, 40);
+  FlatGrid grid_ref = make_flat_grid<radial_type, angular_type>(mol, 50, 40);
 
   // Unscreened reference
   CoreHamiltonianResult Hcore_ref = compute_core_hamiltonian(basis, grid_ref);
 
   // Create bounding boxes for screeing
   const int total_points = grid.quad_points.extent(0);
-  const int max_points_per_box = 512;
+  const int max_points_per_box = 32;
 
   Kokkos::View<Box *, ExecSpace> bounding_boxes =
       create_bounding_boxes(grid, max_points_per_box);
