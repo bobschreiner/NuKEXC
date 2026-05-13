@@ -72,6 +72,7 @@ void print_timing_table(
               << std::endl;
   }
   std::cout << std::string(w * 7, '-') << std::endl;
+  std::cout << std::flush;
 }
 
 void print_timing_table_fused(
@@ -93,6 +94,7 @@ void print_timing_table_fused(
   }
 
   std::cout << std::string(w * 7, '-') << std::endl;
+  std::cout << std::flush;
 }
 
 void print_timing_table_screened(
@@ -114,8 +116,8 @@ void print_timing_table_screened(
               << std::setw(w) << t.at("diag") << std::setw(w) << t.at("total")
               << std::endl;
   }
-
   std::cout << std::string(w * 7, '-') << std::endl;
+  std::cout << std::flush;
 }
 TEST_CASE("Benchmark Core Hamiltonian Separate Kernels",
           "[benchmark_scf][separate kernels]") {
@@ -137,7 +139,6 @@ TEST_CASE("Benchmark Core Hamiltonian Separate Kernels",
 
 #ifdef KOKKOS_ENABLE_HIP
   molecule_names.push_back("taxol");
-
   molecules.push_back(make_taxol());
 #endif
 
@@ -295,9 +296,10 @@ TEST_CASE("Benchmark Fused Core Hamiltonian Screened",
   molecule_names.push_back("water");
   molecule_names.push_back("benzene");
 
-
+#ifdef KOKKOS_ENABLE_HIP
   molecule_names.push_back("taxol");
   molecules.push_back(make_taxol());
+#endif
 
   static std::vector<std::unordered_map<std::string, double>> timings;
 

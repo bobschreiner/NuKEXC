@@ -172,7 +172,7 @@ TEST_CASE("Basis Cutoff", "[h20][cutoff]") {
 
   double cutoff_tol = 1e-15;
   Molecule mol;
-  read_xyz("input/benzene.xyz", mol);
+  read_xyz("input/water.xyz", mol);
   STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", cutoff_tol);
 
   FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, 100, 50);

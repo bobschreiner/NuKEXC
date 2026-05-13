@@ -158,6 +158,7 @@ int main(int argc, char *argv[]) {
 
     std::cout << "└──────────────────────┴" << h << "┘\n";
     std::cout << "\n";
+    std::cout << std::flush;
     std::cout << "┌─────────────────┬───────────────┬───────────────┐\n";
     std::cout << "│   Tolerance     │  Basis Fns    │  % Outside    │\n";
     std::cout << "├─────────────────┼───────────────┼───────────────┤\n";
@@ -184,6 +185,7 @@ int main(int argc, char *argv[]) {
                 << std::setprecision(2) << tol << " │ " << std::setw(13)
                 << std::fixed << N << " │ " << std::setw(12)
                 << std::setprecision(4) << percent << "% │\n";
+      std::cout << std::flush;
     }
     std::cout << "└─────────────────┴───────────────┴───────────────┘\n";
   }

@@ -104,8 +104,8 @@ TEST_CASE("Compute core Hamiltonian with screening",
 
   Molecule mol = make_water();
   STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", 1e-10);
-  FlatGrid grid = make_flat_grid<radial_type, angular_type>(mol, 50, 40);
-  FlatGrid grid_ref = make_flat_grid<radial_type, angular_type>(mol, 50, 40);
+  FlatGrid grid = make_flat_grid<radial_type, angular_type>(mol, 50, 30);
+  FlatGrid grid_ref = make_flat_grid<radial_type, angular_type>(mol, 50, 30);
 
   // Unscreened reference
   CoreHamiltonianResult Hcore_ref = compute_core_hamiltonian(basis, grid_ref);
