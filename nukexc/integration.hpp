@@ -449,8 +449,6 @@ CoreHamiltonianResult compute_core_hamiltonian_screened(
   auto Z = grid.Z;
   auto atom_centers = grid.atom_centers;
 
-  int total_quad_points = grid.quad_points.extent(0);
-
   const int max_points_per_box = nl.max_points_per_box;
   const int total_points = nl.total_points;
   const int num_boxes = nl.offsets.extent(0) - 1;
@@ -524,6 +522,9 @@ CoreHamiltonianResult compute_core_hamiltonian_screened(
             Kokkos::min(start_points + max_points_per_box, total_points);
         const int num_points = end_points - start_points;
 
+        if (local_g >= num_points)
+          return;
+
         const int start_neighbors = nl.offsets(box_idx);
         const int end_neighbors = nl.offsets(box_idx + 1);
         const int num_neighbors = end_neighbors - start_neighbors;
@@ -540,8 +541,8 @@ CoreHamiltonianResult compute_core_hamiltonian_screened(
                           grid.quad_points(global_g)[1],
                           grid.quad_points(global_g)[2],
                           basis_grad(box_idx, local_i, local_g, 0),
-                          basis_grad(box_idx, local_i, local_g, 2),
-                          basis_grad(box_idx, local_i, local_g, 1));
+                          basis_grad(box_idx, local_i, local_g, 1),
+                          basis_grad(box_idx, local_i, local_g, 2));
         }
       });
 
@@ -637,8 +638,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened(
                                          total_contributions.v);
               });
             }); // thread parallel md loop
-        team_member.team_barrier();
-      }); // team parallel loop
+      });       // team parallel loop
   ExecSpace().fence();
   Kokkos::parallel_for(
       "Compute Core Hamiltonian Matrix",
@@ -650,8 +650,9 @@ CoreHamiltonianResult compute_core_hamiltonian_screened(
   Kokkos::fence();
   return result;
 }
+
 template <int CHUNK_SIZE = 8>
-CoreHamiltonianResult compute_core_hamiltonian_screened_and_chunked(
+CoreHamiltonianResult compute_core_hamiltonian_screened_and_tiled(
     const STOBasisSet &basis, const FlatGrid &grid, const NeighborList &nl) {
 
   const int MAX_NEIGHBOUR_CHUNK_SIZE = CHUNK_SIZE;
@@ -659,8 +660,6 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_and_chunked(
   int N = basis.nbf();
   auto Z = grid.Z;
   auto atom_centers = grid.atom_centers;
-
-  int total_quad_points = grid.quad_points.extent(0);
 
   const int max_points_per_box = nl.max_points_per_box;
   const int total_points = nl.total_points;

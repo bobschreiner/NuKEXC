@@ -197,9 +197,6 @@ std::vector<std::pair<std::string, Molecule>> make_molecules() {
   mol_list.push_back({"water", make_water()});
   mol_list.push_back({"benzene", make_benzene()});
   mol_list.push_back({"taxol", make_taxol()});
-#ifdef KOKKOS_ENABLE_HIP
-  mol_list.push_back({"taxol", make_taxol()});
-#endif
   return mol_list;
 }
 
@@ -294,6 +291,59 @@ void run_benchmark_screened(const Config &cfg) {
   print_results(results, true);
 }
 
+void run_benchmark_screened_and_tiled(const Config &cfg) {
+  using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
+  using ll_type = IntegratorXX::LebedevLaikov<double>;
+
+  std::cout << "\n── Screened Core Hamiltonian ──\n";
+
+  std::vector<BenchmarkResult> results;
+  for (auto &[name, mol] : make_molecules()) {
+    STOBasisSet basis = load_adf_basis(mol, cfg.basis_dir, cfg.screening_tol);
+
+    Kokkos::Timer total_timer, grid_timer, nl_timer, hamiltonian_timer,
+        diag_timer;
+    total_timer.reset();
+
+    grid_timer.reset();
+    FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, cfg.nrad, cfg.nang);
+    double t_grid = grid_timer.seconds();
+
+    nl_timer.reset();
+    auto bb = create_bounding_boxes(grid, cfg.max_points_per_box);
+    NeighborList nl;
+    build_neighbor_list(basis, bb, cfg.max_points_per_box,
+                        grid.quad_points.extent(0), nl);
+    double t_neighbors = nl_timer.seconds();
+
+    hamiltonian_timer.reset();
+#if defined(KOKKOS_ENABLE_HIP)
+    auto hcore =
+        compute_core_hamiltonian_screened_and_tiled<8>(basis, grid, nl);
+#else
+    auto hcore =
+        compute_core_hamiltonian_screened_and_tiled<64>(basis, grid, nl);
+#endif
+
+    double t_hamiltonian = hamiltonian_timer.seconds();
+
+    const int N = hcore.overlap.extent(0);
+    DeviceView2DLeft mo_coeff("mo_coeff", N, N);
+    DeviceView1D mo_energies("mo_energies", N);
+
+    diag_timer.reset();
+    Diagonalizer diag(N);
+    diag.compute_transformation(hcore.overlap);
+    diag.solve(hcore.hamiltonian, mo_coeff, mo_energies);
+    double t_diag = diag_timer.seconds();
+
+    results.push_back({name, N, (int)grid.quad_points.extent(0), t_grid,
+                       t_neighbors, t_hamiltonian, t_diag,
+                       total_timer.seconds()});
+  }
+  print_results(results, true);
+}
+
 // ── Main
 // ──────────────────────────────────────────────────────────────────────
 
@@ -309,8 +359,9 @@ int main(int argc, char *argv[]) {
   Kokkos::initialize();
   {
     print_config(cfg);
-    //  run_benchmark_fused(cfg);
+    run_benchmark_fused(cfg);
     run_benchmark_screened(cfg);
+    run_benchmark_screened_and_tiled(cfg);
     std::cout << "\n";
   }
   Kokkos::finalize();
