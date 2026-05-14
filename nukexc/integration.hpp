@@ -30,9 +30,6 @@
 #include <KokkosBatched_Gemm_Team_Impl.hpp>
 #include <KokkosBlas3_gemm.hpp>
 #include <Kokkos_Pair.hpp>
-#include <decl/Kokkos_Declare_OPENMP.hpp>
-#include <filesystem>
-#include <impl/Kokkos_CheckUsage.hpp>
 #include <stdexcept>
 
 namespace NuKEXC {
