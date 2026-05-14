@@ -124,7 +124,7 @@ void print_config(const Config &cfg) {
             << " │\n";
   std::cout << "│ Radial points        │ " << std::setw(width) << cfg.nrad
             << " │\n";
-  std::cout << "│ Angular points       │ " << std::setw(width) << cfg.nang
+  std::cout << "│ Angular order        │ " << std::setw(width) << cfg.nang
             << " │\n";
   std::cout << "│ Screening tolerance  │ " << std::setw(width)
             << cfg.screening_tol << " │\n";
@@ -196,6 +196,7 @@ std::vector<std::pair<std::string, Molecule>> make_molecules() {
   std::vector<std::pair<std::string, Molecule>> mol_list;
   mol_list.push_back({"water", make_water()});
   mol_list.push_back({"benzene", make_benzene()});
+  mol_list.push_back({"taxol", make_taxol()});
 #ifdef KOKKOS_ENABLE_HIP
   mol_list.push_back({"taxol", make_taxol()});
 #endif
@@ -308,7 +309,7 @@ int main(int argc, char *argv[]) {
   Kokkos::initialize();
   {
     print_config(cfg);
-    run_benchmark_fused(cfg);
+    //  run_benchmark_fused(cfg);
     run_benchmark_screened(cfg);
     std::cout << "\n";
   }
