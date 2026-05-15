@@ -742,8 +742,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
   std::cout << "Available L1 size     : " << policy.scratch_size_max(1) << "\n";
   std::cout << "Allocated L1 size     : " << policy.scratch_size(1) << "\n";
   std::cout << "Scratch size needed for grid: " << scratch_size_grid << "\n";
-  std::cout << "Scratch size needed for basis: " << scratch_size_basis
-            << "\n";
+  std::cout << "Scratch size needed for basis: " << scratch_size_basis << "\n";
   std::cout << "Global memory needed   : "
             << 4 * sizeof(double) * num_boxes * max_neighbors *
                    nl.max_points_per_box
@@ -814,7 +813,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
         shared_view_double v_nuc(team_member.team_scratch(scratch_level_grid),
                                  num_points);
         shared_view_basis scratch_basis(
-            team_member.team_scratch(scratch_level_basis), num_points);
+            team_member.team_scratch(scratch_level_basis), num_neighbors);
 
         // Fill weights
         Kokkos::parallel_for(
