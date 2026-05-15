@@ -422,8 +422,9 @@ struct CoreHamiltonianReducer {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator+(const CoreHamiltonianReducer &rhs) volatile {}
-
+  CoreHamiltonianReducer operator+(const CoreHamiltonianReducer &rhs) const {
+    return {s + rhs.s, v + rhs.v, t + rhs.t};
+  }
   KOKKOS_INLINE_FUNCTION static void
   join(volatile CoreHamiltonianReducer &dst,
        const volatile CoreHamiltonianReducer &src) {
@@ -711,19 +712,26 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
 
   // Check how much memory is available per cache
   int scratch_level_grid = 0;
-  if (scratch_size_grid > policy.scratch_size_max(0))
-    scratch_level_grid = 1;
-  if (scratch_size_grid > policy.scratch_size_max(1))
-    throw std::runtime_error(
-        "Could not allocate engouh memory on scratch for grid\n");
-
   int scratch_level_basis = 0;
-  if (scratch_size_basis > policy.scratch_size_max(0))
-    scratch_level_basis = 1;
-  if (scratch_size_basis > policy.scratch_size_max(1))
-    throw std::runtime_error(
-        "Could not allocate engouh memory on scratch for basis\n");
 
+  // Grid will almost always be bigger than basis
+  // So we put both in level 1 if grid exceeds level 0 scratch
+  if (scratch_size_grid > policy.scratch_size_max(0)) {
+    scratch_level_grid = 1;
+    scratch_level_basis = 1;
+    if (scratch_size_basis + scratch_size_grid > policy.scratch_size_max(1))
+      throw std::runtime_error("Could not allocate engouh memory on scratch\n");
+  }
+
+  // In case scratch_level_grid is 0 we need to check if both fit in 0
+  if (scratch_level_grid == 0) {
+    if (scratch_size_basis + scratch_size_grid > policy.scratch_size_max(0))
+      scratch_level_basis = 1;
+    if (scratch_size_basis > policy.scratch_size_max(1))
+      throw std::runtime_error(
+          "Could not allocate engouh memory on scratch for basis\n");
+  }
+  // In case scratch_level_grid is 1 we need to check if both fit in 1
   if (scratch_level_basis == scratch_level_grid)
     policy.set_scratch_size(
         scratch_level_grid,
@@ -748,47 +756,6 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
                    nl.max_points_per_box
             << "\n\n";
 #endif
-
-  Kokkos::View<double ***> basis_val("Basis functions", num_boxes,
-                                     max_neighbors, nl.max_points_per_box);
-
-  Kokkos::View<double ***[3]> basis_grad("Basis gradients", num_boxes,
-                                         max_neighbors, nl.max_points_per_box);
-
-  Kokkos::parallel_for(
-      "Compute all basis functions",
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>(
-          {0, 0}, {num_boxes, nl.max_points_per_box}),
-      KOKKOS_LAMBDA(const int box_idx, const int local_g) {
-        const int start_points = box_idx * max_points_per_box;
-        const int end_points =
-            Kokkos::min(start_points + max_points_per_box, total_points);
-        const int num_points = end_points - start_points;
-
-        if (local_g >= num_points)
-          return;
-
-        const int start_neighbors = nl.offsets(box_idx);
-        const int end_neighbors = nl.offsets(box_idx + 1);
-        const int num_neighbors = end_neighbors - start_neighbors;
-
-        const int global_g = max_points_per_box * box_idx + local_g;
-        for (int local_i = 0; local_i < num_neighbors; ++local_i) {
-
-          const int global_i = nl.neighbors(nl.offsets(box_idx) + local_i);
-          basis_eval(basis, global_i, grid.quad_points(global_g)[0],
-                     grid.quad_points(global_g)[1],
-                     grid.quad_points(global_g)[2],
-                     basis_val(box_idx, local_i, local_g));
-          basis_eval_grad(basis, global_i, grid.quad_points(global_g)[0],
-                          grid.quad_points(global_g)[1],
-                          grid.quad_points(global_g)[2],
-                          basis_grad(box_idx, local_i, local_g, 0),
-                          basis_grad(box_idx, local_i, local_g, 1),
-                          basis_grad(box_idx, local_i, local_g, 2));
-        }
-      });
-
   Kokkos::parallel_for(
       "Compute Core Hamiltonian Screened", policy,
       KOKKOS_LAMBDA(const member_type &team_member) {
@@ -852,27 +819,32 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
             [=](int local_i, int local_j) {
               CoreHamiltonianReducer total_contributions{0.0, 0.0, 0.0};
 
+              const ScratchBasisParams &basis_i = scratch_basis(local_i);
+              const ScratchBasisParams &basis_j = scratch_basis(local_j);
               // Loop over all quadrature_points in the box
               Kokkos::parallel_reduce(
                   Kokkos::ThreadVectorRange(team_member, num_points),
                   [=](int &local_g, CoreHamiltonianReducer &update) {
-                    double basis_value_i = basis_val(box_idx, local_i, local_g);
-                    double basis_gradx_i =
-                        basis_grad(box_idx, local_i, local_g, 0);
-                    double basis_grady_i =
-                        basis_grad(box_idx, local_i, local_g, 1);
-                    double basis_gradz_i =
-                        basis_grad(box_idx, local_i, local_g, 2);
+                    double basis_value_i;
+                    double basis_gradx_i;
+                    double basis_grady_i;
+                    double basis_gradz_i;
 
-                    double basis_value_j = basis_val(box_idx, local_j, local_g);
-                    double basis_gradx_j =
-                        basis_grad(box_idx, local_j, local_g, 0);
-                    double basis_grady_j =
-                        basis_grad(box_idx, local_j, local_g, 1);
-                    double basis_gradz_j =
-                        basis_grad(box_idx, local_j, local_g, 2);
+                    double basis_value_j;
+                    double basis_gradx_j;
+                    double basis_grady_j;
+                    double basis_gradz_j;
 
-                    double w = weights(local_g);
+                    const Point quad_point = quad_points(local_g);
+                    const double w = weights(local_g);
+
+                    basis_eval_with_grad(basis_i, quad_point, basis_value_i,
+                                         basis_gradx_i, basis_grady_i,
+                                         basis_gradz_i);
+
+                    basis_eval_with_grad(basis_j, quad_point, basis_value_j,
+                                         basis_gradx_j, basis_grady_j,
+                                         basis_gradz_j);
 
                     update.s += w * basis_value_i * basis_value_j;
                     update.v +=

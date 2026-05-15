@@ -24,6 +24,11 @@
 #include <Kokkos_Core.hpp>
 
 namespace NuKEXC {
+
+// Maximal angular momentum
+constexpr int MAX_POLY_TERMS = 0;
+constexpr int MAX_ANG_TERMS = 0;
+
 // using ExecSpace = Kokkos::Serial;
 // using ExecSpace = Kokkos::Threads;
 // using ExecSpace = Kokkos::OpenMP;

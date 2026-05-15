@@ -21,6 +21,7 @@
 #pragma once
 
 #include <Kokkos_Core.hpp>
+#include <Kokkos_Macros.hpp>
 #include <cctype>
 #include <fstream>
 #include <map>
@@ -37,7 +38,6 @@
 namespace NuKEXC {
 
 struct STOBasisSet {
-
   Kokkos::View<int *> n;
   Kokkos::View<int *> l;
   Kokkos::View<int *> m;
@@ -519,52 +519,94 @@ struct VG {
   double dz;  // d/dz
 };
 
+struct ScratchBasisParams {
+  double zeta, norm;
+  Point O;
+  int n, l, m;
+  double poly_coeffs[MAX_POLY_TERMS];    // for value
+  double poly_dcoeffs_r[MAX_POLY_TERMS]; // for dP/dr
+  double poly_dcoeffs_z[MAX_POLY_TERMS]; // for dP/dz
+  double ang_coeffs_x[MAX_ANG_TERMS];    // for dA/dx or dB/dx
+  double ang_coeffs_y[MAX_ANG_TERMS];    // for dA/dy or dB/dy
+  int num_poly_terms, num_ang_terms;
+};
+
 KOKKOS_INLINE_FUNCTION
-VG evaluate_with_gradient(const STOBasisSet &basis_set, int i, const Point &p) {
+double int_pow(const double &r, const int &k) {
 
-  const int n_val = basis_set.n(i);
-  const int l_val = basis_set.l(i);
-  const int m_val = basis_set.m(i);
-  const double norm = basis_set.norm(i);
-  const double zeta = basis_set.zeta(i);
+  double result = 0.;
+  switch (k) {
+  case 0:
+    result = 1.;
+    break;
+  case 1:
+    result = r;
+    break;
+  case 2:
+    result = r * r;
+    break;
+  case 3:
+    result = r * r * r;
+    break;
+  case 4:
+    result = r * r * r * r;
+    break;
+  case 5:
+    result = r * r * r * r * r;
+    break;
+  case 6:
+    result = r * r * r * r * r * r;
+    break;
+  case 7:
+    result = r * r * r * r * r * r * r;
+    break;
+  default:
+    break;
 
-  double dx = p[0] - basis_set.O(i)[0];
-  double dy = p[1] - basis_set.O(i)[1];
-  double dz = p[2] - basis_set.O(i)[2];
+  }
+  return result;
+}
+
+KOKKOS_INLINE_FUNCTION
+void basis_eval_with_grad(const ScratchBasisParams &basis, const Point &p,
+                          double &val, double &gradx, double &grady,
+                          double &gradz) {
+
+  const int n_val = basis.n;
+  const int l_val = basis.l;
+  const int m_val = basis.m;
+  const double norm = basis.norm;
+  const double zeta = basis.zeta;
+  const Point origin = basis.O;
+
+  double dx = p[0] - origin[0];
+  double dy = p[1] - origin[1];
+  double dz = p[2] - origin[2];
   double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
              epsilon_shift; // Avoid pow(0,0)
 
   // Angular part
   double S_val;
-  S_val = real_solid_harmonic_cart(l_val, m_val, dx, dy, dz);
-
   double dS_dx;
   double dS_dy;
   double dS_dz;
 
-  grad_real_solid_harmonic_cart(l_val, m_val, dx, dy, dz, dS_dx, dS_dy, dS_dz);
+  // Completely precomputed coefficients
+  real_solid_harmonic_cart_and_grad_precomputed(l_val, m_val, dx, dy, dz, S_val,
+                                                dS_dx, dS_dy, dS_dz);
 
   // Radial part
-  double pow_term = safe_pow(r, n_val - l_val - 1);
+  double pow_term = int_pow(r, n_val - l_val - 1);
   double exp_term = Kokkos::exp(-zeta * r);
   double R_pre = norm * pow_term * exp_term;
 
   double dR_dr = ((n_val - l_val - 1) / r - zeta) * R_pre;
   double common_R = dR_dr / r;
 
-  VG result;
-  result.val = R_pre * S_val;
-  result.dx = R_pre * dS_dx + S_val * (dx * common_R);
-  result.dy = R_pre * dS_dy + S_val * (dy * common_R);
-  result.dz = R_pre * dS_dz + S_val * (dz * common_R);
-
-  return result;
+  val = R_pre * S_val;
+  gradx = R_pre * dS_dx + S_val * (dx * common_R);
+  grady = R_pre * dS_dy + S_val * (dy * common_R);
+  gradz = R_pre * dS_dz + S_val * (dz * common_R);
 }
-
-struct ScratchBasisParams {
-  double zeta, norm;
-  Point O;
-  int n, l, m;
-};
 
 } // namespace NuKEXC
