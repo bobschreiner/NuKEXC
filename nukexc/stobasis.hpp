@@ -560,4 +560,11 @@ VG evaluate_with_gradient(const STOBasisSet &basis_set, int i, const Point &p) {
 
   return result;
 }
+
+struct ScratchBasisParams {
+  double zeta, norm;
+  Point O;
+  int n, l, m;
+};
+
 } // namespace NuKEXC

@@ -266,11 +266,7 @@ void run_benchmark_screened(const Config &cfg) {
     double t_neighbors = nl_timer.seconds();
 
     hamiltonian_timer.reset();
-#if defined(KOKKOS_ENABLE_HIP)
-    auto hcore = compute_core_hamiltonian_screened<8>(basis, grid, nl);
-#else
-    auto hcore = compute_core_hamiltonian_screened<64>(basis, grid, nl);
-#endif
+    auto hcore = compute_core_hamiltonian_screened_scratch(basis, grid, nl);
 
     double t_hamiltonian = hamiltonian_timer.seconds();
 
@@ -322,7 +318,7 @@ void run_benchmark_screened_and_tiled(const Config &cfg) {
         compute_core_hamiltonian_screened_and_tiled<8>(basis, grid, nl);
 #else
     auto hcore =
-        compute_core_hamiltonian_screened_and_tiled<64>(basis, grid, nl);
+        compute_core_hamiltonian_screened_and_tiled<8>(basis, grid, nl);
 #endif
 
     double t_hamiltonian = hamiltonian_timer.seconds();
@@ -361,7 +357,7 @@ int main(int argc, char *argv[]) {
     print_config(cfg);
     run_benchmark_fused(cfg);
     run_benchmark_screened(cfg);
-    run_benchmark_screened_and_tiled(cfg);
+    // run_benchmark_screened_and_tiled(cfg);
     std::cout << "\n";
   }
   Kokkos::finalize();
