@@ -59,6 +59,7 @@ using wo_type = IntegratorXX::Womersley<double>;
 // ────────────────────────────────────────────────────────────────────
 
 struct Config {
+  std::string xyz_file = "input/water.xyz";
   std::string basis_dir = "input/zorabasis/TZP";
   int n_max = 7;
   int m_max = 7;
@@ -97,6 +98,8 @@ Config parse_args(int argc, char *argv[]) {
     if (arg == "--help" || arg == "-h") {
       std::cout
           << "Usage: " << argv[0] << " [options]\n"
+          << "  --xyz=<file>        XYZ input file          (default: "
+          << cfg.xyz_file << ")\n"
           << "  --basis=<dir>          Basis set directory       (default: "
           << cfg.basis_dir << ")\n"
           << "  --n_max=<int>           Radial grid points        (default: "
@@ -111,7 +114,8 @@ Config parse_args(int argc, char *argv[]) {
           << cfg.screening << ")\n";
 
       std::exit(0);
-    } else if (!parse_string("--basis=", cfg.basis_dir) &&
+    } else if (!parse_string("--xyz=", cfg.xyz_file) &&
+               !parse_string("--basis=", cfg.basis_dir) &&
                !parse_int("--n_max=", cfg.n_max) &&
                !parse_int("--m_max=", cfg.m_max) &&
                !parse_double("--tol=", cfg.screening_tol) &&
@@ -127,7 +131,8 @@ Config parse_args(int argc, char *argv[]) {
 template <typename radial_type, typename angular_type>
 CoreHamiltonianResult compute_reference(const Config cfg, size_t nrad,
                                         size_t ang_order) {
-  Molecule mol = make_benzene();
+  Molecule mol;
+  read_xyz(cfg.xyz_file, mol);
   STOBasisSet stobasis = load_adf_basis(mol, cfg.basis_dir, cfg.screening_tol);
 
   FlatGrid grid =
@@ -153,7 +158,8 @@ void convergence_analysis(const Config &cfg,
                           REC recorder) {
   using angular_traits = IntegratorXX::quadrature_traits<angular_type>;
 
-  Molecule mol = make_benzene();
+  Molecule mol;
+  read_xyz(cfg.xyz_file, mol);
   STOBasisSet stobasis = load_adf_basis(mol, cfg.basis_dir, cfg.screening_tol);
 
   FlatGrid grid =
@@ -242,6 +248,8 @@ void print_config(const Config &cfg) {
   std::cout << "│       Integral Convergence Config." << repeat(" ", width - 10)
             << "│\n";
   std::cout << "├───────────────────────" << h << "┤\n";
+  std::cout << "│ XYZ file             │ " << std::setw(width) << cfg.xyz_file
+            << " │\n";
   std::cout << "│ Basis directory      │ " << std::setw(width) << cfg.basis_dir
             << " │\n";
   std::cout << "│ Radial points        │ " << std::setw(width)

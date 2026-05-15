@@ -40,9 +40,10 @@ using namespace NuKEXC;
 // ────────────────────────────────────────────────────────────────────
 
 struct Config {
+  std::string xyz_file = "input/water.xyz";
   std::string basis_dir = "input/zorabasis/TZP";
-  int nrad = 100;
-  int nang = 50;
+  int nrad = 50;
+  int nang = 20;
   double screening_tol = 1e-6;
   int max_points_per_box = 64;
 };
