@@ -523,12 +523,6 @@ struct ScratchBasisParams {
   double zeta, norm;
   Point O;
   int n, l, m;
-  double poly_coeffs[MAX_POLY_TERMS];    // for value
-  double poly_dcoeffs_r[MAX_POLY_TERMS]; // for dP/dr
-  double poly_dcoeffs_z[MAX_POLY_TERMS]; // for dP/dz
-  double ang_coeffs_x[MAX_ANG_TERMS];    // for dA/dx or dB/dx
-  double ang_coeffs_y[MAX_ANG_TERMS];    // for dA/dy or dB/dy
-  int num_poly_terms, num_ang_terms;
 };
 
 KOKKOS_INLINE_FUNCTION

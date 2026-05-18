@@ -23,6 +23,7 @@
 #include "grid.hpp"
 #include "nukexc_config.hpp"
 
+#include <detail/ArborX_Predicates.hpp>
 #include <detail/ArborX_SpaceFillingCurves.hpp>
 #include <detail/ArborX_TreeVisualization.hpp>
 #include <integratorxx/quadratures/s2/lebedev_laikov.hpp>
@@ -113,6 +114,36 @@ struct NeighborList {
   int total_points;
 };
 
+Kokkos::View<Box *, ExecSpace>
+create_shell_bounding_boxes(const FlatGrid &grid) {
+
+  const int natoms = grid.atom_centers.extent(0);
+  const int nrad = grid.nrad;
+  const int nang = grid.nang;
+  const int num_boxes = natoms * nrad; // one box per (atom, shell)
+
+  Kokkos::View<Box *, ExecSpace> boxes("shell_boxes", num_boxes);
+
+  Kokkos::parallel_for(
+      "compute_shell_bounding_boxes",
+      Kokkos::RangePolicy<ExecSpace>(0, num_boxes), KOKKOS_LAMBDA(int idx) {
+        // idx == iatom * nrad + irad
+        const int start = idx * nang; // contiguous in the flat array
+
+        Box b{grid.quad_points(start), grid.quad_points(start)};
+        for (int k = 1; k < nang; ++k) {
+          const auto &p = grid.quad_points(start + k);
+          for (int d = 0; d < 3; ++d) {
+            b.minCorner()[d] = Kokkos::min(b.minCorner()[d], p[d]);
+            b.maxCorner()[d] = Kokkos::max(b.maxCorner()[d], p[d]);
+          }
+        }
+        boxes(idx) = b;
+      });
+
+  ExecSpace{}.fence();
+  return boxes;
+}
 template <typename BASIS>
 void build_neighbor_list(const BASIS basis,
                          const Kokkos::View<Box *, ExecSpace> &bounding_boxes,

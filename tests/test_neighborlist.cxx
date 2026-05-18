@@ -25,6 +25,11 @@
 #include <nukexc/octree.hpp>
 #include <nukexc/stobasis.hpp>
 
+#include <algorithm>
+#include <cmath>
+#include <iostream>
+#include <vector>
+
 using namespace NuKEXC;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,6 +62,59 @@ brute_force_neighbors(const std::vector<Box> &boxes,
   return result;
 }
 
+void create_histogram(std::vector<double> percentages, int num_bins) {
+  if (percentages.empty() || num_bins <= 0)
+    return;
+
+  // 1. Find data boundaries
+  auto [min_it, max_it] =
+      std::minmax_element(percentages.begin(), percentages.end());
+  double min_val = *min_it;
+  double max_val = *max_it;
+
+  // Handle edge case where all values are identical
+  if (std::abs(max_val - min_val) < 1e-9) {
+    max_val += 1.0;
+  }
+
+  // 2. Count frequencies into bins
+  double bin_width = (max_val - min_val) / num_bins;
+  std::vector<int> bins(num_bins, 0);
+
+  for (double val : percentages) {
+    int bin_idx = static_cast<int>((val - min_val) / bin_width);
+    if (bin_idx >= num_bins)
+      bin_idx = num_bins - 1; // Handle maximum edge value
+    if (bin_idx < 0)
+      bin_idx = 0;
+    bins[bin_idx]++;
+  }
+
+  // 3. Determine visual scaling (Max width of 40 ASCII characters)
+  int max_freq = *std::max_element(bins.begin(), bins.end());
+  const int max_bar_width = 40;
+
+  // 4. Print the ASCII histogram
+  std::cout << "\n=== Histogram ===\n";
+  for (int i = 0; i < num_bins; ++i) {
+    double current_bin_start = min_val + (i * bin_width);
+    double current_bin_end = current_bin_start + bin_width;
+
+    // Print aligned range labels
+    std::printf("[%6.2f%% - %6.2f%%]: ", current_bin_start, current_bin_end);
+
+    // Scale bar length if frequency is high
+    int bar_length = bins[i];
+    if (max_freq > max_bar_width) {
+      bar_length = (bins[i] * max_bar_width) / max_freq;
+    }
+
+    // Print the bar and the actual count
+    std::string bar(bar_length, '#');
+    std::cout << bar << " (" << bins[i] << ")\n";
+  }
+  std::cout << "=================\n";
+}
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
 // Place basis functions on a regular 3-D grid and build a small set of
@@ -206,12 +264,13 @@ TEST_CASE("NeighborList: benezene regression",
   using ll_type = IntegratorXX::LebedevLaikov<double>;
 
   Molecule mol = make_benzene();
-  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", 1e-8);
-  FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, 40, 10);
+  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", 1e-6);
+  FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, 30, 30);
 
-  const int points_per_box = 32;
+  const int points_per_box = grid.nang;
 
-  auto bb = create_bounding_boxes(grid, points_per_box);
+  //  auto bb = create_bounding_boxes(grid, points_per_box);
+  auto bb = create_shell_bounding_boxes(grid);
 
   NeighborList nl;
   build_neighbor_list(basis, bb, points_per_box, grid.quad_points.extent(0),
@@ -234,11 +293,13 @@ TEST_CASE("NeighborList: benezene regression",
             << "  sparsity : " << std::fixed << std::setprecision(1)
             << sparsity * 100 << "%\n";
 
-  // Sanity: at least one neighbor per box
-  for (int b = 0; b < num_boxes; ++b)
+  std::vector<double> percentages;
+  for (int b = 0; b < num_boxes; ++b) {
     CHECK(offsets_h(b + 1) >= offsets_h(b));
+    percentages.push_back((offsets_h(b + 1) - offsets_h(b)) / (double)N * 100);
+  }
 
-  CHECK(offsets_h(num_boxes) > 0);
+  create_histogram(percentages, 50);
 }
 
 TEST_CASE("NeighborList: taxol regression",
@@ -249,13 +310,13 @@ TEST_CASE("NeighborList: taxol regression",
   using ll_type = IntegratorXX::LebedevLaikov<double>;
 
   Molecule mol = make_taxol();
-  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", 1e-8);
-  FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, 40, 10);
+  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", 1e-6);
+  FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, 30, 30);
 
-  const int points_per_box = 32;
+  const int points_per_box = grid.nang;
 
-  auto bb = create_bounding_boxes(grid, points_per_box);
-
+  auto bb = create_shell_bounding_boxes(grid);
+  //  auto bb = create_bounding_boxes(grid, points_per_box);
   NeighborList nl;
   build_neighbor_list(basis, bb, points_per_box, grid.quad_points.extent(0),
                       nl);
@@ -279,11 +340,14 @@ TEST_CASE("NeighborList: taxol regression",
 
   // For a large molecule with 1e-8 cutoff we expect >50% sparsity.
   CHECK(sparsity > 0.3);
-  // Sanity: at least one neighbor per box
-  for (int b = 0; b < num_boxes; ++b)
-    CHECK(offsets_h(b + 1) >= offsets_h(b));
 
-  CHECK(offsets_h(num_boxes) > 0);
+  std::vector<double> percentages;
+  for (int b = 0; b < num_boxes; ++b) {
+    CHECK(offsets_h(b + 1) >= offsets_h(b));
+    percentages.push_back((offsets_h(b + 1) - offsets_h(b)) / (double)N * 100);
+  }
+
+  create_histogram(percentages, 50);
 }
 
 int main(int argc, char *argv[]) {

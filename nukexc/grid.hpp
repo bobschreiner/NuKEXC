@@ -52,6 +52,8 @@ struct FlatGrid {
   Kokkos::View<double *> weights;
   Kokkos::View<Point *> atom_centers;
   Kokkos::View<unsigned *> Z;
+  unsigned nrad; // radial points per atom
+  unsigned nang; // angular points per radial shell
 };
 
 template <typename radial_type, typename angular_type>
@@ -106,16 +108,16 @@ FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 50,
 
   Kokkos::parallel_for(
       "FlattenViews",
-      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>(
-          {0, 0}, {(int)natoms, (int)npts}),
-      KOKKOS_LAMBDA(const int i, const int j) {
-        const int idx = i * npts + j;
-        wt_1d(idx) = wt_2d(i, j);
-        qp_1d(idx)[0] = qp_2d(i, j)[0];
-        qp_1d(idx)[1] = qp_2d(i, j)[1];
-        qp_1d(idx)[2] = qp_2d(i, j)[2];
+      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<3>>(
+          {0, 0, 0}, {(int)natoms, (int)nrad, (int)nang}),
+      KOKKOS_LAMBDA(const int iatoms, const int iradial, const int iangular) {
+        const int src = iradial * nang + iangular;
+        const int dest = (iatoms * nrad + iradial) * nang + iangular;
+        wt_1d(dest) = wt_2d(iatoms, src);
+        qp_1d(dest) = qp_2d(iatoms, src);
       });
 
-  return {qp_1d, wt_1d, ac_dev, Z_dev};
+  return {qp_1d, wt_1d, ac_dev, Z_dev, (unsigned)nrad, (unsigned)nang};
 }
+
 } // namespace NuKEXC

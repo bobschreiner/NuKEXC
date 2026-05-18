@@ -200,7 +200,7 @@ int main(int argc, char *argv[]) {
   {
     Molecule mol = make_taxol();
     FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, 40, 10);
-    int max_points_per_bb = 32;
+    int max_points_per_bb = grid.nang;
     // Create bounding boxes
     auto bb = create_bounding_boxes(grid, max_points_per_bb);
 

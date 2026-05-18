@@ -36,10 +36,12 @@
 
 using namespace NuKEXC;
 
-// ── Confg  ───────────────────────────────────────────────────────────────
+// ── Config
+// ────────────────────────────────────────────────────────────────────
 
 struct Config {
   std::string basis_dir = "input/zorabasis/TZP";
+  std::string algorithm = "screened";
   int nrad = 20;
   int nang = 20;
   double screening_tol = 1e-6;
@@ -76,18 +78,22 @@ Config parse_args(int argc, char *argv[]) {
     if (arg == "--help" || arg == "-h") {
       std::cout
           << "Usage: " << argv[0] << " [options]\n"
-          << "  --basis=<dir>          Basis set directory       (default: "
+
+          << "  --basis=<dir>             Basis set directory       (default: "
           << cfg.basis_dir << ")\n"
-          << "  --nrad=<int>           Radial grid points        (default: "
+          << "  --alg=<string>    Algorithm(screened/scratch/dense) (default: "
+          << cfg.algorithm << ")\n"
+          << "  --nrad=<int>              Radial grid points        (default: "
           << cfg.nrad << ")\n"
-          << "  --nang=<int>           Angular grid points       (default: "
+          << "  --nang=<int>              Angular grid points       (default: "
           << cfg.nang << ")\n"
-          << "  --tol=<float>          Screening tolerance       (default: "
+          << "  --tol=<float>             Screening tolerance       (default: "
           << cfg.screening_tol << ")\n"
-          << "  --box-size=<int>       Max points per box        (default: "
+          << "  --box-size=<int>          Max points per box        (default: "
           << cfg.max_points_per_box << ")\n";
       std::exit(0);
     } else if (!parse_string("--basis=", cfg.basis_dir) &&
+               !parse_string("--alg=", cfg.algorithm) &&
                !parse_int("--nrad=", cfg.nrad) &&
                !parse_int("--nang=", cfg.nang) &&
                !parse_double("--tol=", cfg.screening_tol) &&
@@ -100,8 +106,7 @@ Config parse_args(int argc, char *argv[]) {
   return cfg;
 }
 
-// ── Helpers
-// ───────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────
 
 auto repeat(const std::string &s, int n) {
   std::string r;
@@ -120,6 +125,8 @@ void print_config(const Config &cfg) {
             << "│\n";
   std::cout << "├───────────────────────" << h << "┤\n";
   std::cout << "│ Basis directory      │ " << std::setw(width) << cfg.basis_dir
+            << " │\n";
+  std::cout << "│ Algorithm            │ " << std::setw(width) << cfg.algorithm
             << " │\n";
   std::cout << "│ Radial points        │ " << std::setw(width) << cfg.nrad
             << " │\n";
@@ -140,7 +147,6 @@ struct BenchmarkResult {
   double t_grid;
   double t_neighbors; // 0 if not applicable
   double t_hamiltonian;
-  double t_diag;
   double t_total;
 };
 
@@ -157,7 +163,6 @@ void print_results(const std::vector<BenchmarkResult> &results, bool screened) {
     if (screened)
       std::cout << repeat(fill, w + 2) << mid;
     std::cout << repeat(fill, w + 2) << mid;
-    std::cout << repeat(fill, w + 2) << mid;
     std::cout << repeat(fill, w + 2) << right << "\n";
   };
 
@@ -168,7 +173,6 @@ void print_results(const std::vector<BenchmarkResult> &results, bool screened) {
   if (screened)
     std::cout << " │ " << std::setw(w) << "Neighbors (s)";
   std::cout << " │ " << std::setw(w) << "H_el (s)"
-            << " │ " << std::setw(w) << "Diag (s)"
             << " │ " << std::setw(w) << "Total (s)"
             << " │\n";
   hline_top("├", "┼", "┤", "─");
@@ -181,26 +185,26 @@ void print_results(const std::vector<BenchmarkResult> &results, bool screened) {
     if (screened)
       std::cout << " │ " << std::setw(w) << r.t_neighbors;
     std::cout << " │ " << std::setw(w) << r.t_hamiltonian << " │ "
-              << std::setw(w) << r.t_diag << " │ " << std::setw(w) << r.t_total
-              << " │\n";
+              << std::setw(w) << r.t_total << " │\n";
   }
   hline_top("└", "┴", "┘", "─");
   std::cout << std::flush;
 }
 
-// ── Molecules
-// ─────────────────────────────────────────────────────────────────
+// ── Molecules ────────────────────────────────────────────────────────────
 
 std::vector<std::pair<std::string, Molecule>> make_molecules() {
   std::vector<std::pair<std::string, Molecule>> mol_list;
   mol_list.push_back({"water", make_water()});
   mol_list.push_back({"benzene", make_benzene()});
-  //  mol_list.push_back({"taxol", make_taxol()});
+
+#ifdef KOKKOS_ENABLE_HIP
+  mol_list.push_back({"taxol", make_taxol()});
+#endif
   return mol_list;
 }
 
-// ── Benchmarks
-// ────────────────────────────────────────────────────────────────
+// ── Benchmarks ───────────────────────────────────────────────────
 
 void run_benchmark_fused(const Config &cfg) {
   using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
@@ -212,7 +216,7 @@ void run_benchmark_fused(const Config &cfg) {
   for (auto &[name, mol] : make_molecules()) {
     STOBasisSet basis = load_adf_basis(mol, cfg.basis_dir, cfg.screening_tol);
 
-    Kokkos::Timer total_timer, grid_timer, hamiltonian_timer, diag_timer;
+    Kokkos::Timer total_timer, grid_timer, hamiltonian_timer;
     total_timer.reset();
 
     grid_timer.reset();
@@ -227,14 +231,8 @@ void run_benchmark_fused(const Config &cfg) {
     DeviceView2DLeft mo_coeff("mo_coeff", N, N);
     DeviceView1D mo_energies("mo_energies", N);
 
-    diag_timer.reset();
-    Diagonalizer diag(N);
-    diag.compute_transformation(hcore.overlap);
-    diag.solve(hcore.hamiltonian, mo_coeff, mo_energies);
-    double t_diag = diag_timer.seconds();
-
     results.push_back({name, N, (int)grid.quad_points.extent(0), t_grid, 0.0,
-                       t_hamiltonian, t_diag, total_timer.seconds()});
+                       t_hamiltonian, total_timer.seconds()});
   }
   print_results(results, false);
 }
@@ -249,8 +247,8 @@ void run_benchmark_screened(const Config &cfg) {
   for (auto &[name, mol] : make_molecules()) {
     STOBasisSet basis = load_adf_basis(mol, cfg.basis_dir, cfg.screening_tol);
 
-    Kokkos::Timer total_timer, grid_timer, nl_timer, hamiltonian_timer,
-        diag_timer;
+    Kokkos::Timer total_timer, grid_timer, nl_timer, hamiltonian_timer;
+
     total_timer.reset();
 
     grid_timer.reset();
@@ -273,21 +271,52 @@ void run_benchmark_screened(const Config &cfg) {
     DeviceView2DLeft mo_coeff("mo_coeff", N, N);
     DeviceView1D mo_energies("mo_energies", N);
 
-    diag_timer.reset();
-    Diagonalizer diag(N);
-    diag.compute_transformation(hcore.overlap);
-    diag.solve(hcore.hamiltonian, mo_coeff, mo_energies);
-    double t_diag = diag_timer.seconds();
-
     results.push_back({name, N, (int)grid.quad_points.extent(0), t_grid,
-                       t_neighbors, t_hamiltonian, t_diag,
-                       total_timer.seconds()});
+                       t_neighbors, t_hamiltonian, total_timer.seconds()});
   }
   print_results(results, true);
 }
 
-// ── Main
-// ──────────────────────────────────────────────────────────────────────
+void run_benchmark_scratch(const Config &cfg) {
+  using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
+  using ll_type = IntegratorXX::LebedevLaikov<double>;
+
+  std::cout << "\n── Screened Core Hamiltonian ──\n";
+
+  std::vector<BenchmarkResult> results;
+  for (auto &[name, mol] : make_molecules()) {
+    STOBasisSet basis = load_adf_basis(mol, cfg.basis_dir, cfg.screening_tol);
+
+    Kokkos::Timer total_timer, grid_timer, nl_timer, hamiltonian_timer;
+    total_timer.reset();
+
+    grid_timer.reset();
+    FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, cfg.nrad, cfg.nang);
+    double t_grid = grid_timer.seconds();
+
+    nl_timer.reset();
+    auto bb = create_bounding_boxes(grid, cfg.max_points_per_box);
+    NeighborList nl;
+    build_neighbor_list(basis, bb, cfg.max_points_per_box,
+                        grid.quad_points.extent(0), nl);
+    double t_neighbors = nl_timer.seconds();
+
+    hamiltonian_timer.reset();
+    auto hcore = compute_core_hamiltonian_screened_scratch(basis, grid, nl);
+
+    double t_hamiltonian = hamiltonian_timer.seconds();
+
+    const int N = hcore.overlap.extent(0);
+    DeviceView2DLeft mo_coeff("mo_coeff", N, N);
+    DeviceView1D mo_energies("mo_energies", N);
+
+    results.push_back({name, N, (int)grid.quad_points.extent(0), t_grid,
+                       t_neighbors, t_hamiltonian, total_timer.seconds()});
+  }
+  print_results(results, true);
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────
 
 int main(int argc, char *argv[]) {
   Config cfg;
@@ -301,8 +330,13 @@ int main(int argc, char *argv[]) {
   Kokkos::initialize();
   {
     print_config(cfg);
-    // run_benchmark_fused(cfg);
-    run_benchmark_screened(cfg);
+
+    if (cfg.algorithm == "screened")
+      run_benchmark_screened(cfg);
+    else if (cfg.algorithm == "scratch")
+      run_benchmark_scratch(cfg);
+    else if (cfg.algorithm == "dense")
+      run_benchmark_fused(cfg);
     std::cout << "\n";
   }
   Kokkos::finalize();
