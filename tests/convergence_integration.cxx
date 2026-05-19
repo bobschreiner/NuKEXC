@@ -279,7 +279,7 @@ int main(int argc, char *argv[]) {
 
     print_config(cfg);
     using namespace IntegratorXX;
-    using radial_type = ta_type;
+    using radial_type = bk_type;
     using angular_type = ll_type;
 
     std::vector<double> errors_overlap_diag;
@@ -322,7 +322,7 @@ int main(int argc, char *argv[]) {
         compute_reference<radial_type, angular_type>(cfg, nrad_max,
                                                      nang_order_max);
 
-    std::cout << "\n--- Final Convergence for benzene ---\n";
+    std::cout << "\n--- Final Convergence for " << cfg.xyz_file <<"  ---\n ";
     std::cout << std::setw(10) << "rad_pts" << std::setw(10) << "ang_pts"
               << std::setw(15) << "pts_per_atom" << std::setw(15) << "pts_total"
               << std::setw(20) << "err_overlap_diag" << std::setw(20)

@@ -83,7 +83,7 @@ TEST_CASE("H20", "[h20_weights]") {
   Molecule mol = make_water();
   unsigned int natoms = mol.natoms;
   STOBasisSet stobasis = load_adf_basis(mol);
-  FlatGrid grid = make_flat_grid<bk_type, ll_type>(mol);
+  FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol);
 
   DeviceView2DLeft S =
       overlap_integral(stobasis, grid.quad_points, grid.weights);

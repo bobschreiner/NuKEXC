@@ -42,7 +42,7 @@ using namespace NuKEXC;
 struct Config {
   std::string basis_dir = "input/zorabasis/TZP";
   std::string algorithm = "screened";
-  int nrad = 20;
+  int nrad = 50;
   int nang = 20;
   double screening_tol = 1e-6;
   int max_points_per_box = 64;

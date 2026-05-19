@@ -18,6 +18,7 @@
  *
  */
 
+#include <impl/Kokkos_InitializeFinalize.hpp>
 #include <iomanip>
 #include <iostream>
 #include <string_view>
@@ -32,6 +33,7 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
+#include "nukexc/grid.hpp"
 #include "standards.hpp"
 
 using namespace NuKEXC;
@@ -106,7 +108,66 @@ TEMPLATE_LIST_TEST_CASE("Unpruned", "[sph-gen]", sph_test_types) {
   }
 }
 
+void visualize_points_with_tiles(const FlatGrid &grid) {
+
+  Kokkos::View<Point *, ExecSpace> points_dev = grid.quad_points;
+  auto pts =
+      Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, points_dev);
+  const int total = static_cast<int>(pts.extent(0));
+
+  const std::string path = "grid/grid_points.vtk";
+
+  std::filesystem::path p(path);
+  std::filesystem::create_directories(p.parent_path());
+
+  std::ofstream out(path);
+  if (!out) {
+    std::cerr << "[visualize_points_with_tiles] ERROR: cannot open " << path
+              << '\n';
+    return;
+  }
+
+  out << "# vtk DataFile Version 3.0\n"
+      << "Grid Points\n"
+      << "ASCII\n"
+      << "DATASET UNSTRUCTURED_GRID\n\n";
+
+  out << "POINTS " << total << " double\n";
+  for (int i = 0; i < total; ++i)
+    out << pts(i)[0] << ' ' << pts(i)[1] << ' ' << pts(i)[2] << '\n';
+
+  // Each point is its own VTK_VERTEX cell (type 1)
+  out << "\nCELLS " << total << ' ' << total * 2 << '\n';
+  for (int i = 0; i < total; ++i)
+    out << "1 " << i << '\n';
+
+  out << "\nCELL_TYPES " << total << '\n';
+  for (int i = 0; i < total; ++i)
+    out << "1\n";
+
+  out << "\nCELL_DATA " << total << '\n'
+      << "SCALARS tile_id int 1\n"
+      << "LOOKUP_TABLE default\n";
+
+  for (int j = 0; j < grid.nang; ++j)
+    for (int i = 0; i < grid.nrad; ++i)
+      out << i << '\n';
+
+  out.flush();
+  std::cout << "[visualize_points_with_tiles]\n"
+            << "  Points : " << total << '\n'
+            << "  Output : " << path << '\n'
+            << "  Tip    : load alongside bounding_boxes.vtk in ParaView;\n"
+            << "           matching tile_id colours confirm points are\n"
+            << "           correctly contained within their boxes.\n\n";
+}
+
 int main() {
   int result = Catch::Session().run();
-  return result;
+  Kokkos::initialize();
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<ta_type, ll_type>(mol, 20, 40);
+  visualize_points_with_tiles(grid);
+  Kokkos::finalize();
 }

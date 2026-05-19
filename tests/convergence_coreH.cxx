@@ -41,6 +41,7 @@
 #include <integratorxx/generators/radial_factory.hpp>
 #include <integratorxx/generators/spherical_factory.hpp>
 #include <integratorxx/quadratures/radial.hpp>
+#include <integratorxx/quadratures/radial/treutlerahlrichs.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
 #include <nukexc/diagonalizer.hpp>
@@ -60,6 +61,7 @@
 using namespace NuKEXC;
 
 using bk_type = IntegratorXX::Becke<double, double>;
+using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 
 static constexpr double R = 1.0;
@@ -146,8 +148,8 @@ TEST_CASE("H2+ Core Hamiltonian radial convergence", "[convergence][radial]") {
   using namespace IntegratorXX;
 
   std::vector<int> nrad_sweep;
-  int nrad_max = 500;
-  for (int i = 20; i < nrad_max; i += 20) {
+  int nrad_max = 2000;
+  for (int i = 20; i < nrad_max; i *= 2) {
     nrad_sweep.push_back(i);
   }
 
@@ -244,7 +246,7 @@ TEST_CASE("H2+ Core Hamiltonian angular convergence",
     nang_order_sweep.push_back(i);
   }
 
-  const size_t nrad_fixed = 100;
+  const size_t nrad_fixed = 2000;
 
   auto mol = make_h2_mol();
   auto basis = load_adf_basis(mol, "input/zorabasis/QZ4P");
@@ -252,7 +254,7 @@ TEST_CASE("H2+ Core Hamiltonian angular convergence",
   // Compute reference
   double ref_energy;
   {
-    auto grid = make_flat_grid<bk_type, ll_type>(mol, nrad_fixed, nang_max);
+    auto grid = make_flat_grid<ta_type, ll_type>(mol, nrad_fixed, nang_max);
     // npts_actual = natoms * nrad * nang
     const size_t npts = grid.quad_points.extent(0);
 
@@ -279,7 +281,7 @@ TEST_CASE("H2+ Core Hamiltonian angular convergence",
   data.reserve(nang_order_sweep.size());
 
   for (size_t nang_order : nang_order_sweep) {
-    auto grid = make_flat_grid<bk_type, ll_type>(mol, nrad_fixed, nang_order);
+    auto grid = make_flat_grid<ta_type, ll_type>(mol, nrad_fixed, nang_order);
 
     // npts_actual = natoms * nrad * nang
     const size_t npts = grid.quad_points.extent(0);

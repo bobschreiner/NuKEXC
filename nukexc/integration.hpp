@@ -342,6 +342,7 @@ CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
     auto Gz_view = Kokkos::subview(Gz_cur, Kokkos::ALL,
                                    std::make_pair(0, current_batch_size));
 
+
     // Single collocation evaluation — used by overlap AND nuclear
     fill_collocation(space_cur, basis, batch_pts, col_view);
 

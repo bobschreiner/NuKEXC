@@ -102,4 +102,5 @@ double safe_pow(double base, int exp) {
     return 0.0; // 0^positive = 0
   return Kokkos::pow(base, (double)exp);
 }
+
 } // namespace NuKEXC

@@ -47,6 +47,7 @@
 #include <integratorxx/generators/radial_factory.hpp>
 #include <integratorxx/generators/spherical_factory.hpp>
 #include <integratorxx/quadratures/radial.hpp>
+#include <integratorxx/quadratures/radial/treutlerahlrichs.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
 #include <nukexc/grid.hpp> // make_flat_grid
@@ -64,6 +65,7 @@
 using namespace NuKEXC;
 
 using bk_type = IntegratorXX::Becke<double, double>;
+using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 
 // ============================================================

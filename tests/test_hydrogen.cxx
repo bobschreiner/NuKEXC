@@ -68,23 +68,24 @@ TEST_CASE("hydrogen 1s -- normalization, eigenvalues, virial",
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
-  auto grid = make_flat_grid<bk_type, ll_type>(mol,100,40);
-  STOBasisSet basis = load_adf_basis(mol, "input/zora/basis/QZVP");
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 40);
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}}); // 1s
 
-  DeviceView2DLeft S = overlap_integral(basis, grid.quad_points, grid.weights);
-  DeviceView2DLeft T = kinetic_integral(basis, grid.quad_points, grid.weights);
-  DeviceView2DLeft V = nuclear_potential_integral(
-      basis, grid.quad_points, grid.weights, grid.atom_centers, grid.Z);
+  CoreHamiltonianResult result = compute_core_hamiltonian(basis, grid);
+  DeviceView2DLeft S = result.overlap;
+  DeviceView2DLeft T = result.kinetic;
+  DeviceView2DLeft V = result.nuclear;
 
   auto S_h = Kokkos::create_mirror_view(S);
   auto T_h = Kokkos::create_mirror_view(T);
   auto V_h = Kokkos::create_mirror_view(V);
+
   Kokkos::deep_copy(S_h, S);
   Kokkos::deep_copy(T_h, T);
   Kokkos::deep_copy(V_h, V);
 
   require_symmetric(S_h);
-  // require_symmetric(T_h);
+  require_symmetric(T_h);
   require_symmetric(V_h);
 
   REQUIRE_THAT(S_h(0, 0), Catch::Matchers::WithinRel(1.0, 1e-7));
@@ -132,7 +133,6 @@ TEST_CASE("hydrogen 1s -- normalization, eigenvalues, virial",
 
 TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
           "[multi_shell]") {
-
   // Index map:  0 -> 1s,  1 -> 2p_{m=-1},  2 -> 2p_{m=0},  3 -> 2p_{m=+1}
   STOBasisSet basis = make_manual_basis({
       {1, 0, 0, 1.0, 0., 0., 0.},  // 1s
@@ -143,12 +143,12 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
-  auto grid = make_flat_grid<bk_type, ll_type>(mol);
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 40);
 
-  auto S = overlap_integral(basis, grid.quad_points, grid.weights);
-  auto T = kinetic_integral(basis, grid.quad_points, grid.weights);
-  auto V = nuclear_potential_integral(basis, grid.quad_points, grid.weights,
-                                      grid.atom_centers, grid.Z);
+  CoreHamiltonianResult result = compute_core_hamiltonian(basis, grid);
+  DeviceView2DLeft S = result.overlap;
+  DeviceView2DLeft T = result.kinetic;
+  DeviceView2DLeft V = result.nuclear;
 
   auto S_h = Kokkos::create_mirror_view(S);
   auto T_h = Kokkos::create_mirror_view(T);
@@ -191,9 +191,10 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
   REQUIRE_THAT(V_h(2, 2), Catch::Matchers::WithinRel(-0.25, 1e-7)); // 2p_0
   REQUIRE_THAT(V_h(3, 3), Catch::Matchers::WithinRel(-0.25, 1e-7)); // 2p_{+1}
 
-  // ---- m-degeneracy: all 2p states must give identical diagonal T and V ----
-  // Using a tighter relative tolerance here than for the absolute values,
-  // because residual asymmetry diagnoses a grid-symmetry or sign error.
+  // ---- m-degeneracy: all 2p states must give identical diagonal T and V
+  // ---- Using a tighter relative tolerance here than for the absolute
+  // values, because residual asymmetry diagnoses a grid-symmetry or sign
+  // error.
   REQUIRE_THAT(T_h(1, 1), Catch::Matchers::WithinRel(T_h(2, 2), 1e-10));
   REQUIRE_THAT(T_h(1, 1), Catch::Matchers::WithinRel(T_h(3, 3), 1e-10));
   REQUIRE_THAT(V_h(1, 1), Catch::Matchers::WithinRel(V_h(2, 2), 1e-10));
@@ -290,13 +291,12 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
 
 TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
           "[h2_plus]") {
-
   const double R = 1.0; // bond length in bohr
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}, {R, 0., 0.}},
                std::vector<unsigned>{1u, 1u});
 
-  auto grid = make_flat_grid<bk_type, ll_type>(mol);
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 40);
 
   // Build the basis explicitly so the zeta value is unambiguous.
   STOBasisSet basis = make_manual_basis({
@@ -304,10 +304,10 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
       {1, 0, 0, 1.0, R, 0., 0.},  // 1s on atom B
   });
 
-  auto S = overlap_integral(basis, grid.quad_points, grid.weights);
-  auto T = kinetic_integral(basis, grid.quad_points, grid.weights);
-  auto V = nuclear_potential_integral(basis, grid.quad_points, grid.weights,
-                                      grid.atom_centers, grid.Z);
+  CoreHamiltonianResult result = compute_core_hamiltonian(basis, grid);
+  DeviceView2DLeft S = result.overlap;
+  DeviceView2DLeft T = result.kinetic;
+  DeviceView2DLeft V = result.nuclear;
 
   auto S_h = Kokkos::create_mirror_view(S);
   auto T_h = Kokkos::create_mirror_view(T);
@@ -324,7 +324,8 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
   REQUIRE_THAT(S_h(0, 0), Catch::Matchers::WithinRel(1.0, 1e-7));
   REQUIRE_THAT(S_h(1, 1), Catch::Matchers::WithinRel(1.0, 1e-7));
 
-  // ---- Off-diagonal overlap: exact formula S_AB = e^{-R}(1 + R + R^2/3) ----
+  // ---- Off-diagonal overlap: exact formula S_AB = e^{-R}(1 + R + R^2/3)
+  // ----
   const double S_exact = std::exp(-R) * (1.0 + R + R * R / 3.0);
   REQUIRE_THAT(S_h(0, 1), Catch::Matchers::WithinRel(S_exact, 1e-6));
 
@@ -333,7 +334,8 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
   REQUIRE_THAT(T_h(1, 1), Catch::Matchers::WithinRel(0.5, 1e-7));
 
   // ---- V has no closed form for the cross-nuclear terms, but the two  ----
-  // ---- on-diagonal elements must be equal by the symmetry of the system ----
+  // ---- on-diagonal elements must be equal by the symmetry of the system
+  // ----
   REQUIRE_THAT(V_h(0, 0), Catch::Matchers::WithinRel(V_h(1, 1), 1e-6));
 }
 
@@ -355,7 +357,6 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
 // T_AA = T_BB = 0.5 still holds for the single-center kinetic integrals.
 
 TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
-
   const double R = 1.0; // bond length in bohr
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}, {R, 0., 0.}},
@@ -365,11 +366,10 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
 
   // Build the basis explicitly so the zeta value is unambiguous.
   STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P");
-
-  auto S = overlap_integral(basis, grid.quad_points, grid.weights);
-  auto T = kinetic_integral(basis, grid.quad_points, grid.weights);
-  auto V = nuclear_potential_integral(basis, grid.quad_points, grid.weights,
-                                      grid.atom_centers, grid.Z);
+  CoreHamiltonianResult result = compute_core_hamiltonian(basis, grid);
+  DeviceView2DLeft S = result.overlap;
+  DeviceView2DLeft T = result.kinetic;
+  DeviceView2DLeft V = result.nuclear;
 
   auto S_h = Kokkos::create_mirror_view(S);
   auto T_h = Kokkos::create_mirror_view(T);
@@ -453,7 +453,6 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
 
 TEST_CASE("H2+ Energies Fused Hamiltonian",
           "[h2_plus][energies][fused hamiltonian]") {
-
   const double R = 1.0; // bond length in bohr
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}, {R, 0., 0.}},
