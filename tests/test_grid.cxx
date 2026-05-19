@@ -18,7 +18,6 @@
  *
  */
 
-#include <impl/Kokkos_InitializeFinalize.hpp>
 #include <iomanip>
 #include <iostream>
 #include <string_view>
