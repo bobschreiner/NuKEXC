@@ -18,6 +18,7 @@
  *
  */
 
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <string_view>
@@ -164,7 +165,7 @@ void visualize_points_with_tiles(const FlatGrid &grid) {
 int main() {
 
   Kokkos::initialize();
-  
+
   int result = Catch::Session().run();
   {
     Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
@@ -172,6 +173,6 @@ int main() {
     auto grid = make_flat_grid<ta_type, ll_type>(mol, 20, 40);
     visualize_points_with_tiles(grid);
   } // grid and mol destroyed here, while Kokkos is still alive
- Kokkos::finalize();
+  Kokkos::finalize();
   return result;
 }
