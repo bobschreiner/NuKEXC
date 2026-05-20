@@ -162,11 +162,16 @@ void visualize_points_with_tiles(const FlatGrid &grid) {
 }
 
 int main() {
-  int result = Catch::Session().run();
+
   Kokkos::initialize();
-  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
-               std::vector<unsigned>{1u});
-  auto grid = make_flat_grid<ta_type, ll_type>(mol, 20, 40);
-  visualize_points_with_tiles(grid);
-  Kokkos::finalize();
+  
+  int result = Catch::Session().run();
+  {
+    Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+                 std::vector<unsigned>{1u});
+    auto grid = make_flat_grid<ta_type, ll_type>(mol, 20, 40);
+    visualize_points_with_tiles(grid);
+  } // grid and mol destroyed here, while Kokkos is still alive
+ Kokkos::finalize();
+  return result;
 }

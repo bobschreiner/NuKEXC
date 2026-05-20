@@ -431,9 +431,8 @@ struct CoreHamiltonianReducer {
   CoreHamiltonianReducer operator+(const CoreHamiltonianReducer &rhs) const {
     return {s + rhs.s, v + rhs.v, t + rhs.t};
   }
-  KOKKOS_INLINE_FUNCTION static void
-  join(volatile CoreHamiltonianReducer &dst,
-       const volatile CoreHamiltonianReducer &src) {
+  KOKKOS_INLINE_FUNCTION
+  void join(CoreHamiltonianReducer &dst, const CoreHamiltonianReducer &src) {
     dst.s += src.s;
     dst.v += src.v;
     dst.t += src.t;
@@ -489,7 +488,8 @@ CoreHamiltonianResult compute_core_hamiltonian_screened(
               const int global_i = nl.neighbors(start_neighbors + local_i);
               const int global_j = nl.neighbors(start_neighbors + local_j);
 
-              CoreHamiltonianReducer total_contributions{0.0, 0.0, 0.0};
+              if (global_i < global_j)
+                return;
 
               ScratchBasisParams local_basis_i{
                   basis.zeta(global_i), basis.norm(global_i),
@@ -501,51 +501,58 @@ CoreHamiltonianResult compute_core_hamiltonian_screened(
                   basis.O(global_j),    basis.n(global_j),
                   basis.l(global_j),    basis.m(global_j)};
 
-              Kokkos::parallel_reduce(
-                  Kokkos::ThreadVectorRange(team_member, num_points),
-                  [=](int &local_g, CoreHamiltonianReducer &update) {
-                    const int global_g = max_points_per_box * box_idx + local_g;
-                    double w_g = grid.weights(global_g);
-                    Point quad_point_g = grid.quad_points(global_g);
-                    double v_g = 0.0;
-                    for (int k = 0; k < grid.atom_centers.extent(0); ++k) {
-                      double r = dist(grid.atom_centers(k), quad_point_g);
-                      v_g -= grid.Z(k) / r;
-                    }
+              double total_s = 0.0;
+              double total_t = 0.0;
+              double total_v = 0.0;
 
-                    double basis_val_i;
-                    double basis_gx_i;
-                    double basis_gy_i;
-                    double basis_gz_i;
+              for (int local_g = 0; local_g < num_points; ++local_g) {
 
-                    double basis_val_j;
-                    double basis_gx_j;
-                    double basis_gy_j;
-                    double basis_gz_j;
+                const int global_g = max_points_per_box * box_idx + local_g;
+                double w_g = grid.weights(global_g);
+                Point quad_point_g = grid.quad_points(global_g);
+                double v_g = 0.0;
+                for (int k = 0; k < grid.atom_centers.extent(0); ++k) {
+                  double r = dist(grid.atom_centers(k), quad_point_g);
+                  v_g -= grid.Z(k) / r;
+                }
 
-                    basis_eval_with_grad(local_basis_j, quad_point_g,
-                                         basis_val_j, basis_gx_j, basis_gy_j,
-                                         basis_gz_j);
-                    basis_eval_with_grad(local_basis_i, quad_point_g,
-                                         basis_val_i, basis_gx_i, basis_gy_i,
-                                         basis_gz_i);
+                double basis_val_i;
+                double basis_gx_i;
+                double basis_gy_i;
+                double basis_gz_i;
 
-                    const double local_s = w_g * basis_val_i * basis_val_j;
-                    update.s += local_s;
-                    update.t +=
-                        0.5 * w_g *
-                        (basis_gx_i * basis_gx_j + basis_gy_i * basis_gy_j +
-                         basis_gz_i * basis_gz_j);
-                    update.v += v_g * local_s;
-                  },
-                  total_contributions);
+                double basis_val_j;
+                double basis_gx_j;
+                double basis_gy_j;
+                double basis_gz_j;
+
+                basis_eval_with_grad(local_basis_j, quad_point_g, basis_val_j,
+                                     basis_gx_j, basis_gy_j, basis_gz_j);
+                basis_eval_with_grad(local_basis_i, quad_point_g, basis_val_i,
+                                     basis_gx_i, basis_gy_i, basis_gz_i);
+
+                const double local_s = w_g * basis_val_i * basis_val_j;
+                total_s += local_s;
+                total_t += 0.5 * w_g *
+                           (basis_gx_i * basis_gx_j + basis_gy_i * basis_gy_j +
+                            basis_gz_i * basis_gz_j);
+                total_v += v_g * local_s;
+              }
 
               Kokkos::atomic_fetch_add(&result.overlap(global_i, global_j),
-                                       total_contributions.s);
+                                       total_s);
               Kokkos::atomic_fetch_add(&result.kinetic(global_i, global_j),
-                                       total_contributions.t);
+                                       total_t);
               Kokkos::atomic_fetch_add(&result.nuclear(global_i, global_j),
-                                       total_contributions.v);
+                                       total_v);
+              if (global_i != global_j) {
+                Kokkos::atomic_fetch_add(&result.overlap(global_j, global_i),
+                                         total_s);
+                Kokkos::atomic_fetch_add(&result.kinetic(global_j, global_i),
+                                         total_t);
+                Kokkos::atomic_fetch_add(&result.nuclear(global_j, global_i),
+                                         total_v);
+              }
             });
       });
 
