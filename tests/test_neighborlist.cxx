@@ -347,7 +347,7 @@ TEST_CASE("NeighborList: benezene regression",
   STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", 1e-6);
   FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, 30, 30);
 
-  const int points_per_box = 32;
+  const int points_per_box = 8;
 
   //  auto bb = create_bounding_boxes(grid, points_per_box);
   auto bb = create_bounding_boxes(grid, points_per_box);
@@ -393,7 +393,7 @@ TEST_CASE("NeighborList: taxol regression",
   STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", 1e-6);
   FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, 30, 30);
 
-  const int points_per_box = 32;
+  const int points_per_box = 8;
 
   auto bb = create_bounding_boxes(grid, points_per_box);
   //  auto bb = create_bounding_boxes(grid, points_per_box);

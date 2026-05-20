@@ -483,67 +483,69 @@ CoreHamiltonianResult compute_core_hamiltonian_screened(
         const int num_neighbors = end_neighbors - start_neighbors;
 
         Kokkos::parallel_for(
-            Kokkos::TeamVectorRange(team_member, num_points),
-            [=](int &local_g) {
-              const int global_g = max_points_per_box * box_idx + local_g;
-              double w_g = grid.weights(global_g);
-              Point quad_point_g = grid.quad_points(global_g);
-              double v_g = 0.0;
-              for (int k = 0; k < grid.atom_centers.extent(0); ++k) {
-                double r = dist(grid.atom_centers(k), quad_point_g);
-                v_g -= grid.Z(k) / r;
-              }
+            Kokkos::TeamThreadMDRange(team_member, num_neighbors,
+                                      num_neighbors),
+            [=](const int local_i, const int local_j) {
+              const int global_i = nl.neighbors(start_neighbors + local_i);
+              const int global_j = nl.neighbors(start_neighbors + local_j);
 
-              for (int local_i = 0; local_i < num_neighbors; ++local_i) {
-                int global_i = nl.neighbors(nl.offsets(box_idx) + local_i);
-                ScratchBasisParams local_basis_i{
-                    basis.zeta(global_i), basis.norm(global_i),
-                    basis.O(global_i),    basis.n(global_i),
-                    basis.l(global_i),    basis.m(global_i)};
+              CoreHamiltonianReducer total_contributions{0.0, 0.0, 0.0};
 
-                double basis_val_i;
-                double basis_gx_i;
-                double basis_gy_i;
-                double basis_gz_i;
+              ScratchBasisParams local_basis_i{
+                  basis.zeta(global_i), basis.norm(global_i),
+                  basis.O(global_i),    basis.n(global_i),
+                  basis.l(global_i),    basis.m(global_i)};
 
-                basis_eval_with_grad(local_basis_i, quad_point_g, basis_val_i,
-                                     basis_gx_i, basis_gy_i, basis_gz_i);
+              ScratchBasisParams local_basis_j{
+                  basis.zeta(global_j), basis.norm(global_j),
+                  basis.O(global_j),    basis.n(global_j),
+                  basis.l(global_j),    basis.m(global_j)};
 
-                for (int local_j = 0; local_j < num_neighbors; ++local_j) {
+              Kokkos::parallel_reduce(
+                  Kokkos::ThreadVectorRange(team_member, num_points),
+                  [=](int &local_g, CoreHamiltonianReducer &update) {
+                    const int global_g = max_points_per_box * box_idx + local_g;
+                    double w_g = grid.weights(global_g);
+                    Point quad_point_g = grid.quad_points(global_g);
+                    double v_g = 0.0;
+                    for (int k = 0; k < grid.atom_centers.extent(0); ++k) {
+                      double r = dist(grid.atom_centers(k), quad_point_g);
+                      v_g -= grid.Z(k) / r;
+                    }
 
-                  int global_j = nl.neighbors(nl.offsets(box_idx) + local_j);
+                    double basis_val_i;
+                    double basis_gx_i;
+                    double basis_gy_i;
+                    double basis_gz_i;
 
-                  ScratchBasisParams local_basis_j{
-                      basis.zeta(global_j), basis.norm(global_j),
-                      basis.O(global_j),    basis.n(global_j),
-                      basis.l(global_j),    basis.m(global_j)};
+                    double basis_val_j;
+                    double basis_gx_j;
+                    double basis_gy_j;
+                    double basis_gz_j;
 
-                  double basis_val_j;
-                  double basis_gx_j;
-                  double basis_gy_j;
-                  double basis_gz_j;
+                    basis_eval_with_grad(local_basis_j, quad_point_g,
+                                         basis_val_j, basis_gx_j, basis_gy_j,
+                                         basis_gz_j);
+                    basis_eval_with_grad(local_basis_i, quad_point_g,
+                                         basis_val_i, basis_gx_i, basis_gy_i,
+                                         basis_gz_i);
 
-                  basis_eval_with_grad(local_basis_j, quad_point_g, basis_val_j,
-                                       basis_gx_j, basis_gy_j, basis_gz_j);
+                    const double local_s = w_g * basis_val_i * basis_val_j;
+                    update.s += local_s;
+                    update.t +=
+                        0.5 * w_g *
+                        (basis_gx_i * basis_gx_j + basis_gy_i * basis_gy_j +
+                         basis_gz_i * basis_gz_j);
+                    update.v += v_g * local_s;
+                  },
+                  total_contributions);
 
-                  double s_local;
-                  double t_local;
-                  double v_local;
-
-                  s_local = w_g * basis_val_i * basis_val_j;
-                  t_local = 0.5 * w_g *
-                            (basis_gx_i * basis_gx_j + basis_gy_i * basis_gy_j +
-                             basis_gz_i * basis_gz_j);
-                  v_local = v_g * s_local;
-
-                  Kokkos::atomic_fetch_add(&result.overlap(global_i, global_j),
-                                           s_local);
-                  Kokkos::atomic_fetch_add(&result.kinetic(global_i, global_j),
-                                           t_local);
-                  Kokkos::atomic_fetch_add(&result.nuclear(global_i, global_j),
-                                           v_local);
-                }
-              }
+              Kokkos::atomic_fetch_add(&result.overlap(global_i, global_j),
+                                       total_contributions.s);
+              Kokkos::atomic_fetch_add(&result.kinetic(global_i, global_j),
+                                       total_contributions.t);
+              Kokkos::atomic_fetch_add(&result.nuclear(global_i, global_j),
+                                       total_contributions.v);
             });
       });
 
