@@ -31,6 +31,7 @@
 #include <KokkosBatched_Util.hpp>
 #include <KokkosBlas2_team_gemv.hpp>
 #include <KokkosBlas3_gemm.hpp>
+#include <Kokkos_Core_fwd.hpp>
 #include <Kokkos_Pair.hpp>
 #include <decl/Kokkos_Declare_OPENMP.hpp>
 #include <impl/Kokkos_HostThreadTeam.hpp>
@@ -342,7 +343,6 @@ CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
     auto Gz_view = Kokkos::subview(Gz_cur, Kokkos::ALL,
                                    std::make_pair(0, current_batch_size));
 
-
     // Single collocation evaluation — used by overlap AND nuclear
     fill_collocation(space_cur, basis, batch_pts, col_view);
 
@@ -463,119 +463,8 @@ CoreHamiltonianResult compute_core_hamiltonian_screened(
   result.nuclear = DeviceView2DLeft("Nuclear potential matrix", N, N);
   result.hamiltonian = DeviceView2DLeft("Core Hamiltonian", N, N);
 
-  // --- Reduce to find max_n, then allocate with correct size ---
-  int max_neighbors = 0;
-  Kokkos::parallel_reduce(
-      "Find maximum number of neighbors", nl.offsets.extent(0) - 1,
-      KOKKOS_LAMBDA(const int &i, int &lmax) {
-        const int num_neighbors = nl.offsets(i + 1) - nl.offsets(i);
-        if (lmax < num_neighbors)
-          lmax = num_neighbors;
-      },
-      Kokkos::Max<int>(max_neighbors));
-
-  // Define helpers for scratch space access
-  typedef ExecSpace::scratch_memory_space ScratchSpace;
-
-  typedef Kokkos::View<double *, ScratchSpace,
-                       Kokkos::MemoryTraits<Kokkos::Unmanaged>>
-      shared_view_double;
-
-  typedef Kokkos::View<Point *, ScratchSpace,
-                       Kokkos::MemoryTraits<Kokkos::Unmanaged>>
-      shared_view_points;
-
   Kokkos::TeamPolicy<ExecSpace> policy(num_boxes, Kokkos::AUTO());
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
-
-  // Compute required cache sizes
-  size_t scratch_grid_size =
-      (shared_view_double::shmem_size(max_points_per_box)     // weights
-       + shared_view_double::shmem_size(max_points_per_box)   // v_nuc
-       + shared_view_points::shmem_size(max_points_per_box)); // quad_points
-
-  size_t scratch_basis_size = 3 * shared_view_double::shmem_size(max_neighbors);
-
-  // Check how much memory is available per cache
-  int scratch_grid_level = 0;
-  int scratch_basis_level = 1;
-  if (scratch_grid_size > policy.scratch_size_max(0))
-    scratch_grid_level = 1;
-
-#if 1
-  std::cout << "---------- Memory Allocations ------------\n";
-
-  std::cout << "Max Neighbors         : " << max_neighbors << "\n";
-  std::cout << "Available L0 size     : " << policy.scratch_size_max(0) << "\n";
-  std::cout << "Available L1 size     : " << policy.scratch_size_max(1) << "\n";
-  std::cout << "Scratch size needed for grid: " << scratch_grid_size << "\n";
-  std::cout << "Scratch size needed for : " << scratch_basis_size << "\n";
-#endif
-
-  if (scratch_basis_level == scratch_grid_level) {
-    policy.set_scratch_size(
-        scratch_grid_level,
-        Kokkos::PerTeam(scratch_grid_size + scratch_basis_size));
-  } else {
-    policy.set_scratch_size(scratch_grid_level,
-                            Kokkos::PerTeam(scratch_grid_size));
-    policy.set_scratch_size(scratch_basis_level,
-                            Kokkos::PerTeam(scratch_basis_size));
-  }
-
-  if (scratch_grid_size > policy.scratch_size_max(1))
-    throw std::runtime_error("Could not allocate engouh memory on scratch\n");
-
-  if (scratch_basis_size > policy.scratch_size_max(1))
-    throw std::runtime_error("Could not allocate engouh memory on scratch\n");
-
-  if (scratch_grid_size + scratch_basis_size > policy.scratch_size_max(1))
-    throw std::runtime_error("Could not allocate engouh memory on scratch\n");
-
-  Kokkos::View<double ***, Kokkos::LayoutLeft> basis_val(
-      "Basis functions", num_boxes, max_neighbors, nl.max_points_per_box);
-
-  Kokkos::View<double ***, Kokkos::LayoutLeft> basis_gx(
-      "Basis gradient x", num_boxes, max_neighbors, nl.max_points_per_box);
-
-  Kokkos::View<double ***, Kokkos::LayoutLeft> basis_gy(
-      "Basis gradient y", num_boxes, max_neighbors, nl.max_points_per_box);
-
-  Kokkos::View<double ***, Kokkos::LayoutLeft> basis_gz(
-      "Basis gradient z", num_boxes, max_neighbors, nl.max_points_per_box);
-
-  Kokkos::parallel_for(
-      "Compute all basis functions",
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>(
-          {0, 0}, {num_boxes, nl.max_points_per_box}),
-      KOKKOS_LAMBDA(const int box_idx, const int local_g) {
-        const int start_points = box_idx * max_points_per_box;
-        const int end_points =
-            Kokkos::min(start_points + max_points_per_box, total_points);
-        const int num_points = end_points - start_points;
-
-        if (local_g >= num_points)
-          return;
-
-        const int start_neighbors = nl.offsets(box_idx);
-        const int end_neighbors = nl.offsets(box_idx + 1);
-        const int num_neighbors = end_neighbors - start_neighbors;
-
-        const int global_g = max_points_per_box * box_idx + local_g;
-        for (int local_i = 0; local_i < num_neighbors; ++local_i) {
-
-          const int global_i = nl.neighbors(nl.offsets(box_idx) + local_i);
-          ScratchBasisParams local_basis = {
-              basis.zeta(global_i), basis.norm(global_i), basis.O(global_i),
-              basis.n(global_i),    basis.l(global_i),    basis.m(global_i)};
-
-          basis_eval_with_grad(local_basis, grid.quad_points(global_g),
-                               basis_val(box_idx, local_i, local_g),
-                               basis_gx(box_idx, local_i, local_g),
-                               basis_gy(box_idx, local_i, local_g),
-                               basis_gz(box_idx, local_i, local_g));
-        }
-      });
 
   Kokkos::parallel_for(
       "Compute Core Hamiltonian Screened", policy,
@@ -593,146 +482,69 @@ CoreHamiltonianResult compute_core_hamiltonian_screened(
         const int end_neighbors = nl.offsets(box_idx + 1);
         const int num_neighbors = end_neighbors - start_neighbors;
 
-        // Initialize shared memory
-        shared_view_double weights(team_member.team_scratch(scratch_grid_level),
-                                   num_points);
-        shared_view_points quad_points(
-            team_member.team_scratch(scratch_grid_level), num_points);
-        shared_view_double v_nuc(team_member.team_scratch(scratch_grid_level),
-                                 num_points);
-        shared_view_double s_local(
-            team_member.team_scratch(scratch_basis_level), max_neighbors);
-        shared_view_double v_local(
-            team_member.team_scratch(scratch_basis_level), max_neighbors);
-
-        shared_view_double t_local(
-            team_member.team_scratch(scratch_basis_level), max_neighbors);
-
-        // Fill weights
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange(team_member, num_points),
             [=](int &local_g) {
               const int global_g = max_points_per_box * box_idx + local_g;
-              weights(local_g) = Kokkos::sqrt(grid.weights(global_g));
-              quad_points(local_g) = grid.quad_points(global_g);
-
-              v_nuc(local_g) = 0;
-              double r_sum = 0.0;
+              double w_g = grid.weights(global_g);
+              Point quad_point_g = grid.quad_points(global_g);
+              double v_g = 0.0;
               for (int k = 0; k < grid.atom_centers.extent(0); ++k) {
-                double r = dist(grid.atom_centers(k), quad_points(local_g));
-                r_sum += grid.Z(k) / r;
+                double r = dist(grid.atom_centers(k), quad_point_g);
+                v_g -= grid.Z(k) / r;
               }
-              v_nuc(local_g) = Kokkos::sqrt(r_sum);
-            });
 
-        auto team_basis =
-            Kokkos::subview(basis_val, box_idx, Kokkos::ALL(), Kokkos::ALL());
-
-        auto team_gx =
-            Kokkos::subview(basis_gx, box_idx, Kokkos::ALL(), Kokkos::ALL());
-        auto team_gy =
-            Kokkos::subview(basis_gy, box_idx, Kokkos::ALL(), Kokkos::ALL());
-        auto team_gz =
-            Kokkos::subview(basis_gz, box_idx, Kokkos::ALL(), Kokkos::ALL());
-
-        team_member.team_barrier();
-        Kokkos::parallel_for(
-            Kokkos::TeamVectorMDRange(team_member, num_neighbors, num_points),
-            [=](int &local_i, int &local_g) {
-              team_basis(local_i, local_g) *= weights(local_g);
-              team_gx(local_i, local_g) *= weights(local_g);
-              team_gy(local_i, local_g) *= weights(local_g);
-              team_gz(local_i, local_g) *= weights(local_g);
-            });
-
-        for (int local_j = 0; local_j < num_neighbors; ++local_j) {
-
-          int global_j = nl.neighbors(nl.offsets(box_idx) + local_j);
-
-          auto local_subview_basis =
-              Kokkos::subview(basis_val, box_idx, local_j, Kokkos::ALL());
-
-          auto local_subview_gx =
-              Kokkos::subview(basis_gx, box_idx, local_j, Kokkos::ALL());
-          auto local_subview_gy =
-              Kokkos::subview(basis_gy, box_idx, local_j, Kokkos::ALL());
-
-          auto local_subview_gz =
-              Kokkos::subview(basis_gz, box_idx, local_j, Kokkos::ALL());
-
-          team_member.team_barrier();
-          KokkosBlas::TeamGemv<
-              member_type, KokkosBlas::Trans::NoTranspose,
-              KokkosBlas::Algo::Gemv::Unblocked>::invoke(team_member, 1.0,
-                                                         team_basis,
-                                                         local_subview_basis,
-                                                         0.0, s_local);
-
-          KokkosBlas::TeamGemv<
-              member_type, KokkosBlas::Trans::NoTranspose,
-              KokkosBlas::Algo::Gemv::Unblocked>::invoke(team_member, 0.5,
-                                                         team_gx,
-                                                         local_subview_gx, 0.0,
-                                                         t_local);
-          KokkosBlas::TeamGemv<
-              member_type, KokkosBlas::Trans::NoTranspose,
-              KokkosBlas::Algo::Gemv::Unblocked>::invoke(team_member, 0.5,
-                                                         team_gy,
-                                                         local_subview_gy, 1.0,
-                                                         t_local);
-
-          KokkosBlas::TeamGemv<
-              member_type, KokkosBlas::Trans::NoTranspose,
-              KokkosBlas::Algo::Gemv::Blocked>::invoke(team_member, 0.5,
-                                                       team_gz,
-                                                       local_subview_gz, 1.0,
-                                                       t_local);
-
-          team_member.team_barrier();
-          Kokkos::single(Kokkos::PerThread(team_member), [=]() {
-            for (int local_i = 0; local_i < num_neighbors; ++local_i) {
-              int global_i = nl.neighbors(nl.offsets(box_idx) + local_i);
-
-              Kokkos::atomic_fetch_add(&result.overlap(global_i, global_j),
-                                       s_local(local_i));
-              Kokkos::atomic_fetch_add(&result.kinetic(global_i, global_j),
-                                       t_local(local_i));
-            }
-          });
-        }
-
-        team_member.team_barrier();
-        Kokkos::parallel_for(
-            Kokkos::TeamVectorMDRange(team_member, num_neighbors, num_points),
-            [=](int &local_i, int &local_g) {
-              team_basis(local_i, local_g) *= v_nuc(local_g);
-            });
-
-        team_member.team_barrier();
-
-        for (int local_j = 0; local_j < num_neighbors; ++local_j) {
-
-          int global_j = nl.neighbors(nl.offsets(box_idx) + local_j);
-          auto local_subview_basis =
-              Kokkos::subview(basis_val, box_idx, local_j, Kokkos::ALL());
-
-          team_member.team_barrier();
-          KokkosBlas::TeamGemv<
-              member_type, KokkosBlas::Trans::NoTranspose,
-              KokkosBlas::Algo::Gemv::Blocked>::invoke(team_member, -1.0,
-                                                       team_basis,
-                                                       local_subview_basis, 0.0,
-                                                       v_local);
-
-          team_member.team_barrier();
-          Kokkos::parallel_for(
-              Kokkos::TeamThreadRange(team_member, num_neighbors),
-              [=](int local_i) {
+              for (int local_i = 0; local_i < num_neighbors; ++local_i) {
                 int global_i = nl.neighbors(nl.offsets(box_idx) + local_i);
-                Kokkos::atomic_fetch_add(&result.nuclear(global_i, global_j),
-                                         v_local(local_i));
-              });
-        }
+                ScratchBasisParams local_basis_i{
+                    basis.zeta(global_i), basis.norm(global_i),
+                    basis.O(global_i),    basis.n(global_i),
+                    basis.l(global_i),    basis.m(global_i)};
+
+                double basis_val_i;
+                double basis_gx_i;
+                double basis_gy_i;
+                double basis_gz_i;
+
+                basis_eval_with_grad(local_basis_i, quad_point_g, basis_val_i,
+                                     basis_gx_i, basis_gy_i, basis_gz_i);
+
+                for (int local_j = 0; local_j < num_neighbors; ++local_j) {
+
+                  int global_j = nl.neighbors(nl.offsets(box_idx) + local_j);
+
+                  ScratchBasisParams local_basis_j{
+                      basis.zeta(global_j), basis.norm(global_j),
+                      basis.O(global_j),    basis.n(global_j),
+                      basis.l(global_j),    basis.m(global_j)};
+
+                  double basis_val_j;
+                  double basis_gx_j;
+                  double basis_gy_j;
+                  double basis_gz_j;
+
+                  basis_eval_with_grad(local_basis_j, quad_point_g, basis_val_j,
+                                       basis_gx_j, basis_gy_j, basis_gz_j);
+
+                  double s_local;
+                  double t_local;
+                  double v_local;
+
+                  s_local = w_g * basis_val_i * basis_val_j;
+                  t_local = 0.5 * w_g *
+                            (basis_gx_i * basis_gx_j + basis_gy_i * basis_gy_j +
+                             basis_gz_i * basis_gz_j);
+                  v_local = v_g * s_local;
+
+                  Kokkos::atomic_fetch_add(&result.overlap(global_i, global_j),
+                                           s_local);
+                  Kokkos::atomic_fetch_add(&result.kinetic(global_i, global_j),
+                                           t_local);
+                  Kokkos::atomic_fetch_add(&result.nuclear(global_i, global_j),
+                                           v_local);
+                }
+              }
+            });
       });
 
   ExecSpace().fence();
