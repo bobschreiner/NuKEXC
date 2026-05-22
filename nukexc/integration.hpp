@@ -874,20 +874,23 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                     basis.O(global_i),    basis.n(global_i),
                     basis.l(global_i),    basis.m(global_i)};
 
-                for (int local_g = 0; local_g < num_points; ++local_g) {
+                Kokkos::parallel_for(
+                    Kokkos::TeamVectorRange(team_member, num_points),
+                    [=](const int local_g) {
+                      basis_eval_with_grad(local_basis_i,
+                                           points_scratch(local_g),
+                                           tile_val_i(local_i, local_g),
+                                           tile_gx_i(local_i, local_g),
+                                           tile_gy_i(local_i, local_g),
+                                           tile_gz_i(local_i, local_g));
 
-                  basis_eval_with_grad(
-                      local_basis_i, points_scratch(local_g),
-                      tile_val_i(local_i, local_g), tile_gx_i(local_i, local_g),
-                      tile_gy_i(local_i, local_g), tile_gz_i(local_i, local_g));
+                      const double w = weights_scratch(local_g);
 
-                  const double w = weights_scratch(local_g);
-
-                  tile_val_i(local_i, local_g) *= w;
-                  tile_gx_i(local_i, local_g) *= w;
-                  tile_gy_i(local_i, local_g) *= w;
-                  tile_gz_i(local_i, local_g) *= w;
-                }
+                      tile_val_i(local_i, local_g) *= w;
+                      tile_gx_i(local_i, local_g) *= w;
+                      tile_gy_i(local_i, local_g) *= w;
+                      tile_gz_i(local_i, local_g) *= w;
+                    });
               });
 
           for (int tile_j = 0; tile_j < num_tiles; ++tile_j) {
@@ -908,14 +911,16 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                       basis.O(global_j),    basis.n(global_j),
                       basis.l(global_j),    basis.m(global_j)};
 
-                  for (int local_g = 0; local_g < num_points; ++local_g) {
-
-                    basis_eval_with_grad(local_basis_j, points_scratch(local_g),
-                                         tile_val_j(local_j, local_g),
-                                         tile_gx_j(local_j, local_g),
-                                         tile_gy_j(local_j, local_g),
-                                         tile_gz_j(local_j, local_g));
-                  }
+                  Kokkos::parallel_for(
+                      Kokkos::TeamVectorRange(team_member, num_points),
+                      [=](const int local_g) {
+                        basis_eval_with_grad(local_basis_j,
+                                             points_scratch(local_g),
+                                             tile_val_j(local_j, local_g),
+                                             tile_gx_j(local_j, local_g),
+                                             tile_gy_j(local_j, local_g),
+                                             tile_gz_j(local_j, local_g));
+                      });
                 });
             team_member.team_barrier();
 
