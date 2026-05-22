@@ -669,33 +669,37 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
               double total_t = 0.0;
               double total_v = 0.0;
 
-              for (int local_g = 0; local_g < num_points; ++local_g) {
+              Kokkos::parallel_reduce(
+                  Kokkos::ThreadVectorRange(team_member, num_points),
+                  [=](const int local_g, double &update_s, double &update_t,
+                      double &update_v) {
+                    double basis_val_i;
+                    double basis_gx_i;
+                    double basis_gy_i;
+                    double basis_gz_i;
 
-                double basis_val_i;
-                double basis_gx_i;
-                double basis_gy_i;
-                double basis_gz_i;
+                    double basis_val_j;
+                    double basis_gx_j;
+                    double basis_gy_j;
+                    double basis_gz_j;
 
-                double basis_val_j;
-                double basis_gx_j;
-                double basis_gy_j;
-                double basis_gz_j;
+                    basis_eval_with_grad(local_basis_j, points_scratch(local_g),
+                                         basis_val_j, basis_gx_j, basis_gy_j,
+                                         basis_gz_j);
+                    basis_eval_with_grad(local_basis_i, points_scratch(local_g),
+                                         basis_val_i, basis_gx_i, basis_gy_i,
+                                         basis_gz_i);
 
-                basis_eval_with_grad(local_basis_j, points_scratch(local_g),
-                                     basis_val_j, basis_gx_j, basis_gy_j,
-                                     basis_gz_j);
-                basis_eval_with_grad(local_basis_i, points_scratch(local_g),
-                                     basis_val_i, basis_gx_i, basis_gy_i,
-                                     basis_gz_i);
-
-                const double local_s =
-                    weights_scratch(local_g) * basis_val_i * basis_val_j;
-                total_s += local_s;
-                total_t += 0.5 * weights_scratch(local_g) *
-                           (basis_gx_i * basis_gx_j + basis_gy_i * basis_gy_j +
-                            basis_gz_i * basis_gz_j);
-                total_v += v_scratch(local_g) * local_s;
-              }
+                    const double local_s =
+                        weights_scratch(local_g) * basis_val_i * basis_val_j;
+                    update_s += local_s;
+                    update_t +=
+                        0.5 * weights_scratch(local_g) *
+                        (basis_gx_i * basis_gx_j + basis_gy_i * basis_gy_j +
+                         basis_gz_i * basis_gz_j);
+                    update_v += v_scratch(local_g) * local_s;
+                  },
+                  total_s, total_t, total_v);
 
               Kokkos::atomic_fetch_add(&result.overlap(global_i, global_j),
                                        total_s);
@@ -875,7 +879,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                     basis.l(global_i),    basis.m(global_i)};
 
                 Kokkos::parallel_for(
-                    Kokkos::TeamVectorRange(team_member, num_points),
+                    Kokkos::ThreadVectorRange(team_member, num_points),
                     [=](const int local_g) {
                       basis_eval_with_grad(local_basis_i,
                                            points_scratch(local_g),
@@ -912,7 +916,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                       basis.l(global_j),    basis.m(global_j)};
 
                   Kokkos::parallel_for(
-                      Kokkos::TeamVectorRange(team_member, num_points),
+                      Kokkos::ThreadVectorRange(team_member, num_points),
                       [=](const int local_g) {
                         basis_eval_with_grad(local_basis_j,
                                              points_scratch(local_g),
@@ -969,10 +973,11 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                   const int global_j = nl.neighbors(
                       start_neighbors + tile_j * MAX_NEIGHBORS_TILE + local_j);
 
-                  for (int local_g = 0; local_g < num_points; ++local_g) {
-
-                    tile_val_j(local_j, local_g) *= v_scratch(local_g);
-                  }
+                  Kokkos::parallel_for(
+                      Kokkos::TeamVectorRange(team_member, num_points),
+                      [=](const int local_g) {
+                        tile_val_j(local_j, local_g) *= v_scratch(local_g);
+                      });
                 });
 
             team_member.team_barrier();
