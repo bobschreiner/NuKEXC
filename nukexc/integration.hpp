@@ -935,7 +935,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
             KokkosBatched::TeamGemm<
                 member_type, KokkosBatched::Trans::NoTranspose,
                 KokkosBatched::Trans::Transpose,
-                KokkosBatched::Algo::Gemm::Blocked>::invoke(team_member, 1.0,
+                KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 1.0,
                                                             tile_val_i,
                                                             tile_val_j, 0.0,
                                                             tile_overlap);
@@ -950,24 +950,29 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
             KokkosBatched::TeamGemm<
                 member_type, KokkosBatched::Trans::NoTranspose,
                 KokkosBatched::Trans::Transpose,
-                KokkosBatched::Algo::Gemm::Blocked>::invoke(team_member, 0.5,
+                KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 0.5,
                                                             tile_gx_i,
                                                             tile_gx_j, 1.0,
                                                             tile_kinetic);
+
+            team_member.team_barrier();
             KokkosBatched::TeamGemm<
                 member_type, KokkosBatched::Trans::NoTranspose,
                 KokkosBatched::Trans::Transpose,
-                KokkosBatched::Algo::Gemm::Blocked>::invoke(team_member, 0.5,
+                KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 0.5,
                                                             tile_gy_i,
                                                             tile_gy_j, 1.0,
                                                             tile_kinetic);
+
+            team_member.team_barrier();
             KokkosBatched::TeamGemm<
                 member_type, KokkosBatched::Trans::NoTranspose,
                 KokkosBatched::Trans::Transpose,
-                KokkosBatched::Algo::Gemm::Blocked>::invoke(team_member, 0.5,
+                KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 0.5,
                                                             tile_gz_i,
                                                             tile_gz_j, 1.0,
                                                             tile_kinetic);
+
 
             team_member.team_barrier();
             // Fill tiles with basis_functions
@@ -988,7 +993,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
             KokkosBatched::TeamGemm<
                 member_type, KokkosBatched::Trans::NoTranspose,
                 KokkosBatched::Trans::Transpose,
-                KokkosBatched::Algo::Gemm::Blocked>::invoke(team_member, 1.0,
+                KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 1.0,
                                                             tile_val_i,
                                                             tile_val_j, 0.0,
                                                             tile_nuclear);

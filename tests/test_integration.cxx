@@ -233,6 +233,16 @@ TEST_CASE("Compute core Hamiltonian with screening (basis tiled)",
                                                    Hcore_ref.overlap);
   auto S_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
                                                    Hcore_scr.overlap);
+  auto T_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.kinetic);
+  auto T_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.kinetic);
+
+  auto V_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.nuclear);
+  auto V_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.nuclear);
+
   auto H_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
                                                    Hcore_ref.hamiltonian);
   auto H_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
@@ -244,6 +254,8 @@ TEST_CASE("Compute core Hamiltonian with screening (basis tiled)",
     REQUIRE_THAT(S_scr(i, i), Catch::Matchers::WithinRel(1.0, 1e-5));
     for (int j = 0; j < N; ++j) {
       REQUIRE_THAT(S_scr(i, j), Catch::Matchers::WithinAbs(S_ref(i, j), tol));
+      REQUIRE_THAT(T_scr(i, j), Catch::Matchers::WithinAbs(T_ref(i, j), tol));
+      REQUIRE_THAT(V_scr(i, j), Catch::Matchers::WithinAbs(V_ref(i, j), tol));
       REQUIRE_THAT(H_scr(i, j), Catch::Matchers::WithinAbs(H_ref(i, j), tol));
     }
   }
