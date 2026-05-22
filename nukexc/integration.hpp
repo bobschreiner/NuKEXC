@@ -627,6 +627,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
         shared_view_double weights_scratch(team_member.team_scratch(0),
                                            num_points);
         shared_view_double v_scratch(team_member.team_scratch(0), num_points);
+
         shared_view_points points_scratch(team_member.team_scratch(0),
                                           num_points);
 
@@ -645,6 +646,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
               }
             });
 
+        team_member.team_barrier();
         Kokkos::parallel_for(
             Kokkos::TeamThreadMDRange(team_member, num_neighbors,
                                       num_neighbors),
@@ -700,6 +702,8 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
                     update_v += v_scratch(local_g) * local_s;
                   },
                   total_s, total_t, total_v);
+
+              team_member.team_barrier();
 
               Kokkos::atomic_fetch_add(&result.overlap(global_i, global_j),
                                        total_s);
