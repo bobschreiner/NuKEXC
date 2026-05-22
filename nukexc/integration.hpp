@@ -936,9 +936,9 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                 member_type, KokkosBatched::Trans::NoTranspose,
                 KokkosBatched::Trans::Transpose,
                 KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 1.0,
-                                                            tile_val_i,
-                                                            tile_val_j, 0.0,
-                                                            tile_overlap);
+                                                              tile_val_i,
+                                                              tile_val_j, 0.0,
+                                                              tile_overlap);
             // Zero out scratch memory
             Kokkos::parallel_for(
                 Kokkos::TeamVectorMDRange(team_member, MAX_NEIGHBORS_TILE,
@@ -951,28 +951,27 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                 member_type, KokkosBatched::Trans::NoTranspose,
                 KokkosBatched::Trans::Transpose,
                 KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 0.5,
-                                                            tile_gx_i,
-                                                            tile_gx_j, 1.0,
-                                                            tile_kinetic);
+                                                              tile_gx_i,
+                                                              tile_gx_j, 1.0,
+                                                              tile_kinetic);
 
             team_member.team_barrier();
             KokkosBatched::TeamGemm<
                 member_type, KokkosBatched::Trans::NoTranspose,
                 KokkosBatched::Trans::Transpose,
                 KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 0.5,
-                                                            tile_gy_i,
-                                                            tile_gy_j, 1.0,
-                                                            tile_kinetic);
+                                                              tile_gy_i,
+                                                              tile_gy_j, 1.0,
+                                                              tile_kinetic);
 
             team_member.team_barrier();
             KokkosBatched::TeamGemm<
                 member_type, KokkosBatched::Trans::NoTranspose,
                 KokkosBatched::Trans::Transpose,
                 KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 0.5,
-                                                            tile_gz_i,
-                                                            tile_gz_j, 1.0,
-                                                            tile_kinetic);
-
+                                                              tile_gz_i,
+                                                              tile_gz_j, 1.0,
+                                                              tile_kinetic);
 
             team_member.team_barrier();
             // Fill tiles with basis_functions
@@ -983,7 +982,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                       start_neighbors + tile_j * MAX_NEIGHBORS_TILE + local_j);
 
                   Kokkos::parallel_for(
-                      Kokkos::TeamVectorRange(team_member, num_points),
+                      Kokkos::ThreadVectorRange(team_member, num_points),
                       [=](const int local_g) {
                         tile_val_j(local_j, local_g) *= v_scratch(local_g);
                       });
@@ -994,9 +993,9 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                 member_type, KokkosBatched::Trans::NoTranspose,
                 KokkosBatched::Trans::Transpose,
                 KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 1.0,
-                                                            tile_val_i,
-                                                            tile_val_j, 0.0,
-                                                            tile_nuclear);
+                                                              tile_val_i,
+                                                              tile_val_j, 0.0,
+                                                              tile_nuclear);
 
             team_member.team_barrier();
             Kokkos::parallel_for(
