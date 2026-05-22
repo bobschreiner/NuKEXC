@@ -45,7 +45,7 @@ struct Config {
   int nrad = 50;
   int nang = 20;
   double screening_tol = 1e-6;
-  int max_points_per_box = 64;
+  int max_points_per_box = 32;
 };
 
 Config parse_args(int argc, char *argv[]) {
@@ -316,6 +316,45 @@ void run_benchmark_scratch(const Config &cfg) {
   print_results(results, true);
 }
 
+void run_benchmark_tiled(const Config &cfg) {
+  using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
+  using ll_type = IntegratorXX::LebedevLaikov<double>;
+
+  std::cout << "\n── Screened Core Hamiltonian ──\n";
+
+  std::vector<BenchmarkResult> results;
+  for (auto &[name, mol] : make_molecules()) {
+    STOBasisSet basis = load_adf_basis(mol, cfg.basis_dir, cfg.screening_tol);
+
+    Kokkos::Timer total_timer, grid_timer, nl_timer, hamiltonian_timer;
+    total_timer.reset();
+
+    grid_timer.reset();
+    FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, cfg.nrad, cfg.nang);
+    double t_grid = grid_timer.seconds();
+
+    nl_timer.reset();
+    auto bb = create_bounding_boxes(grid, cfg.max_points_per_box);
+    NeighborList nl;
+    build_neighbor_list(basis, bb, cfg.max_points_per_box,
+                        grid.quad_points.extent(0), nl);
+    double t_neighbors = nl_timer.seconds();
+
+    hamiltonian_timer.reset();
+    auto hcore = compute_core_hamiltonian_screened_tiled(basis, grid, nl);
+
+    double t_hamiltonian = hamiltonian_timer.seconds();
+
+    const int N = hcore.overlap.extent(0);
+    DeviceView2DLeft mo_coeff("mo_coeff", N, N);
+    DeviceView1D mo_energies("mo_energies", N);
+
+    results.push_back({name, N, (int)grid.quad_points.extent(0), t_grid,
+                       t_neighbors, t_hamiltonian, total_timer.seconds()});
+  }
+  print_results(results, true);
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────
 
 int main(int argc, char *argv[]) {
@@ -335,6 +374,8 @@ int main(int argc, char *argv[]) {
       run_benchmark_screened(cfg);
     else if (cfg.algorithm == "scratch")
       run_benchmark_scratch(cfg);
+    else if (cfg.algorithm == "tiled")
+      run_benchmark_tiled(cfg);
     else if (cfg.algorithm == "dense")
       run_benchmark_fused(cfg);
     std::cout << "\n";
