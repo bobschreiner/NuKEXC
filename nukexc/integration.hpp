@@ -326,21 +326,16 @@ CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
     auto batch_wts = Kokkos::subview(
         quadrature_weights, std::make_pair(start, start + current_batch_size));
 
-    auto col_view = Kokkos::subview(col_cur, Kokkos::ALL,
-                                    std::make_pair(0, current_batch_size));
-    auto wt_ov_view = Kokkos::subview(wt_ov_cur, Kokkos::ALL,
-                                      std::make_pair(0, current_batch_size));
-    auto wt_nuc_view = Kokkos::subview(wt_nuc_cur, Kokkos::ALL,
-                                       std::make_pair(0, current_batch_size));
+    auto overlap_view = Kokkos::subview(wt_ov_cur, Kokkos::ALL,
+                                        std::make_pair(0, current_batch_size));
+    auto nuclear_view = Kokkos::subview(wt_nuc_cur, Kokkos::ALL,
+                                        std::make_pair(0, current_batch_size));
     auto Gx_view = Kokkos::subview(Gx_cur, Kokkos::ALL,
                                    std::make_pair(0, current_batch_size));
     auto Gy_view = Kokkos::subview(Gy_cur, Kokkos::ALL,
                                    std::make_pair(0, current_batch_size));
     auto Gz_view = Kokkos::subview(Gz_cur, Kokkos::ALL,
                                    std::make_pair(0, current_batch_size));
-
-    // Zero nuclear weight buffer before accumulating
-    Kokkos::deep_copy(space_cur, wt_nuc_view, 0.0);
 
     Kokkos::TeamPolicy<ExecSpace> policy(space_cur, current_batch_size,
                                          Kokkos::AUTO());
@@ -358,28 +353,30 @@ CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
                 ScratchBasisParams basis_i{basis.zeta(i), basis.norm(i),
                                            basis.O(i),    basis.n(i),
                                            basis.l(i),    basis.m(i)};
-                basis_eval_with_grad(basis_i, local_pt, col_view(i, g),
+                basis_eval_with_grad(basis_i, local_pt, overlap_view(i, g),
                                      Gx_view(i, g), Gy_view(i, g),
                                      Gz_view(i, g));
               });
-          double v_nuc = 0.0;
-          for (unsigned k = 0; k < atom_centers.extent(0); ++k) {
-            double r = dist(local_pt, atom_centers(k)) + epsilon_shift;
-            v_nuc -= double(Z(k)) / r;
-          }
-          team_member.team_barrier();
 
-          const double w_g = batch_wts(g);
-          const double wf = Kokkos::sqrt(w_g);
+          double v_nuc = 0.0;
+          Kokkos::parallel_reduce(
+              Kokkos::TeamThreadRange(team_member, atom_centers.extent(0)),
+              [=](const int k, double &local_v) {
+                double r = dist(local_pt, atom_centers(k)) + epsilon_shift;
+                local_v += double(Z(k)) / r;
+              },
+              v_nuc);
+          v_nuc = Kokkos::sqrt(v_nuc);
+
+          const double wf = Kokkos::sqrt(batch_wts(g));
           Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, N),
                                [=](const int i) {
-                                 double w_phi_ig = w_g * col_view(i, g);
-
+                                 double ov_wf = overlap_view(i, g) * wf;
                                  // Overlap weight
-                                 wt_ov_view(i, g) = w_phi_ig;
+                                 overlap_view(i, g) = ov_wf;
 
                                  // Nuclear weight — accumulate over atoms
-                                 wt_nuc_view(i, g) = v_nuc * w_phi_ig;
+                                 nuclear_view(i, g) = ov_wf * v_nuc;
 
                                  // Gradient weights
                                  Gx_view(i, g) *= wf;
@@ -392,11 +389,11 @@ CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
     space_prev.fence();
 
     // Overlap: S += wt_ov * col^T
-    KokkosBlas::gemm(space_cur, "N", "T", 1.0, wt_ov_view, col_view, 1.0,
+    KokkosBlas::gemm(space_cur, "N", "T", 1.0, overlap_view, overlap_view, 1.0,
                      result.overlap);
 
     // Nuclear: V += wt_nuc * col^T
-    KokkosBlas::gemm(space_cur, "N", "T", 1.0, wt_nuc_view, col_view, 1.0,
+    KokkosBlas::gemm(space_cur, "N", "T", -1.0, nuclear_view, nuclear_view, 1.0,
                      result.nuclear);
 
     // Kinetic: T += 0.5 * G{xyz} * G{xyz}^T
