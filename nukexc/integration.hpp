@@ -1135,7 +1135,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_sparse(
                   basis.O(global_i),    basis.n(global_i),
                   basis.l(global_i),    basis.m(global_i)};
 
-              Kokkos::parallel_for(ThreadVectorRange(team_member, num_points),
+              Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_points),
                                    [=](const int local_g) {
                                      basis_eval_with_grad(
                                          local_basis_i, points_scratch(local_g),
