@@ -526,7 +526,7 @@ struct ScratchBasisParams {
 };
 
 KOKKOS_INLINE_FUNCTION
-double int_pow(const double &r, const int &k) {
+double int_pow(const double r, const int k) {
 
   double result = 0.;
   switch (k) {
