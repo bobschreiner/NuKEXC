@@ -188,7 +188,7 @@ TEST_CASE("H2+ S_AB radial convergence", "[convergence][radial]") {
 
   for (size_t nrad : nrad_sweep) {
 
-    auto grid = make_flat_grid<bk_type, ll_type>(mol, nrad, nang_order_fixed);
+    auto grid = make_flat_grid<ta_type, ll_type>(mol, nrad, nang_order_fixed);
 
     // npts_actual = natoms * nrad * nang
     const size_t npts = grid.quad_points.extent(0);
@@ -241,7 +241,7 @@ TEST_CASE("H2+ S_AB angular convergence", "[convergence][angular]") {
   data.reserve(nang_order_sweep.size());
 
   for (size_t order : nang_order_sweep) {
-    auto grid = make_flat_grid<bk_type, ll_type>(mol, nrad_fixed, order);
+    auto grid = make_flat_grid<ta_type, ll_type>(mol, nrad_fixed, order);
 
     const size_t npts = grid.quad_points.extent(0);
 
@@ -290,7 +290,7 @@ TEST_CASE("H2+ diagonal normalization convergence", "[convergence][diagonal]") {
   std::vector<DiagPoint> data;
 
   for (size_t nrad : nrad_sweep) {
-    auto grid = make_flat_grid<bk_type, ll_type>(mol, nrad, nang_order_fixed);
+    auto grid = make_flat_grid<ta_type, ll_type>(mol, nrad, nang_order_fixed);
     auto S = overlap_integral(basis, grid.quad_points, grid.weights);
     auto S_h = Kokkos::create_mirror_view(S);
     Kokkos::deep_copy(S_h, S);

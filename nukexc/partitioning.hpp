@@ -178,60 +178,66 @@ void partition_becke_team(const Kokkos::View<Point *> &atom_centers,
         }
       });
 
-  size_t bytes_per_thread =
-      Kokkos::View<double *, ExecSpace::scratch_memory_space>::shmem_size(
-          natoms);
+  using scratch_view_double =
+      Kokkos::View<double *, ExecSpace::scratch_memory_space>;
+
+  const size_t bytes_per_team = 2 * scratch_view_double::shmem_size(natoms);
 
   // Use L1 cache for large molecules, L0 cache of small molecules
-  int cache_level = natoms > 100 ? 1 : 0;
+  const int cache_level = 0;
 
   // Set the policy to use that amount "PerThread"
   auto policy =
-      TeamPolicy(natoms, Kokkos::AUTO)
-          .set_scratch_size(cache_level, Kokkos::PerThread(bytes_per_thread));
+      TeamPolicy(natoms * nquad_points_per_atom, Kokkos::AUTO)
+          .set_scratch_size(cache_level, Kokkos::PerTeam(bytes_per_team));
 
   Kokkos::parallel_for(
       "Becke Team Parallel", policy,
       KOKKOS_LAMBDA(const MemberType &team_member) {
-        size_t p = team_member.league_rank(); // Each team handles one atom p
+        int pg = team_member.league_rank();
+        int p = pg / nquad_points_per_atom;
+        int g = pg % nquad_points_per_atom;
 
-        // Scratch memory for distance caching per thread
-        Kokkos::View<double *, ExecSpace::scratch_memory_space,
-                     Kokkos::MemoryUnmanaged>
-            r_cache(team_member.thread_scratch(cache_level), natoms);
+        // PerTeam shared scratch — one r_cache and w_cache per quadrature point
+        scratch_view_double r_cache(team_member.team_scratch(cache_level),
+                                    natoms);
 
-        // Parallelize over the quadrature points 'g' within the team
+        scratch_view_double w_cache(team_member.team_scratch(cache_level),
+                                    natoms);
+
+        Point pt = quadrature_points(p, g);
+
+        // Phase 1: parallel distance cache over atoms
+        Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, natoms),
+                             [=](const int i) {
+                               r_cache(i) = NuKEXC::dist(pt, atom_centers(i));
+                             });
+        team_member.team_barrier();
+
+        // Phase 2: parallel w_i computation
         Kokkos::parallel_for(
-            Kokkos::TeamThreadRange(team_member, nquad_points_per_atom),
-            [&](const size_t g) {
-              // Cache distances for quadrature point g to all atoms i
-              for (size_t i = 0; i < natoms; ++i) {
-                r_cache(i) =
-                    NuKEXC::dist(quadrature_points(p, g), atom_centers(i));
+            Kokkos::TeamVectorRange(team_member, natoms), [=](const int i) {
+              double w_i = 1.0;
+              for (int k = 0; k < n_neighbors(i); ++k) {
+                int j = neighbor_list(i, k);
+                double mu =
+                    compute_mu_laqua(r_cache(i), r_cache(j), R_ij(i, j));
+                w_i *= compute_s(compute_p(compute_p(compute_p(mu))));
               }
-              double w_p;
-              double normalization = 0.0;
-              for (int i = 0; i < natoms; ++i) {
-                double w_i = 1.0;
-                // Only loop over neighborhood
-                for (int k = 0; k < max_n; ++k) {
-                  int j = neighbor_list(i, k);
-                  if (j < 0)
-                    continue;
-
-                  double mu =
-                      compute_mu_laqua(r_cache(i), r_cache(j), R_ij(i, j));
-                  double poly = compute_p(compute_p(compute_p(mu)));
-
-                  w_i *= compute_s(poly);
-                }
-                if (i == p)
-                  w_p = w_i;
-                normalization += w_i;
-              }
-
-              weights(p, g) *= (w_p / normalization);
+              w_cache(i) = w_i;
             });
+        team_member.team_barrier();
+
+        // Phase 3: parallel reduction for normalization
+        double normalization = 0.0;
+        Kokkos::parallel_reduce(
+            Kokkos::TeamVectorRange(team_member, natoms),
+            [=](const int i, double &lsum) { lsum += w_cache(i); },
+            normalization);
+
+        // Single thread applies final weight
+        Kokkos::single(Kokkos::PerTeam(team_member),
+                       [=]() { weights(p, g) *= w_cache(p) / normalization; });
       });
 }
 } // namespace NuKEXC

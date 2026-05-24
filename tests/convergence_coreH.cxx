@@ -254,7 +254,7 @@ TEST_CASE("H2+ Core Hamiltonian angular convergence",
   // Compute reference
   double ref_energy;
   {
-    auto grid = make_flat_grid<ta_type, ll_type>(mol, nrad_fixed, nang_max);
+    auto grid = make_flat_grid<bk_type, ll_type>(mol, nrad_fixed, nang_max);
     // npts_actual = natoms * nrad * nang
     const size_t npts = grid.quad_points.extent(0);
 
@@ -281,7 +281,7 @@ TEST_CASE("H2+ Core Hamiltonian angular convergence",
   data.reserve(nang_order_sweep.size());
 
   for (size_t nang_order : nang_order_sweep) {
-    auto grid = make_flat_grid<ta_type, ll_type>(mol, nrad_fixed, nang_order);
+    auto grid = make_flat_grid<bk_type, ll_type>(mol, nrad_fixed, nang_order);
 
     // npts_actual = natoms * nrad * nang
     const size_t npts = grid.quad_points.extent(0);
