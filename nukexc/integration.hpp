@@ -41,7 +41,7 @@
 namespace NuKEXC {
 // A helper to determine batch size based on available memory or a fixed
 // constant
-const size_t CHUNK_SIZE = 50000;
+const size_t CHUNK_SIZE = 500000;
 
 DeviceView2DLeft
 overlap_integral(STOBasisSet &basis, Kokkos::View<Point *> quadrature_points,
