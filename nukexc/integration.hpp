@@ -315,7 +315,6 @@ CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
     auto &col_cur = even ? col_a : col_b;
     auto &wt_ov_cur = even ? wt_overlap_a : wt_overlap_b;
     auto &wt_nuc_cur = even ? wt_nuclear_a : wt_nuclear_b;
-    auto &grad_cur = even ? grad_a : grad_b;
     auto &Gx_cur = even ? Gx_a : Gx_b;
     auto &Gy_cur = even ? Gy_a : Gy_b;
     auto &Gz_cur = even ? Gz_a : Gz_b;
@@ -333,9 +332,6 @@ CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
                                       std::make_pair(0, current_batch_size));
     auto wt_nuc_view = Kokkos::subview(wt_nuc_cur, Kokkos::ALL,
                                        std::make_pair(0, current_batch_size));
-    auto grad_view =
-        Kokkos::subview(grad_cur, Kokkos::ALL,
-                        std::make_pair(0, current_batch_size), Kokkos::ALL);
     auto Gx_view = Kokkos::subview(Gx_cur, Kokkos::ALL,
                                    std::make_pair(0, current_batch_size));
     auto Gy_view = Kokkos::subview(Gy_cur, Kokkos::ALL,
@@ -343,41 +339,53 @@ CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
     auto Gz_view = Kokkos::subview(Gz_cur, Kokkos::ALL,
                                    std::make_pair(0, current_batch_size));
 
-    // Single collocation evaluation — used by overlap AND nuclear
-    fill_collocation(space_cur, basis, batch_pts, col_view);
-
-    // Single grad collocation evaluation — used by kinetic only
-    fill_grad_collocation(space_cur, basis, batch_pts, grad_view);
-
     // Zero nuclear weight buffer before accumulating
     Kokkos::deep_copy(space_cur, wt_nuc_view, 0.0);
+
+    Kokkos::TeamPolicy<ExecSpace> policy(space_cur, current_batch_size,
+                                         Kokkos::AUTO());
+    using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
 
     // Single fused kernel: compute overlap weights, nuclear weights,
     // and gradient weights all in one pass over (i, g)
     Kokkos::parallel_for(
-        "Fused scale",
-        Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>(
-            space_cur, {0, 0}, {N, current_batch_size}),
-        KOKKOS_LAMBDA(int i, int g) {
-          double phi_ig = col_view(i, g);
-          double w_g = batch_wts(g);
+        "Fused scale", policy, KOKKOS_LAMBDA(member_type team_member) {
+          const int g = team_member.league_rank();
+          const Point local_pt = batch_pts(g);
 
-          // Overlap weight
-          wt_ov_view(i, g) = w_g * phi_ig;
-
-          // Nuclear weight — accumulate over atoms
+          Kokkos::parallel_for(
+              Kokkos::TeamVectorRange(team_member, N), [=](const int i) {
+                ScratchBasisParams basis_i{basis.zeta(i), basis.norm(i),
+                                           basis.O(i),    basis.n(i),
+                                           basis.l(i),    basis.m(i)};
+                basis_eval_with_grad(basis_i, local_pt, col_view(i, g),
+                                     Gx_view(i, g), Gy_view(i, g),
+                                     Gz_view(i, g));
+              });
           double v_nuc = 0.0;
           for (unsigned k = 0; k < atom_centers.extent(0); ++k) {
-            double r = dist(batch_pts(g), atom_centers(k)) + epsilon_shift;
+            double r = dist(local_pt, atom_centers(k)) + epsilon_shift;
             v_nuc -= double(Z(k)) / r;
           }
-          wt_nuc_view(i, g) = v_nuc * w_g * phi_ig;
+          team_member.team_barrier();
 
-          // Gradient weights
-          double wf = Kokkos::sqrt(w_g);
-          Gx_view(i, g) = grad_view(i, g, 0) * wf;
-          Gy_view(i, g) = grad_view(i, g, 1) * wf;
-          Gz_view(i, g) = grad_view(i, g, 2) * wf;
+          const double w_g = batch_wts(g);
+          const double wf = Kokkos::sqrt(w_g);
+          Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, N),
+                               [=](const int i) {
+                                 double w_phi_ig = w_g * col_view(i, g);
+
+                                 // Overlap weight
+                                 wt_ov_view(i, g) = w_phi_ig;
+
+                                 // Nuclear weight — accumulate over atoms
+                                 wt_nuc_view(i, g) = v_nuc * w_phi_ig;
+
+                                 // Gradient weights
+                                 Gx_view(i, g) *= wf;
+                                 Gy_view(i, g) *= wf;
+                                 Gz_view(i, g) *= wf;
+                               });
         });
 
     // Serialise GEMMs against previous iteration
@@ -694,6 +702,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
 
                     const double local_s =
                         weights_scratch(local_g) * basis_val_i * basis_val_j;
+
                     update_s += local_s;
                     update_t +=
                         0.5 * weights_scratch(local_g) *
