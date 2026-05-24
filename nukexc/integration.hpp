@@ -707,7 +707,6 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
                   },
                   total_s, total_t, total_v);
 
-              team_member.team_barrier();
 
               Kokkos::atomic_fetch_add(&result.overlap(global_i, global_j),
                                        total_s);
@@ -1052,13 +1051,13 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_sparse(
   result.hamiltonian = DeviceView2DLeft("Core Hamiltonian", N, N);
 
   const int num_neighbors = nl.neighbors.extent(0);
-  DeviceView2DLeft sparse_basis_val("Basis Values", num_neighbors,
+  DeviceView2DRight sparse_basis_val("Basis Values", num_neighbors,
                                     max_points_per_box);
-  DeviceView2DLeft sparse_basis_gx("Basis  Grad x", num_neighbors,
+  DeviceView2DRight sparse_basis_gx("Basis  Grad x", num_neighbors,
                                    max_points_per_box);
-  DeviceView2DLeft sparse_basis_gy("Basis  Grad y", num_neighbors,
+  DeviceView2DRight sparse_basis_gy("Basis  Grad y", num_neighbors,
                                    max_points_per_box);
-  DeviceView2DLeft sparse_basis_gz("Basis  Grad z", num_neighbors,
+  DeviceView2DRight sparse_basis_gz("Basis  Grad z", num_neighbors,
                                    max_points_per_box);
 
   // Define helpers for scratch space access
@@ -1135,15 +1134,15 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_sparse(
                   basis.O(global_i),    basis.n(global_i),
                   basis.l(global_i),    basis.m(global_i)};
 
-              Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_points),
-                                   [=](const int local_g) {
-                                     basis_eval_with_grad(
-                                         local_basis_i, points_scratch(local_g),
+              Kokkos::parallel_for(
+                  Kokkos::ThreadVectorRange(team_member, num_points),
+                  [=](const int local_g) {
+                    basis_eval_with_grad(local_basis_i, points_scratch(local_g),
                                          sparse_basis_val(sparse_i, local_g),
                                          sparse_basis_gx(sparse_i, local_g),
                                          sparse_basis_gy(sparse_i, local_g),
                                          sparse_basis_gz(sparse_i, local_g));
-                                   });
+                  });
             });
 
         team_member.team_barrier();
@@ -1182,8 +1181,6 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_sparse(
                     update_v += v_scratch(local_g) * local_s;
                   },
                   total_s, total_t, total_v);
-
-              team_member.team_barrier();
 
               Kokkos::atomic_fetch_add(&result.overlap(global_i, global_j),
                                        total_s);
