@@ -761,7 +761,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                        Kokkos::MemoryTraits<Kokkos::Unmanaged>>
       shared_view_double;
 
-  typedef Kokkos::View<double **, ScratchSpace,
+  typedef Kokkos::View<double **, Kokkos::LayoutRight, ScratchSpace,
                        Kokkos::MemoryTraits<Kokkos::Unmanaged>>
       shared_view2d_double;
 
@@ -769,7 +769,21 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                        Kokkos::MemoryTraits<Kokkos::Unmanaged>>
       shared_view_points;
 
-  Kokkos::TeamPolicy<ExecSpace> policy(num_boxes, Kokkos::AUTO());
+  // Bind LaunchBounds (Max 256 threads/block, Min 4 waves per CU)
+  // and explicitly set team_size to 128 or 256 to stop Workgroup Manager
+  // overloading.
+
+  using Bounds = Kokkos::LaunchBounds<256, 4>;
+  int fixed_team_size = 1;
+  int vector_length = 1;
+#if defined(KOKKOS_ENABLE_OPENMP)
+  fixed_team_size = 10;
+#endif
+#if defined(KOKKOS_ENABLE_HIP)
+  fixed_team_size = 128;
+#endif
+  Kokkos::TeamPolicy<ExecSpace, Bounds> policy(num_boxes, fixed_team_size,
+                                               vector_length);
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
 
   int scratch_size = shared_view_double::shmem_size(max_points_per_box) +
