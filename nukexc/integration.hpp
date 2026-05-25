@@ -776,9 +776,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                      shared_view_double::shmem_size(max_points_per_box) +
                      shared_view_points::shmem_size(max_points_per_box) +
                      8 * shared_view2d_double::shmem_size(MAX_NEIGHBORS_TILE,
-                                                          max_points_per_box) +
-                     3 * shared_view2d_double::shmem_size(MAX_NEIGHBORS_TILE,
-                                                          MAX_NEIGHBORS_TILE);
+                                                          max_points_per_box);
 
   policy.set_scratch_size(0, Kokkos::PerTeam(scratch_size));
 
@@ -839,18 +837,6 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
 
         shared_view2d_double tile_gz_j(team_member.team_scratch(0),
                                        MAX_NEIGHBORS_TILE, num_points);
-
-        shared_view2d_double tile_overlap(team_member.team_scratch(0),
-                                          MAX_NEIGHBORS_TILE,
-                                          MAX_NEIGHBORS_TILE);
-        shared_view2d_double tile_kinetic(team_member.team_scratch(0),
-                                          MAX_NEIGHBORS_TILE,
-                                          MAX_NEIGHBORS_TILE);
-
-        shared_view2d_double tile_nuclear(team_member.team_scratch(0),
-                                          MAX_NEIGHBORS_TILE,
-                                          MAX_NEIGHBORS_TILE);
-
         // Fill the scratch
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange(team_member, num_points),
@@ -893,18 +879,10 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                                            tile_gx_i(local_i, local_g),
                                            tile_gy_i(local_i, local_g),
                                            tile_gz_i(local_i, local_g));
-
-                      const double w = weights_scratch(local_g);
-
-                      tile_val_i(local_i, local_g) *= w;
-                      tile_gx_i(local_i, local_g) *= w;
-                      tile_gy_i(local_i, local_g) *= w;
-                      tile_gz_i(local_i, local_g) *= w;
                     });
               });
 
           for (int tile_j = 0; tile_j < num_tiles; ++tile_j) {
-
             int num_neighbors_tile_j =
                 Kokkos::min(MAX_NEIGHBORS_TILE,
                             num_neighbors - (tile_j * MAX_NEIGHBORS_TILE));
@@ -932,72 +910,6 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                                              tile_gz_j(local_j, local_g));
                       });
                 });
-            team_member.team_barrier();
-
-            KokkosBatched::TeamGemm<
-                member_type, KokkosBatched::Trans::NoTranspose,
-                KokkosBatched::Trans::Transpose,
-                KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 1.0,
-                                                              tile_val_i,
-                                                              tile_val_j, 0.0,
-                                                              tile_overlap);
-            // Zero out scratch memory
-            Kokkos::parallel_for(
-                Kokkos::TeamVectorMDRange(team_member, MAX_NEIGHBORS_TILE,
-                                          MAX_NEIGHBORS_TILE),
-                [=](const int i, const int j) { tile_kinetic(i, j) = 0.; });
-
-            team_member.team_barrier();
-
-            KokkosBatched::TeamGemm<
-                member_type, KokkosBatched::Trans::NoTranspose,
-                KokkosBatched::Trans::Transpose,
-                KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 0.5,
-                                                              tile_gx_i,
-                                                              tile_gx_j, 1.0,
-                                                              tile_kinetic);
-
-            team_member.team_barrier();
-            KokkosBatched::TeamGemm<
-                member_type, KokkosBatched::Trans::NoTranspose,
-                KokkosBatched::Trans::Transpose,
-                KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 0.5,
-                                                              tile_gy_i,
-                                                              tile_gy_j, 1.0,
-                                                              tile_kinetic);
-
-            team_member.team_barrier();
-            KokkosBatched::TeamGemm<
-                member_type, KokkosBatched::Trans::NoTranspose,
-                KokkosBatched::Trans::Transpose,
-                KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 0.5,
-                                                              tile_gz_i,
-                                                              tile_gz_j, 1.0,
-                                                              tile_kinetic);
-
-            team_member.team_barrier();
-            // Fill tiles with basis_functions
-            Kokkos::parallel_for(
-                Kokkos::TeamThreadRange(team_member, num_neighbors_tile_j),
-                [=](const int local_j) {
-                  const int global_j = nl.neighbors(
-                      start_neighbors + tile_j * MAX_NEIGHBORS_TILE + local_j);
-
-                  Kokkos::parallel_for(
-                      Kokkos::ThreadVectorRange(team_member, num_points),
-                      [=](const int local_g) {
-                        tile_val_j(local_j, local_g) *= v_scratch(local_g);
-                      });
-                });
-
-            team_member.team_barrier();
-            KokkosBatched::TeamGemm<
-                member_type, KokkosBatched::Trans::NoTranspose,
-                KokkosBatched::Trans::Transpose,
-                KokkosBatched::Algo::Gemm::Unblocked>::invoke(team_member, 1.0,
-                                                              tile_val_i,
-                                                              tile_val_j, 0.0,
-                                                              tile_nuclear);
 
             team_member.team_barrier();
             Kokkos::parallel_for(
@@ -1009,12 +921,47 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                   const int global_j = nl.neighbors(
                       start_neighbors + tile_j * MAX_NEIGHBORS_TILE + local_j);
 
+                  if (global_i < global_j)
+                    return;
+
+                  double total_s = 0.0;
+                  double total_t = 0.0;
+                  double total_v = 0.0;
+
+                  Kokkos::parallel_reduce(
+                      Kokkos::ThreadVectorRange(team_member, num_points),
+                      [=](const int local_g, double &update_s, double &update_t,
+                          double &update_v) {
+                        const double local_s = weights_scratch(local_g) *
+                                               tile_val_i(local_i, local_g) *
+                                               tile_val_j(local_j, local_g);
+
+                        update_s += local_s;
+                        update_t += 0.5 * weights_scratch(local_g) *
+                                    (tile_gx_i(local_i, local_g) *
+                                         tile_gx_j(local_j, local_g) +
+                                     tile_gy_i(local_i, local_g) *
+                                         tile_gy_j(local_j, local_g) +
+                                     tile_gz_i(local_i, local_g) *
+                                         tile_gz_j(local_j, local_g));
+                        update_v += v_scratch(local_g) * local_s;
+                      },
+                      total_s, total_t, total_v);
+
                   Kokkos::atomic_fetch_add(&result.overlap(global_i, global_j),
-                                           tile_overlap(local_i, local_j));
+                                           total_s);
                   Kokkos::atomic_fetch_add(&result.kinetic(global_i, global_j),
-                                           tile_kinetic(local_i, local_j));
+                                           total_t);
                   Kokkos::atomic_fetch_add(&result.nuclear(global_i, global_j),
-                                           tile_nuclear(local_i, local_j));
+                                           total_v);
+                  if (global_i != global_j) {
+                    Kokkos::atomic_fetch_add(
+                        &result.overlap(global_j, global_i), total_s);
+                    Kokkos::atomic_fetch_add(
+                        &result.kinetic(global_j, global_i), total_t);
+                    Kokkos::atomic_fetch_add(
+                        &result.nuclear(global_j, global_i), total_v);
+                  }
                 });
             team_member.team_barrier();
           }
@@ -1112,17 +1059,21 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_sparse(
 
         auto subview_sparse_basis_val = Kokkos::subview(
             sparse_basis_val,
-            Kokkos::make_pair(start_neighbors, start_neighbors), Kokkos::ALL());
+            Kokkos::make_pair(start_neighbors, start_neighbors + num_neighbors),
+            Kokkos::ALL());
 
         auto subview_sparse_basis_gx = Kokkos::subview(
             sparse_basis_gx,
-            Kokkos::make_pair(start_neighbors, start_neighbors), Kokkos::ALL());
+            Kokkos::make_pair(start_neighbors, start_neighbors + num_neighbors),
+            Kokkos::ALL());
         auto subview_sparse_basis_gy = Kokkos::subview(
             sparse_basis_gy,
-            Kokkos::make_pair(start_neighbors, start_neighbors), Kokkos::ALL());
+            Kokkos::make_pair(start_neighbors, start_neighbors + num_neighbors),
+            Kokkos::ALL());
         auto subview_sparse_basis_gz = Kokkos::subview(
             sparse_basis_gz,
-            Kokkos::make_pair(start_neighbors, start_neighbors), Kokkos::ALL());
+            Kokkos::make_pair(start_neighbors, start_neighbors + num_neighbors),
+            Kokkos::ALL());
 
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange(team_member, num_points),
