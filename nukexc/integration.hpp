@@ -707,7 +707,6 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
                   },
                   total_s, total_t, total_v);
 
-
               Kokkos::atomic_fetch_add(&result.overlap(global_i, global_j),
                                        total_s);
               Kokkos::atomic_fetch_add(&result.kinetic(global_i, global_j),
@@ -1051,14 +1050,18 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_sparse(
   result.hamiltonian = DeviceView2DLeft("Core Hamiltonian", N, N);
 
   const int num_neighbors = nl.neighbors.extent(0);
-  DeviceView2DRight sparse_basis_val("Basis Values", num_neighbors,
-                                    max_points_per_box);
-  DeviceView2DRight sparse_basis_gx("Basis  Grad x", num_neighbors,
-                                   max_points_per_box);
-  DeviceView2DRight sparse_basis_gy("Basis  Grad y", num_neighbors,
-                                   max_points_per_box);
-  DeviceView2DRight sparse_basis_gz("Basis  Grad z", num_neighbors,
-                                   max_points_per_box);
+
+  // We want Right layout on CPU and Left Layout on GPU, Kokkos should do this
+  // natively
+  Kokkos::View<double **, ExecSpace> sparse_basis_val(
+      "Basis Values", num_neighbors, max_points_per_box);
+
+  Kokkos::View<double **, ExecSpace> sparse_basis_gx(
+      "Basis  Grad x", num_neighbors, max_points_per_box);
+  Kokkos::View<double **, ExecSpace> sparse_basis_gy(
+      "Basis  Grad y", num_neighbors, max_points_per_box);
+  Kokkos::View<double **, ExecSpace> sparse_basis_gz(
+      "Basis  Grad z", num_neighbors, max_points_per_box);
 
   // Define helpers for scratch space access
   typedef ExecSpace::scratch_memory_space ScratchSpace;
@@ -1107,6 +1110,20 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_sparse(
         shared_view_points points_scratch(team_member.team_scratch(0),
                                           num_points);
 
+        auto subview_sparse_basis_val = Kokkos::subview(
+            sparse_basis_val,
+            Kokkos::make_pair(start_neighbors, start_neighbors), Kokkos::ALL());
+
+        auto subview_sparse_basis_gx = Kokkos::subview(
+            sparse_basis_gx,
+            Kokkos::make_pair(start_neighbors, start_neighbors), Kokkos::ALL());
+        auto subview_sparse_basis_gy = Kokkos::subview(
+            sparse_basis_gy,
+            Kokkos::make_pair(start_neighbors, start_neighbors), Kokkos::ALL());
+        auto subview_sparse_basis_gz = Kokkos::subview(
+            sparse_basis_gz,
+            Kokkos::make_pair(start_neighbors, start_neighbors), Kokkos::ALL());
+
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange(team_member, num_points),
             [=](const int local_g) {
@@ -1128,7 +1145,6 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_sparse(
             Kokkos::TeamThreadRange(team_member, num_neighbors),
             [=](const int local_i) {
               const int global_i = nl.neighbors(start_neighbors + local_i);
-              const int sparse_i = start_neighbors + local_i;
               ScratchBasisParams local_basis_i{
                   basis.zeta(global_i), basis.norm(global_i),
                   basis.O(global_i),    basis.n(global_i),
@@ -1137,11 +1153,12 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_sparse(
               Kokkos::parallel_for(
                   Kokkos::ThreadVectorRange(team_member, num_points),
                   [=](const int local_g) {
-                    basis_eval_with_grad(local_basis_i, points_scratch(local_g),
-                                         sparse_basis_val(sparse_i, local_g),
-                                         sparse_basis_gx(sparse_i, local_g),
-                                         sparse_basis_gy(sparse_i, local_g),
-                                         sparse_basis_gz(sparse_i, local_g));
+                    basis_eval_with_grad(
+                        local_basis_i, points_scratch(local_g),
+                        subview_sparse_basis_val(local_i, local_g),
+                        subview_sparse_basis_gx(local_i, local_g),
+                        subview_sparse_basis_gy(local_i, local_g),
+                        subview_sparse_basis_gz(local_i, local_g));
                   });
             });
 
@@ -1156,8 +1173,6 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_sparse(
               if (global_i < global_j)
                 return;
 
-              const int sparse_i = start_neighbors + local_i;
-              const int sparse_j = start_neighbors + local_j;
               double total_s = 0.0;
               double total_t = 0.0;
               double total_v = 0.0;
@@ -1166,18 +1181,19 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_sparse(
                   Kokkos::ThreadVectorRange(team_member, num_points),
                   [=](const int local_g, double &update_s, double &update_t,
                       double &update_v) {
-                    const double local_s = weights_scratch(local_g) *
-                                           sparse_basis_val(sparse_i, local_g) *
-                                           sparse_basis_val(sparse_j, local_g);
+                    const double local_s =
+                        weights_scratch(local_g) *
+                        subview_sparse_basis_val(local_i, local_g) *
+                        subview_sparse_basis_val(local_j, local_g);
 
                     update_s += local_s;
                     update_t += 0.5 * weights_scratch(local_g) *
-                                (sparse_basis_gx(sparse_i, local_g) *
-                                     sparse_basis_gx(sparse_j, local_g) +
-                                 sparse_basis_gy(sparse_i, local_g) *
-                                     sparse_basis_gy(sparse_j, local_g) +
-                                 sparse_basis_gz(sparse_i, local_g) *
-                                     sparse_basis_gz(sparse_j, local_g));
+                                (subview_sparse_basis_gx(local_i, local_g) *
+                                     subview_sparse_basis_gx(local_j, local_g) +
+                                 subview_sparse_basis_gy(local_i, local_g) *
+                                     subview_sparse_basis_gy(local_j, local_g) +
+                                 subview_sparse_basis_gz(local_i, local_g) *
+                                     subview_sparse_basis_gz(local_j, local_g));
                     update_v += v_scratch(local_g) * local_s;
                   },
                   total_s, total_t, total_v);
