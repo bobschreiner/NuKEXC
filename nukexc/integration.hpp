@@ -736,7 +736,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
   return result;
 }
 
-template <int MAX_NEIGHBORS_TILE = 8>
+template <int MAX_NEIGHBORS_TILE = 4>
 CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
     const STOBasisSet &basis, const FlatGrid &grid, const NeighborList &nl) {
 
