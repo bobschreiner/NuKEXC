@@ -736,7 +736,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
   return result;
 }
 
-template <int MAX_NEIGHBORS_TILE = 4>
+template <int MAX_NEIGHBORS_TILE = 16>
 CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
     const STOBasisSet &basis, const FlatGrid &grid, const NeighborList &nl) {
 
@@ -779,7 +779,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
   int vector_length = 1;
 #if defined(KOKKOS_ENABLE_HIP)
   fixed_team_size = MAX_NEIGHBORS_TILE;
-  vector_length = 64;
+  vector_length = 16;
 #endif
   Kokkos::TeamPolicy<ExecSpace, Bounds> policy(num_boxes, fixed_team_size,
                                                vector_length);
