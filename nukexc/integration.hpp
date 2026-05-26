@@ -774,17 +774,16 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
   // overloading.
 
   using Bounds = Kokkos::LaunchBounds<256, 4>;
+
   int fixed_team_size = 1;
   int vector_length = 1;
-#if defined(KOKKOS_ENABLE_OPENMP)
-  fixed_team_size = 10;
-#endif
 #if defined(KOKKOS_ENABLE_HIP)
-  fixed_team_size = 128;
+  fixed_team_size = MAX_NEIGHBORS_TILE;
+  vector_length = 64;
 #endif
   Kokkos::TeamPolicy<ExecSpace, Bounds> policy(num_boxes, fixed_team_size,
                                                vector_length);
-  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+  using member_type = Kokkos::TeamPolicy<ExecSpace, Bounds>::member_type;
 
   int scratch_size = shared_view_double::shmem_size(max_points_per_box) +
                      shared_view_double::shmem_size(max_points_per_box) +
@@ -794,24 +793,31 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
 
   policy.set_scratch_size(0, Kokkos::PerTeam(scratch_size));
 
-  std::cout << "------------Allocated Memory-------------" << std::endl;
+  std::cout << "------------Allocated "
+               "Memory-------------"
+            << std::endl;
   std::cout << "Available L0 scratch : " << policy.scratch_size_max(0)
             << std::endl;
   std::cout << "Allocated L0 scratch : " << scratch_size << std::endl;
-  std::cout << "-----------------------------------------" << std::endl;
+  std::cout << "------------------------"
+               "-----------------"
+            << std::endl;
 
   Kokkos::parallel_for(
-      "Compute Core Hamiltonian Screened", policy,
-      KOKKOS_LAMBDA(const member_type &team_member) {
+      "Compute Core Hamiltonian "
+      "Screened",
+      policy, KOKKOS_LAMBDA(const member_type &team_member) {
         const int box_idx = team_member.league_rank();
 
-        // Compute number of points per box
+        // Compute number of points
+        // per box
         const int start_points = box_idx * max_points_per_box;
         const int end_points =
             Kokkos::min(start_points + max_points_per_box, total_points);
         const int num_points = end_points - start_points;
 
-        // Compute number of neighbors per box
+        // Compute number of
+        // neighbors per box
         const int start_neighbors = nl.offsets(box_idx);
         const int end_neighbors = nl.offsets(box_idx + 1);
         const int num_neighbors = end_neighbors - start_neighbors;
@@ -872,7 +878,8 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
               Kokkos::min(MAX_NEIGHBORS_TILE,
                           num_neighbors - (tile_i * MAX_NEIGHBORS_TILE));
 
-          // Fill tiles with basis_functions
+          // Fill tiles with
+          // basis_functions
           Kokkos::parallel_for(
               Kokkos::TeamThreadRange(team_member, num_neighbors_tile_i),
               [=](const int local_i) {
@@ -896,12 +903,13 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                     });
               });
 
-          for (int tile_j = 0; tile_j < num_tiles; ++tile_j) {
+          for (int tile_j = 0; tile_j <= tile_i; ++tile_j) {
             int num_neighbors_tile_j =
                 Kokkos::min(MAX_NEIGHBORS_TILE,
                             num_neighbors - (tile_j * MAX_NEIGHBORS_TILE));
 
-            // Fill tiles with basis_functions
+            // Fill tiles with
+            // basis_functions
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange(team_member, num_neighbors_tile_j),
                 [=](const int local_j) {
@@ -984,7 +992,8 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
 
   ExecSpace().fence();
   Kokkos::parallel_for(
-      "Compute Core Hamiltonian Matrix",
+      "Compute Core Hamiltonian "
+      "Matrix",
       Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>({0, 0}, {N, N}),
       KOKKOS_LAMBDA(const int i, const int j) {
         result.hamiltonian(i, j) = result.kinetic(i, j) + result.nuclear(i, j);

@@ -26,7 +26,9 @@
 #include <detail/ArborX_Predicates.hpp>
 #include <detail/ArborX_SpaceFillingCurves.hpp>
 #include <detail/ArborX_TreeVisualization.hpp>
+#include <impl/Kokkos_Profiling.hpp>
 #include <integratorxx/quadratures/s2/lebedev_laikov.hpp>
+#include <sorting/Kokkos_SortByKeyPublicAPI.hpp>
 
 namespace NuKEXC {
 
@@ -200,6 +202,20 @@ void build_neighbor_list(const BASIS basis,
       },
       neighbors, offsets);
 
+  ExecSpace{}.fence();
+  using policy = Kokkos::TeamPolicy<ExecSpace>;
+  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+
+  Kokkos::parallel_for(
+      "Sort neighborlist", policy(num_boxes, Kokkos::AUTO()),
+      KOKKOS_LAMBDA(member_type team_member) {
+        const int box_idx = team_member.league_rank();
+        const int start = offsets(box_idx);
+        const int end = offsets(box_idx + 1);
+        auto segment =
+            Kokkos::subview(neighbors, Kokkos::make_pair(start, end));
+        Kokkos::Experimental::sort_team(team_member, segment);
+      });
   ExecSpace{}.fence();
 
   neighbor_list.neighbors = neighbors;
