@@ -195,11 +195,11 @@ void print_results(const std::vector<BenchmarkResult> &results, bool screened) {
 
 std::vector<std::pair<std::string, Molecule>> make_molecules() {
   std::vector<std::pair<std::string, Molecule>> mol_list;
-  mol_list.push_back({"water", make_water()});
-  mol_list.push_back({"benzene", make_benzene()});
-
 #ifdef KOKKOS_ENABLE_HIP
   mol_list.push_back({"taxol", make_taxol()});
+#else 
+  mol_list.push_back({"water", make_water()});
+  mol_list.push_back({"benzene", make_benzene()});
 #endif
   return mol_list;
 }
