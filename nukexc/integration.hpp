@@ -764,7 +764,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                        Kokkos::MemoryTraits<Kokkos::Unmanaged>>
       shared_view_points;
 
-  using Bounds = Kokkos::LaunchBounds<256, 2>;
+  using Bounds = Kokkos::LaunchBounds<128, 2>;
   int fixed_team_size = 1;
   int vector_length = 1;
 #if defined(KOKKOS_ENABLE_HIP)
