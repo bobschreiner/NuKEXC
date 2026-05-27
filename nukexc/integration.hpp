@@ -731,7 +731,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_scratch(
   return result;
 }
 
-template <int MAX_NEIGHBORS_TILE = 8, int MAX_POINTS_PER_TILE = 16>
+template <int MAX_NEIGHBORS_TILE = 24, int MAX_POINTS_PER_TILE = 8>
 CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
     const STOBasisSet &basis, const FlatGrid &grid, const NeighborList &nl) {
 
@@ -781,8 +781,12 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                                                           MAX_POINTS_PER_TILE) +
                      3 * shared_view2d_double::shmem_size(MAX_NEIGHBORS_TILE,
                                                           MAX_NEIGHBORS_TILE);
+  int scratch_size_one =
+      2 * shared_view_double::shmem_size(max_points_per_box) +
+      shared_view_points::shmem_size(max_points_per_box);
 
   policy.set_scratch_size(0, Kokkos::PerTeam(scratch_size));
+  policy.set_scratch_size(1, Kokkos::PerTeam(scratch_size_one));
 
   std::cout << "------------Allocated "
                "Memory-------------"
@@ -864,6 +868,29 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                                           MAX_NEIGHBORS_TILE,
                                           MAX_NEIGHBORS_TILE);
 
+        // Use L1 scratch for pre-computed v across all points
+        // Allocate full-box v/weights/points at L1 scratch level
+        shared_view_double weights_full(team_member.team_scratch(1),
+                                        num_points);
+        shared_view_double v_full(team_member.team_scratch(1), num_points);
+        shared_view_points points_full(team_member.team_scratch(1), num_points);
+
+        // Fill once — expensive atom loop runs ONCE per box
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadRange(team_member, num_points),
+            [=](const int local_g) {
+              const int global_g = start_points + local_g;
+              weights_full(local_g) = grid.weights(global_g);
+              points_full(local_g) = grid.quad_points(global_g);
+              v_full(local_g) = 0.0;
+              for (unsigned k = 0; k < atom_centers.extent(0); ++k) {
+                double r =
+                    dist(points_full(local_g), atom_centers(k)) + epsilon_shift;
+                v_full(local_g) -= double(Z(k)) / r;
+              }
+            });
+        team_member.team_barrier();
+
         for (int tile_i = 0; tile_i < num_tiles; ++tile_i) {
           int num_neighbors_tile_i = Kokkos::min(
               MAX_NEIGHBORS_TILE, num_neighbors - tile_i * MAX_NEIGHBORS_TILE);
@@ -893,23 +920,15 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
                   Kokkos::min(pt_start + MAX_POINTS_PER_TILE, num_points);
               const int num_pts = pt_end - pt_start;
 
-              // Fill weights/points/v for this point tile
+              // Copy slice from full arrays into tile scratch
               Kokkos::parallel_for(
-                  Kokkos::TeamVectorRange(team_member, num_pts),
+                  Kokkos::TeamThreadRange(team_member, num_pts),
                   [=](const int local_g) {
-                    const int global_g = start_points + pt_start + local_g;
-                    weights_scratch(local_g) = grid.weights(global_g);
-                    points_scratch(local_g) = grid.quad_points(global_g);
-                    v_scratch(local_g) = 0.0;
-                    for (unsigned k = 0; k < atom_centers.extent(0); ++k) {
-                      double r =
-                          dist(points_scratch(local_g), atom_centers(k)) +
-                          epsilon_shift;
-                      v_scratch(local_g) -= double(Z(k)) / r;
-                    }
+                    weights_scratch(local_g) = weights_full(pt_start + local_g);
+                    points_scratch(local_g) = points_full(pt_start + local_g);
+                    v_scratch(local_g) = v_full(pt_start + local_g);
                   });
               team_member.team_barrier();
-
               // Fill tile_i for this point tile
               Kokkos::parallel_for(
                   Kokkos::TeamThreadRange(team_member, num_neighbors_tile_i),
