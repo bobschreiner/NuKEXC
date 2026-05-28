@@ -27,7 +27,7 @@
 
 #include <nukexc/diagonalizer.hpp>
 #include <nukexc/grid.hpp>
-#include <nukexc/integration.hpp>
+#include <nukexc/core_hamiltonian.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/octree.hpp>
 #include <nukexc/stobasis.hpp>

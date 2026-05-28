@@ -46,7 +46,7 @@
 
 #include <nukexc/diagonalizer.hpp>
 #include <nukexc/grid.hpp> // make_flat_grid
-#include <nukexc/integration.hpp>
+#include <nukexc/core_hamiltonian.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/nukexc_config.hpp>
 #include <nukexc/partitioning.hpp>

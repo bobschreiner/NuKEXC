@@ -36,7 +36,7 @@
 #include <integratorxx/quadratures/s2.hpp>
 
 #include <nukexc/grid.hpp>
-#include <nukexc/integration.hpp>
+#include <nukexc/core_hamiltonian.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/partitioning.hpp>
 #include <nukexc/stobasis.hpp>
