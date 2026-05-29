@@ -104,6 +104,8 @@ DeviceView2D compute_poisson(const STOBasisSet basis,
                                          N_bf_aux, N_quad);
 
   DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
+  DeviceView2DLeft basis_collocation_scaled("Basis collocation Scaled", N_bf,
+                                            N_quad);
 
   DeviceView1D expansion_coeff("Expansion coeff", N_bf_aux);
 
@@ -125,31 +127,32 @@ DeviceView2D compute_poisson(const STOBasisSet basis,
 
   Kokkos::parallel_for(
       "Scale Auxilary basis",
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_quad}),
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>(space, {0, 0}, {N_bf_aux, N_quad}),
       KOKKOS_LAMBDA(const int i, const int g) {
         potential_collocation(i, g) *= grid.weights(g);
       });
 
-  KokkosBlas::gemv("N", 1.0, potential_collocation, density, 0.0,
+  KokkosBlas::gemv(space, "N", 1.0, potential_collocation, density, 0.0,
                    expansion_coeff);
 
-  KokkosBlas::gemm("N", "T", 1.0, basis_aux_collocation, potential_collocation,
-                   0.0, aux_overlap);
+  KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
+                   potential_collocation, 0.0, aux_overlap);
 
   KokkosLapack::gesv(space, aux_overlap, expansion_coeff, piv);
 
-  KokkosBlas::gemv("T", 1.0, potential_collocation, expansion_coeff, 0.0,
+  KokkosBlas::gemv(space, "T", 1.0, potential_collocation, expansion_coeff, 0.0,
                    potential_on_grid);
 
   Kokkos::parallel_for(
       "Scale Auxilary basis",
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_quad}),
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>(space, {0, 0}, {N_bf_aux, N_quad}),
       KOKKOS_LAMBDA(const int i, const int g) {
-        basis_collocation(i, g) *= Kokkos::sqrt(potential_on_grid(g));
+        basis_collocation_scaled(i, g) *= potential_on_grid(g);
       });
 
-  KokkosBlas::gemm("N", "T", 1.0, basis_collocation, basis_collocation, 0.0,
-                   result);
+  KokkosBlas::gemm(space, "N", "T", 1.0, basis_collocation,
+                   basis_collocation_scaled, 0.0, result);
+  space.fence();
 
   return result;
 }
