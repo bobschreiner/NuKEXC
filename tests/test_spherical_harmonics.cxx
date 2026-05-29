@@ -566,6 +566,99 @@ TEST_CASE("Solid Harmonics vs precomputed solid harmonics",
     }
   }
 }
+
+TEST_CASE("Solid Harmonics vs solid harmonics and grad",
+          "[precompute][compute_solid_harmonics_grad]") {
+
+  using radial_type = bk_type;
+  using angular_type = ll_type;
+  using angular_traits = quadrature_traits<angular_type>;
+
+  using spherical_type = SphericalQuadrature<radial_type, angular_type>;
+
+  size_t nrad = 10;
+  size_t nang = angular_traits::npts_by_algebraic_order(
+      angular_traits::next_algebraic_order(
+          5)); // Smallest possible angular grid
+
+  // Generate via runtime API
+  auto rad_spec = radial_from_type<radial_type>();
+  auto rad_traits = make_radial_traits(rad_spec, nrad, 1.0);
+  UnprunedSphericalGridSpecification unp(
+      rad_spec, *rad_traits, angular_from_type<angular_type>(), nang);
+
+  auto sph = SphericalGridFactory::generate_grid(unp);
+
+  const auto npts = sph->npts();
+
+  Kokkos::View<Point *, Layout, ExecSpace> quadrature_points_device(
+      "quadrature_points", npts);
+
+  auto quadrature_points_h =
+      Kokkos::create_mirror_view(quadrature_points_device);
+
+  for (int i = 0; i < npts; ++i) {
+    quadrature_points_h(i)[0] = sph->points()[i][0];
+    quadrature_points_h(i)[1] = sph->points()[i][1];
+    quadrature_points_h(i)[2] = sph->points()[i][2];
+  }
+  Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
+
+  ///////////////////////////////////////////////////////////////////////
+
+  Kokkos::View<double *> solid_harmonics_pre("solid_harmonics_pre", npts);
+  auto solid_harmonics_pre_h = Kokkos::create_mirror_view(solid_harmonics_pre);
+
+  Kokkos::View<double *> solid_harmonics_pre_grad("solid_harmonics", npts);
+  auto solid_harmonics_pre_grad_h =
+      Kokkos::create_mirror_view(solid_harmonics_pre_grad);
+
+  Kokkos::View<double *[3]> grad_solid("Analytical grad solid", npts);
+  auto grad_solid_h = Kokkos::create_mirror_view(grad_solid);
+
+  Kokkos::View<double *[3]> grad_solid_pre("Analytical grad solid_pre", npts);
+  auto grad_solid_pre_h = Kokkos::create_mirror_view(grad_solid_pre);
+
+  /*
+   * Compare analytical spherical harmonics in cartesian coordinates to finite
+   * difference solutions
+   */
+  for (int l = 1; l < 7; ++l) {
+    for (int m = -l; m < l + 1; ++m) {
+
+      std::cout << "Testing precomputed l = " << l << " , m = " << m
+                << std::endl;
+      Kokkos::parallel_for(
+          "For loop", npts, KOKKOS_LAMBDA(int i) {
+            real_solid_harmonic_cart_precomputed(
+                l, m, quadrature_points_device(i)[0],
+                quadrature_points_device(i)[1], quadrature_points_device(i)[2],
+                solid_harmonics_pre_grad(i));
+
+            real_solid_harmonic_cart_and_grad_precomputed(
+                l, m, quadrature_points_device(i)[0],
+                quadrature_points_device(i)[1], quadrature_points_device(i)[2],
+                solid_harmonics_pre(i), grad_solid_pre(i, 0),
+                grad_solid_pre(i, 1), grad_solid_pre(i, 2));
+          });
+
+      Kokkos::deep_copy(solid_harmonics_pre_grad_h, solid_harmonics_pre_grad);
+      Kokkos::deep_copy(solid_harmonics_pre_h, solid_harmonics_pre);
+
+      for (int i = 0; i < npts; ++i) {
+        if (solid_harmonics_pre_grad_h(i) < 1e-5) {
+          REQUIRE_THAT(
+              solid_harmonics_pre_grad_h(i),
+              Catch::Matchers::WithinAbs(solid_harmonics_pre_h(i), 1e-5));
+        } else {
+          REQUIRE_THAT(
+              solid_harmonics_pre_grad_h(i),
+              Catch::Matchers::WithinRel(solid_harmonics_pre_h(i), 1e-5));
+        }
+      }
+    }
+  }
+}
 ///////////////////////////////////////////////////////////////////////////
 int main() {
   Kokkos::initialize();

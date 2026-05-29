@@ -444,23 +444,66 @@ void fill_collocation(
         double dx = collocation_points(j)[0] - basis.O(i)[0];
         double dy = collocation_points(j)[1] - basis.O(i)[1];
         double dz = collocation_points(j)[2] - basis.O(i)[2];
-        double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
-                   epsilon_shift; // Avoid pow(0,0)
 
         double radial_part;
+        {
+          double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
+                     epsilon_shift; // Avoid pow(0,0)
 
-        radial_part =
-            norm * Kokkos::pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
-
+          radial_part =
+              norm * Kokkos::pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
+        }
         // Angular part of the shell
         // https://en.wikipedia.org/wiki/Spherical_harmonics
-        double angular_part =
-            real_solid_harmonic_cart(l_val, m_val, dx, dy, dz);
+        double angular_part;
+        real_solid_harmonic_cart_precomputed(l_val, m_val, dx, dy, dz,
+                                             angular_part);
 
         collocation_values(i, j) = radial_part * angular_part;
       });
 }
 
+template <typename PointsView, typename ValuesView>
+void fill_collocation_transpose(
+    ExecSpace &space, const STOBasisSet &basis, PointsView collocation_points,
+    ValuesView collocation_values) // pre-allocated, written in place
+{
+  int N = basis.nbf();
+  int G = collocation_points.extent(0);
+  Kokkos::parallel_for(
+      "Fill collocation",
+      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>(space, {0, 0}, {N, G}),
+      KOKKOS_LAMBDA(int i, int g) {
+        // same math as before, written directly into col(i,j)
+        const int n_val = basis.n(i);
+        const int l_val = basis.l(i);
+        const int m_val = basis.m(i);
+        const double norm = basis.norm(i);
+        const double zeta = basis.zeta(i);
+
+        // radial part of the shell
+        // radial_part = R_nl(r) = r^(n-1) * C_nl * exp(-⍺ * r))
+        double dx = collocation_points(g)[0] - basis.O(i)[0];
+        double dy = collocation_points(g)[1] - basis.O(i)[1];
+        double dz = collocation_points(g)[2] - basis.O(i)[2];
+
+        double radial_part;
+        {
+          double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
+                     epsilon_shift; // Avoid pow(0,0)
+
+          radial_part =
+              norm * Kokkos::pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
+        }
+        // Angular part of the shell
+        // https://en.wikipedia.org/wiki/Spherical_harmonics
+        double angular_part;
+        real_solid_harmonic_cart_precomputed(l_val, m_val, dx, dy, dz,
+                                             angular_part);
+
+        collocation_values(g, i) = radial_part * angular_part;
+      });
+}
 template <typename PointsView, typename ValuesView>
 void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
                            PointsView &collocation_points,
@@ -524,42 +567,6 @@ struct ScratchBasisParams {
   Point O;
   int n, l, m;
 };
-
-KOKKOS_INLINE_FUNCTION
-double int_pow(const double r, const int k) {
-
-  double result = 0.;
-  switch (k) {
-  case 0:
-    result = 1.;
-    break;
-  case 1:
-    result = r;
-    break;
-  case 2:
-    result = r * r;
-    break;
-  case 3:
-    result = r * r * r;
-    break;
-  case 4:
-    result = r * r * r * r;
-    break;
-  case 5:
-    result = r * r * r * r * r;
-    break;
-  case 6:
-    result = r * r * r * r * r * r;
-    break;
-  case 7:
-    result = r * r * r * r * r * r * r;
-    break;
-  default:
-    break;
-
-  }
-  return result;
-}
 
 KOKKOS_INLINE_FUNCTION
 void basis_eval_with_grad(const ScratchBasisParams &basis, const Point &p,

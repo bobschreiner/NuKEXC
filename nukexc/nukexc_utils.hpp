@@ -55,7 +55,7 @@ double dist_squared(const Point a, const Point b) {
 }
 
 KOKKOS_INLINE_FUNCTION
-double double_factorial(int n) {
+double double_factorial(const int n) {
   if (n <= 0)
     return 1.0;
 
@@ -67,7 +67,7 @@ double double_factorial(int n) {
 }
 
 KOKKOS_INLINE_FUNCTION
-double factorial(int n) {
+double factorial(const int n) {
 
   if (n <= 0)
     return 1.0;
@@ -79,13 +79,13 @@ double factorial(int n) {
   return result;
 }
 KOKKOS_INLINE_FUNCTION
-long int binomial(int n, int k) {
+long int binomial(const int n, const int k) {
   long int result = factorial(n) / (factorial(k) * factorial(n - k));
   return result;
 }
 
 KOKKOS_INLINE_FUNCTION
-double log_factorial_ratio(int top, int bottom) {
+double log_factorial_ratio(const int top, const int bottom) {
   // Computes log(top! / bottom!) = log(bottom+1) + ... + log(top)
   // Assumes top >= bottom >= 0
   double result = 0.0;
@@ -95,12 +95,70 @@ double log_factorial_ratio(int top, int bottom) {
 }
 
 KOKKOS_INLINE_FUNCTION
-double safe_pow(double base, int exp) {
+double safe_pow(const double base, const int exp) {
   if (exp == 0)
     return 1.0; // always 1 regardless of base
   if (base == 0.0)
     return 0.0; // 0^positive = 0
   return Kokkos::pow(base, (double)exp);
+}
+
+KOKKOS_INLINE_FUNCTION
+double int_pow(const double r, const int k) {
+
+  double result = 0.;
+  switch (k) {
+  case 0:
+    result = 1.;
+    break;
+  case 1:
+    result = r;
+    break;
+  case 2:
+    result = r * r;
+    break;
+  case 3:
+    result = r * r * r;
+    break;
+  case 4:
+    result = r * r * r * r;
+    break;
+  case 5:
+    result = r * r * r * r * r;
+    break;
+  case 6:
+    result = r * r * r * r * r * r;
+    break;
+  case 7:
+    result = r * r * r * r * r * r * r;
+    break;
+  default:
+    result = Kokkos::pow(r, (double)k);
+    break;
+  }
+  return result;
+}
+KOKKOS_INLINE_FUNCTION
+double lower_gamma(const int n, const double x) {
+  double result = 0.0;
+  for (int k = 0; k < n; ++k) {
+    result += int_pow(x, k) / factorial(k);
+  }
+  result *= Kokkos::exp(-x);
+  result = 1.0 - result;
+  result *= factorial(n - 1);
+  return result;
+}
+
+KOKKOS_INLINE_FUNCTION
+double upper_gamma(const int n, const double x) {
+  double result = 0.0;
+  for (int k = 0; k < n; ++k) {
+    result += int_pow(x, k) / factorial(k);
+  }
+  result *= Kokkos::exp(-x);
+  result *= factorial(n - 1);
+  return result;
 }
 
 } // namespace NuKEXC
