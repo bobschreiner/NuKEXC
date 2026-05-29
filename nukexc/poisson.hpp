@@ -146,7 +146,8 @@ DeviceView2D compute_poisson(const STOBasisSet basis,
       "Scale Auxilary basis",
       Kokkos::MDRangePolicy<Kokkos::Rank<2>>(space, {0, 0}, {N_bf_aux, N_quad}),
       KOKKOS_LAMBDA(const int i, const int g) {
-        basis_collocation_scaled(i, g) *= potential_on_grid(g);
+        basis_collocation_scaled(i, g) =
+            basis_collocation(i, g) * potential_on_grid(g);
       });
 
   KokkosBlas::gemm(space, "N", "T", 1.0, basis_collocation,
