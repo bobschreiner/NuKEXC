@@ -20,12 +20,22 @@
 
 #pragma once
 
+#include "density.hpp"
+#include "grid.hpp"
 #include "nukexc_config.hpp"
 #include "nukexc_utils.hpp"
 #include "stobasis.hpp"
 
+#include <KokkosBlas2_gemv.hpp>
+#include <KokkosBlas2_gemv_impl.hpp>
+#include <KokkosBlas3_gemm.hpp>
+#include <KokkosBlas3_gemm_impl.hpp>
+
+#include <KokkosLapack_gesv.hpp>
+
 #include <Kokkos_Macros.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
+#include <impl/Kokkos_CheckUsage.hpp>
 
 namespace NuKEXC {
 KOKKOS_INLINE_FUNCTION
@@ -52,6 +62,96 @@ double sto_potential(const int n, const int l, const int m, const double x,
   double val;
   real_solid_harmonic_cart_precomputed(l, m, x, y, z, val);
   return C_prefactor(n, l, zeta) * val * I_tilde(n, l, r, zeta);
+}
+
+DeviceView2DLeft sto_potential_collocation(const STOBasisSet basis,
+                                           const FlatGrid grid,
+                                           const DeviceView2DLeft basis_vals) {
+
+  const int N_bf = basis.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  DeviceView2DLeft potential_collocation("Potential collocation", N_bf, N_quad);
+
+  Kokkos::parallel_for(
+      "Compute potentials",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf, N_quad}),
+      KOKKOS_LAMBDA(const int i, const int g) {
+        const int n = basis.n(i);
+        const int l = basis.l(i);
+        const int m = basis.m(i);
+        const double zeta = basis.zeta(i);
+        const double x = grid.quad_points(g)[0];
+        const double y = grid.quad_points(g)[1];
+        const double z = grid.quad_points(g)[2];
+        const double r = dist(grid.quad_points(g), basis.O(i)) + epsilon_shift;
+        potential_collocation(i, g) =
+            C_prefactor(n, l, zeta) * basis_vals(i, g) * I_tilde(n, l, r, zeta);
+      });
+  return potential_collocation;
+}
+
+DeviceView2D compute_poisson(const STOBasisSet basis,
+                             const STOBasisSet basis_aux, const FlatGrid grid,
+                             const DeviceView2D density_matrix) {
+
+  ExecSpace space;
+  const int N_bf = basis.nbf();
+  const int N_bf_aux = basis_aux.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  DeviceView2DLeft basis_aux_collocation("Auxillary basis collocation",
+                                         N_bf_aux, N_quad);
+
+  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
+
+  DeviceView1D expansion_coeff("Expansion coeff", N_bf_aux);
+
+  DeviceView1D potential_on_grid("Expansion coeff scaled", N_quad);
+
+  DeviceView1D density = compute_density(basis, grid, density_matrix);
+
+  DeviceView2D result("Poisson matrix", N_bf, N_bf);
+
+  DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
+
+  Kokkos::View<int *, ExecSpace> piv("pivot", N_bf_aux);
+
+  fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
+  fill_collocation(space, basis, grid.quad_points, basis_collocation);
+
+  DeviceView2DLeft potential_collocation =
+      sto_potential_collocation(basis_aux, grid, basis_aux_collocation);
+
+  Kokkos::parallel_for(
+      "Scale Auxilary basis",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_quad}),
+      KOKKOS_LAMBDA(const int i, const int g) {
+        potential_collocation(i, g) *= grid.weights(g);
+      });
+
+  KokkosBlas::gemv("N", 1.0, potential_collocation, density, 0.0,
+                   expansion_coeff);
+
+  KokkosBlas::gemm("N", "T", 1.0, basis_aux_collocation, potential_collocation,
+                   0.0, aux_overlap);
+
+  KokkosLapack::gesv(space, aux_overlap, expansion_coeff, piv);
+
+  KokkosBlas::gemv("T", 1.0, potential_collocation, expansion_coeff, 0.0,
+                   potential_on_grid);
+
+  Kokkos::parallel_for(
+      "Scale Auxilary basis",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_quad}),
+      KOKKOS_LAMBDA(const int i, const int g) {
+        basis_collocation(i, g) *= Kokkos::sqrt(potential_on_grid(g));
+      });
+
+  KokkosBlas::gemm("N", "T", 1.0, basis_collocation, basis_collocation, 0.0,
+                   result);
+
+  return result;
 }
 
 } // namespace NuKEXC

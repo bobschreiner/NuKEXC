@@ -164,6 +164,50 @@ TEST_CASE("H2O_adf_QZ4P", "[h20][adf]") {
 #endif
 };
 
+TEST_CASE("H2O_adf_QZ4P_AUX", "[h20][adf][fit]") {
+  Molecule mol;
+  read_xyz("input/water.xyz", mol);
+  const bool fit = true;
+  const double tol = 1e-10;
+  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", tol, fit);
+
+  // On CPU we can print out the basis set
+  // Copy to host device
+  auto n_h = Kokkos::create_mirror_view(basis.n);
+  auto l_h = Kokkos::create_mirror_view(basis.l);
+  auto m_h = Kokkos::create_mirror_view(basis.m);
+  auto norm_h = Kokkos::create_mirror_view(basis.norm);
+  auto zeta_h = Kokkos::create_mirror_view(basis.zeta);
+  auto O_h = Kokkos::create_mirror_view(basis.O);
+  auto cutoff_h = Kokkos::create_mirror_view(basis.cutoff_radii);
+
+  Kokkos::deep_copy(n_h, basis.n);
+  Kokkos::deep_copy(l_h, basis.l);
+  Kokkos::deep_copy(m_h, basis.m);
+  Kokkos::deep_copy(zeta_h, basis.zeta);
+  Kokkos::deep_copy(norm_h, basis.norm);
+  Kokkos::deep_copy(O_h, basis.O);
+  Kokkos::deep_copy(cutoff_h, basis.cutoff_radii);
+
+#if 1
+  std::cout << "Auxillary ADF QZ4P" << std::endl;
+
+  for (int i = 0; i < basis.nbf(); ++i) {
+    std::cout << "Basis function " << i << std::endl;
+    std::cout << "n " << n_h(i) << std::endl;
+    std::cout << "l " << l_h(i) << std::endl;
+    std::cout << "m " << m_h(i) << std::endl;
+    std::cout << "zeta " << zeta_h(i) << std::endl;
+    std::cout << "norm " << norm_h(i) << std::endl;
+    std::cout << "cutoff " << cutoff_h(i) << std::endl;
+    std::cout << "O_h " << O_h(i)[0] << " " << O_h(i)[0] << " " << O_h(i)[2]
+              << " " << std::endl
+              << std::endl;
+  }
+  std::cout << "--------------------------------------------------"
+            << std::endl;
+#endif
+};
 TEST_CASE("Basis Cutoff", "[h20][cutoff]") {
 
   using bk_type = IntegratorXX::Becke<double, double>;

@@ -212,7 +212,7 @@ STOBasisSet make_manual_basis(const std::vector<STOFunc> &funcs,
 
 STOBasisSet load_adf_basis(const Molecule &mol,
                            const std::string &data_dir = "input/zorabasis/TZP",
-                           double cutoff_tol = 1e-10) {
+                           double cutoff_tol = 1e-10, bool fit = false) {
 
   std::vector<STOFunc> temp_basis;
 
@@ -229,9 +229,10 @@ STOBasisSet load_adf_basis(const Molecule &mol,
     std::string line;
     int current_l = 0;
 
-    // Skip all lines until we find the BASIS keyword
+    // Skip all lines until we find the basis keyword
+    std::string basis_keyword = fit ? "FIT" : "BASIS";
     while (std::getline(file, line)) {
-      if (line == "BASIS")
+      if (line == basis_keyword)
         break;
     }
 

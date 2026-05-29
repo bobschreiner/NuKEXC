@@ -28,11 +28,12 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
+#include <nukexc/core_hamiltonian.hpp>
 #include <nukexc/diagonalizer.hpp>
 #include <nukexc/grid.hpp>
-#include <nukexc/core_hamiltonian.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/partitioning.hpp>
+#include <nukexc/poisson.hpp>
 #include <nukexc/stobasis.hpp>
 
 #include <cmath>
@@ -513,10 +514,45 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
   REQUIRE(e_ground < 0.0); // Must be bound
 
   // Optional: print out the spectrum for debugging
+#if 0
   std::cout << "H2+ Spectrum (R=" << R << ")" << std::endl;
   for (int i = 0; i < n_basis; ++i)
     std::cout << mo_energies_h(i) << std::endl;
   std::cout << std::endl;
+#endif
+}
+
+TEST_CASE("compute_poisson -- hydrogen 1s self-repulsion", "[poisson]") {
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 40);
+
+  // Primary basis: single 1s STO
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+
+  // Aux basis: needs to be rich enough to represent the density ρ = φ^2,
+  // which for a 1s STO with ζ=1 is a 1s-like function with ζ=2.
+  // Use a few s-type STOs spanning a range of exponents.
+  STOBasisSet basis_aux = make_manual_basis({
+      {1, 0, 0, 1.0, 0., 0., 0.},
+      {1, 0, 0, 2.0, 0., 0., 0.},
+      {1, 0, 0, 3.0, 0., 0., 0.},
+      {1, 0, 0, 4.0, 0., 0., 0.},
+  });
+
+  // Density matrix: fully occupied single orbital, D_11 = 1
+  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", 1, 1);
+  auto dm_h = Kokkos::create_mirror_view(density_matrix);
+  dm_h(0, 0) = 1.0;
+  Kokkos::deep_copy(density_matrix, dm_h);
+
+  DeviceView2D J = compute_poisson(basis, basis_aux, grid, density_matrix);
+
+  auto J_h = Kokkos::create_mirror_view(J);
+  Kokkos::deep_copy(J_h, J);
+
+  // Analytical self-repulsion of hydrogen 1s: 5/8 hartree
+  REQUIRE_THAT(J_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-4));
 }
 
 // ============================================================
