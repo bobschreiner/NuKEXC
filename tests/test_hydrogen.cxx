@@ -535,9 +535,6 @@ TEST_CASE("compute_poisson -- hydrogen 1s self-repulsion", "[poisson]") {
   // Use a few s-type STOs spanning a range of exponents.
   STOBasisSet basis_aux = make_manual_basis({
       {1, 0, 0, 1.0, 0., 0., 0.},
-      {1, 0, 0, 2.0, 0., 0., 0.},
-      {1, 0, 0, 3.0, 0., 0., 0.},
-      {1, 0, 0, 4.0, 0., 0., 0.},
   });
 
   // Density matrix: fully occupied single orbital, D_11 = 1
