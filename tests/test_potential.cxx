@@ -289,8 +289,8 @@ TEST_CASE("Potential vs precomputed Potentia", "[potential]") {
             REQUIRE_THAT(potential_h(i),
                          Catch::Matchers::WithinAbs(potential_pre_h(i), 1e-5));
           } else {
-            REQUIRE_THAT(potential_h(i), Catch::Matchers::WithinRel(
-                                             potential_pre_h(i), 1e-3));
+            REQUIRE_THAT(potential_h(i),
+                         Catch::Matchers::WithinRel(potential_pre_h(i), 1e-3));
           }
         }
         idx += 1;

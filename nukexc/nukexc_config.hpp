@@ -56,7 +56,9 @@ using DeviceView2DLeft = Kokkos::View<double **, Kokkos::LayoutLeft,
 using DeviceView2DRight =
     Kokkos::View<double **, Kokkos::LayoutRight, ExecSpace>;
 using DeviceView1D = Kokkos::View<double *, ExecSpace>;
-
+using DeviceView1DLeft = Kokkos::View<double *, Kokkos::LayoutLeft, ExecSpace>;
+using DeviceView1DRight =
+    Kokkos::View<double *, Kokkos::LayoutRight, ExecSpace>;
 // Host Views with specific layout
 using HostView2DLeft = Kokkos::View<double **, Kokkos::LayoutLeft, HostSpace>;
 using HostView2DRight = Kokkos::View<double **, Kokkos::LayoutRight, HostSpace>;

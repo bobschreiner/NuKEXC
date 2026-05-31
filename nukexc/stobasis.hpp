@@ -53,7 +53,7 @@ struct STOBasisSet {
 int label_to_l(char label) {
   label = std::toupper(label);
   static const std::string order =
-      "SPDFGHIK"; // Standard spectroscopic notation (skipping J)
+      "SPDFGHI"; // Standard spectroscopic notation (skipping J)
   size_t pos = order.find(label);
   return (pos != std::string::npos) ? static_cast<int>(pos) : -1;
 }

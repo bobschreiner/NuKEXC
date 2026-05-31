@@ -63,7 +63,8 @@ double sto_potential(const int n, const int l, const int m, const double x,
   return C_prefactor(n, l, zeta) * val * I_tilde(n, l, r, zeta);
 }
 
-DeviceView2DLeft sto_potential_collocation(const STOBasisSet basis,
+DeviceView2DLeft sto_potential_collocation(const ExecSpace space,
+                                           const STOBasisSet basis,
                                            const FlatGrid grid,
                                            const DeviceView2DLeft basis_vals) {
 
@@ -80,19 +81,21 @@ DeviceView2DLeft sto_potential_collocation(const STOBasisSet basis,
         const int l = basis.l(i);
         const int m = basis.m(i);
         const double zeta = basis.zeta(i);
-        const double x = grid.quad_points(g)[0];
-        const double y = grid.quad_points(g)[1];
-        const double z = grid.quad_points(g)[2];
-        const double r = dist(grid.quad_points(g), basis.O(i)) + epsilon_shift;
+        const double x = grid.quad_points(g)[0] - basis.O(i)[0];
+        const double y = grid.quad_points(g)[1] - basis.O(i)[1];
+        const double z = grid.quad_points(g)[2] - basis.O(i)[2];
+        const double r = dist(grid.quad_points(g), basis.O(i));
         potential_collocation(i, g) =
-            C_prefactor(n, l, zeta) * basis_vals(i, g) * I_tilde(n, l, r, zeta);
+            sto_potential(n, l, m, x, y, z, r, zeta) + epsilon_shift;
       });
+  space.fence();
   return potential_collocation;
 }
 
-DeviceView2D compute_poisson(const STOBasisSet basis,
-                             const STOBasisSet basis_aux, const FlatGrid grid,
-                             const DeviceView2D density_matrix) {
+DeviceView2DLeft compute_poisson(const STOBasisSet basis,
+                                 const STOBasisSet basis_aux,
+                                 const FlatGrid grid,
+                                 const DeviceView2D density_matrix) {
 
   ExecSpace space;
   const int N_bf = basis.nbf();
@@ -106,30 +109,31 @@ DeviceView2D compute_poisson(const STOBasisSet basis,
   DeviceView2DLeft basis_collocation_scaled("Basis collocation Scaled", N_bf,
                                             N_quad);
 
-  DeviceView1D expansion_coeff("Expansion coeff", N_bf_aux);
+  DeviceView1DLeft expansion_coeff("Expansion coeff", N_bf_aux);
 
-  DeviceView1D potential_on_grid("Expansion coeff scaled", N_quad);
+  DeviceView1DLeft potential_on_grid("Expansion coeff scaled", N_quad);
 
-  DeviceView1D density = compute_density(basis, grid, density_matrix);
+  DeviceView1DLeft density = compute_density(basis, grid, density_matrix);
 
-  DeviceView2D result("Poisson matrix", N_bf, N_bf);
+  DeviceView2DLeft result("Poisson matrix", N_bf, N_bf);
 
   DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
 
-  Kokkos::View<int *, ExecSpace> piv("pivot", N_bf_aux);
+  Kokkos::View<int *, Kokkos::LayoutLeft, ExecSpace> piv("pivot", N_bf_aux);
 
   fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
   fill_collocation(space, basis, grid.quad_points, basis_collocation);
 
   DeviceView2DLeft potential_collocation =
-      sto_potential_collocation(basis_aux, grid, basis_aux_collocation);
+      sto_potential_collocation(space, basis_aux, grid, basis_aux_collocation);
 
   Kokkos::parallel_for(
-      "Scale Auxilary basis",
+      "Scale potential",
       Kokkos::MDRangePolicy<Kokkos::Rank<2>>(space, {0, 0}, {N_bf_aux, N_quad}),
       KOKKOS_LAMBDA(const int i, const int g) {
         potential_collocation(i, g) *= grid.weights(g);
       });
+  space.fence();
 
   KokkosBlas::gemv(space, "N", 1.0, potential_collocation, density, 0.0,
                    expansion_coeff);
@@ -137,14 +141,16 @@ DeviceView2D compute_poisson(const STOBasisSet basis,
   KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
                    potential_collocation, 0.0, aux_overlap);
 
+  space.fence();
+
   KokkosLapack::gesv(space, aux_overlap, expansion_coeff, piv);
 
   KokkosBlas::gemv(space, "T", 1.0, potential_collocation, expansion_coeff, 0.0,
                    potential_on_grid);
 
   Kokkos::parallel_for(
-      "Scale Auxilary basis",
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>(space, {0, 0}, {N_bf_aux, N_quad}),
+      "Scale basis",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>(space, {0, 0}, {N_bf, N_quad}),
       KOKKOS_LAMBDA(const int i, const int g) {
         basis_collocation_scaled(i, g) =
             basis_collocation(i, g) * potential_on_grid(g);
