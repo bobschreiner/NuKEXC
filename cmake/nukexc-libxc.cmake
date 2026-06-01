@@ -21,6 +21,7 @@ endif()
     target_include_directories( xc INTERFACE 
       $<BUILD_INTERFACE:${libxc_BINARY_DIR}/src>
       $<BUILD_INTERFACE:${libxc_SOURCE_DIR}/src>
+      $<BUILD_INTERFACE:${libxc_BINARY_DIR}/include>
     )
     endif()
   if( NOT TARGET Libxc::xc )
