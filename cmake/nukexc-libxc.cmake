@@ -17,8 +17,13 @@ if( NOT ${Libxc_FOUND} )
  else()
 	message(STATUS "Found Libxc: ${Libxc_DIR} (version \"${Libxc_VERSION}\")")
 endif()
-
-  if( TARGET xc AND NOT TARGET Libxc::xc )
+  if( TARGET xc )
+    target_include_directories( xc INTERFACE 
+      $<BUILD_INTERFACE:${libxc_BINARY_DIR}/src>
+      $<BUILD_INTERFACE:${libxc_SOURCE_DIR}/src>
+    )
+    endif()
+  if( NOT TARGET Libxc::xc )
     add_library( Libxc::xc ALIAS xc )
   endif()
  
