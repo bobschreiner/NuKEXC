@@ -12,7 +12,14 @@ if( NOT ${Libxc_FOUND} )
     GIT_TAG        ${NUKEXC_LIBXC_REVISION}
   )
   FetchContent_MakeAvailable( libxc )
-  else()
+  # When built via FetchContent, libxc exports target 'xc', not 'Libxc::xc'.
+  # Create an alias so the rest of the build uses a consistent name.
+ else()
 	message(STATUS "Found Libxc: ${Libxc_DIR} (version \"${Libxc_VERSION}\")")
 endif()
+
+  if( TARGET xc AND NOT TARGET Libxc::xc )
+    add_library( Libxc::xc ALIAS xc )
+  endif()
+ 
 target_link_libraries( libnukexc INTERFACE Libxc::xc )
