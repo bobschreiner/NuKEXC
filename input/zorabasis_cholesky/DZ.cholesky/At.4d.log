@@ -1,0 +1,6 @@
+title:    Astatine (II, 4d frozen)
+orbital:  8S 7P 4D 3F
+old FIT:  25S 16P 12D 9F 7G
+new FIT:  19S 18P 16D 14F 12G 8H 6I  (wrote At.4d.new)
+diagonal RI error (old): 1.543340e+01
+diagonal RI error (new): 5.692477e-06

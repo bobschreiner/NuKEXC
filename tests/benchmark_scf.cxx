@@ -25,9 +25,9 @@
 #include <integratorxx/quadratures/radial/treutlerahlrichs.hpp>
 #include <integratorxx/quadratures/s2/lebedev_laikov.hpp>
 
+#include <nukexc/core_hamiltonian.hpp>
 #include <nukexc/diagonalizer.hpp>
 #include <nukexc/grid.hpp>
-#include <nukexc/core_hamiltonian.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/octree.hpp>
 #include <nukexc/stobasis.hpp>
@@ -139,7 +139,7 @@ struct BenchmarkResult {
   int grid_points;
   double t_grid;
   double t_neighbors; // 0 if not applicable
-  double t_hamiltonian;
+  double t_core_hamiltonian;
   double t_diag;
   double t_total;
 };
@@ -167,7 +167,7 @@ void print_results(const std::vector<BenchmarkResult> &results, bool screened) {
             << " │ " << std::setw(8) << "Grid pts";
   if (screened)
     std::cout << " │ " << std::setw(w) << "Neighbors (s)";
-  std::cout << " │ " << std::setw(w) << "H_el (s)"
+  std::cout << " │ " << std::setw(w) << "H_core (s)"
             << " │ " << std::setw(w) << "Diag (s)"
             << " │ " << std::setw(w) << "Total (s)"
             << " │\n";
@@ -180,7 +180,7 @@ void print_results(const std::vector<BenchmarkResult> &results, bool screened) {
               << r.grid_points;
     if (screened)
       std::cout << " │ " << std::setw(w) << r.t_neighbors;
-    std::cout << " │ " << std::setw(w) << r.t_hamiltonian << " │ "
+    std::cout << " │ " << std::setw(w) << r.t_core_hamiltonian << " │ "
               << std::setw(w) << r.t_diag << " │ " << std::setw(w) << r.t_total
               << " │\n";
   }
@@ -212,16 +212,16 @@ void run_benchmark_fused(const Config &cfg) {
   for (auto &[name, mol] : make_molecules()) {
     STOBasisSet basis = load_adf_basis(mol, cfg.basis_dir, cfg.screening_tol);
 
-    Kokkos::Timer total_timer, grid_timer, hamiltonian_timer, diag_timer;
+    Kokkos::Timer total_timer, grid_timer, core_hamiltonian_timer, diag_timer;
     total_timer.reset();
 
     grid_timer.reset();
     FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, cfg.nrad, cfg.nang);
     double t_grid = grid_timer.seconds();
 
-    hamiltonian_timer.reset();
+    core_hamiltonian_timer.reset();
     auto hcore = compute_core_hamiltonian(basis, grid);
-    double t_hamiltonian = hamiltonian_timer.seconds();
+    double t_core_hamiltonian = core_hamiltonian_timer.seconds();
 
     const int N = hcore.overlap.extent(0);
     DeviceView2DLeft mo_coeff("mo_coeff", N, N);
@@ -234,7 +234,7 @@ void run_benchmark_fused(const Config &cfg) {
     double t_diag = diag_timer.seconds();
 
     results.push_back({name, N, (int)grid.quad_points.extent(0), t_grid, 0.0,
-                       t_hamiltonian, t_diag, total_timer.seconds()});
+                       t_core_hamiltonian, t_diag, total_timer.seconds()});
   }
   print_results(results, false);
 }
@@ -249,7 +249,7 @@ void run_benchmark_screened(const Config &cfg) {
   for (auto &[name, mol] : make_molecules()) {
     STOBasisSet basis = load_adf_basis(mol, cfg.basis_dir, cfg.screening_tol);
 
-    Kokkos::Timer total_timer, grid_timer, nl_timer, hamiltonian_timer,
+    Kokkos::Timer total_timer, grid_timer, nl_timer, core_hamiltonian_timer,
         diag_timer;
     total_timer.reset();
 
@@ -264,10 +264,10 @@ void run_benchmark_screened(const Config &cfg) {
                         grid.quad_points.extent(0), nl);
     double t_neighbors = nl_timer.seconds();
 
-    hamiltonian_timer.reset();
+    core_hamiltonian_timer.reset();
     auto hcore = compute_core_hamiltonian_screened(basis, grid, nl);
 
-    double t_hamiltonian = hamiltonian_timer.seconds();
+    double t_core_hamiltonian = core_hamiltonian_timer.seconds();
 
     const int N = hcore.overlap.extent(0);
     DeviceView2DLeft mo_coeff("mo_coeff", N, N);
@@ -280,7 +280,7 @@ void run_benchmark_screened(const Config &cfg) {
     double t_diag = diag_timer.seconds();
 
     results.push_back({name, N, (int)grid.quad_points.extent(0), t_grid,
-                       t_neighbors, t_hamiltonian, t_diag,
+                       t_neighbors, t_core_hamiltonian, t_diag,
                        total_timer.seconds()});
   }
   print_results(results, true);

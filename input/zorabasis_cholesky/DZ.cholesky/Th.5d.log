@@ -1,0 +1,6 @@
+title:    Thorium (II, 5d frozen)
+orbital:  9S 7P 5D 4F
+old FIT:  26S 19P 14D 10F 8G
+new FIT:  20S 19P 20D 17F 17G 10H 8I  (wrote Th.5d.new)
+diagonal RI error (old): 8.458843e+00
+diagonal RI error (new): 4.681461e-05

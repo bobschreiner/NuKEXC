@@ -1,0 +1,6 @@
+title:    Bromine (II, 3p frozen)
+orbital:  5S 4P 2D
+old FIT:  16S 8P 7D 4F 3G
+new FIT:  14S 11P 11D 7F 3G  (wrote Br.3p.new)
+diagonal RI error (old): 2.659998e-01
+diagonal RI error (new): 1.674995e-06

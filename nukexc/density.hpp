@@ -48,7 +48,7 @@ compute_density(const STOBasisSet basis, const FlatGrid grid,
   const int N_bf = basis.nbf();
 
   DeviceView1D density("density", N_quad);
-  DeviceView2D collocation_values("collocation", N_quad, N_bf);
+  DeviceView2D collocation_values("collocation values", N_quad, N_bf);
   DeviceView2D intermediate_matrix("intermediate", N_quad, N_bf);
 
   fill_collocation_transpose(space, basis, collocation_points,
@@ -56,6 +56,7 @@ compute_density(const STOBasisSet basis, const FlatGrid grid,
   KokkosBlas::gemm(space, "N", "N", 1.0, collocation_values, density_matrix,
                    0.0, intermediate_matrix);
 
+  // Contract the basis in order to get the density
   Kokkos::parallel_for(
       "Contract Basis", N_quad, KOKKOS_LAMBDA(const int g) {
         double sum = 0;
@@ -66,5 +67,47 @@ compute_density(const STOBasisSet basis, const FlatGrid grid,
       });
 
   return density;
+};
+
+void compute_density_and_sigma(
+    const STOBasisSet basis, const FlatGrid grid,
+    Kokkos::View<double **, ExecSpace> density_matrix, DeviceView1D rho,
+    DeviceView1D sigma) {
+
+  ExecSpace space;
+  Kokkos::View<Point *, ExecSpace> collocation_points = grid.quad_points;
+  const int N_quad = collocation_points.extent(0);
+  const int N_bf = basis.nbf();
+
+  DeviceView2D collocation_values("collocation values", N_quad, N_bf);
+  Kokkos::View<double **[3], ExecSpace> collocation_gradients(
+      "collocation gradients", N_quad, N_bf);
+  DeviceView2D intermediate_matrix("intermediate", N_quad, N_bf);
+
+  fill_collocation_transpose(space, basis, collocation_points,
+                             collocation_values);
+
+  fill_grad_collocation_transpose(space, basis, collocation_points,
+                                  collocation_gradients);
+
+  KokkosBlas::gemm(space, "N", "N", 1.0, collocation_values, density_matrix,
+                   0.0, intermediate_matrix);
+
+  // Contract the basis in order to get the density
+  Kokkos::parallel_for(
+      "Contract Basis", N_quad, KOKKOS_LAMBDA(const int g) {
+        double sum_values = 0;
+        double sum_gx = 0;
+        double sum_gy = 0;
+        double sum_gz = 0;
+        for (int i = 0; i < N_bf; ++i) {
+          sum_values += collocation_values(g, i) * intermediate_matrix(g, i);
+          sum_gx += collocation_gradients(g, i, 0) * intermediate_matrix(g, i);
+          sum_gy += collocation_gradients(g, i, 1) * intermediate_matrix(g, i);
+          sum_gz += collocation_gradients(g, i, 2) * intermediate_matrix(g, i);
+        }
+        rho(g) = sum_values;
+        sigma(g) = sum_gx * sum_gx + sum_gy * sum_gy + sum_gz * sum_gz;
+      });
 };
 }; // namespace NuKEXC

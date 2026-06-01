@@ -1,0 +1,6 @@
+title:    Yttrium (IV, 3d frozen)
+orbital:  8S 6P 4D
+old FIT:  20S 12P 9D 6F 4G
+new FIT:  17S 15P 15D 10F 7G  (wrote Y.3d.new)
+diagonal RI error (old): 1.314987e-01
+diagonal RI error (new): 8.684359e-06

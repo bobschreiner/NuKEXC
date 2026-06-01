@@ -1,0 +1,6 @@
+title:    Manganese (IV)
+orbital:  9S 6P 3D
+old FIT:  19S 8P 7D 4F 3G
+new FIT:  16S 14P 13D 8F 6G  (wrote Mn.new)
+diagonal RI error (old): 1.691496e-01
+diagonal RI error (new): 5.086642e-06

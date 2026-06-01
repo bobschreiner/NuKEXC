@@ -1,0 +1,6 @@
+title:    Barium (II, all electron)
+orbital:  13S 10P 5D 1F
+old FIT:  32S 15P 12D 8F 6G
+new FIT:  25S 22P 21D 15F 12G 5H 1I  (wrote Ba.new)
+diagonal RI error (old): 3.206808e+01
+diagonal RI error (new): 2.889928e-05

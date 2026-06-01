@@ -1,0 +1,6 @@
+title:    Rubidium (QZ, all electron, 17S 12P 6D 3F)
+orbital:  17S 12P 6D 3F
+old FIT:  36S 17P 14D 12F 8G
+new FIT:  26S 24P 22D 17F 14G 9H 5I  (wrote Rb.new)
+diagonal RI error (old): 5.838694e+01
+diagonal RI error (new): 2.832382e-05

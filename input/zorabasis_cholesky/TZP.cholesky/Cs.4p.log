@@ -1,0 +1,6 @@
+title:    Cesium (IV, 4p frozen)
+orbital:  10S 7P 6D 1F
+old FIT:  25S 15P 12D 8F 6G
+new FIT:  22S 19P 19D 15F 12G 6H 1I  (wrote Cs.4p.new)
+diagonal RI error (old): 1.702768e+00
+diagonal RI error (new): 6.613663e-06

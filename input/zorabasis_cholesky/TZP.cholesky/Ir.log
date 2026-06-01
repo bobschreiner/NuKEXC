@@ -1,0 +1,6 @@
+title:    Iridium (IV, all electron)
+orbital:  14S 10P 7D 3F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  25S 23P 23D 17F 16G 9H 6I  (wrote Ir.new)
+diagonal RI error (old): 7.928311e+01
+diagonal RI error (new): 9.239331e-05

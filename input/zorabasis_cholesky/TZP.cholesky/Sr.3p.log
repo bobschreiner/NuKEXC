@@ -1,0 +1,6 @@
+title:    Strontium (IV, 3p frozen)
+orbital:  8S 6P 5D
+old FIT:  20S 11P 8D 5F 4G
+new FIT:  17S 16P 13D 11F 9G  (wrote Sr.3p.new)
+diagonal RI error (old): 7.787480e-01
+diagonal RI error (new): 1.396477e-05

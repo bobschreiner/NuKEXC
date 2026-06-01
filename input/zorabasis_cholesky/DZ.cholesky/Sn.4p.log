@@ -1,0 +1,6 @@
+title:    Tin (II, 4p frozen)
+orbital:  6S 5P 3D
+old FIT:  21S 13P 11D 7F 5G
+new FIT:  17S 15P 15D 9F 6G  (wrote Sn.4p.new)
+diagonal RI error (old): 1.836699e-02
+diagonal RI error (new): 3.179282e-06

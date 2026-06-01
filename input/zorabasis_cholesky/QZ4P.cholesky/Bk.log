@@ -1,0 +1,6 @@
+title:    Berkelium (QZ, all electron, 25S 20P 14D 9F)
+orbital:  25S 20P 14D 9F
+old FIT:  50S 24P 20D 17F 13G
+new FIT:  38S 37P 34D 29F 25G 20H 16I  (wrote Bk.new)
+diagonal RI error (old): 4.355666e+03
+diagonal RI error (new): 8.081400e-05

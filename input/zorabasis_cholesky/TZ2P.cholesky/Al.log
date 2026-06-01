@@ -1,0 +1,6 @@
+title:    Aluminium (V)
+orbital:  7S 5P 1D 1F
+old FIT:  14S 7P 6D 2F 1G
+new FIT:  14S 12P 12D 7F 6G 1H 1I  (wrote Al.new)
+diagonal RI error (old): 9.753215e-01
+diagonal RI error (new): 2.584159e-06

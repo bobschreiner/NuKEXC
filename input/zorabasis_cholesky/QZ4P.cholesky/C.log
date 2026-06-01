@@ -1,0 +1,6 @@
+title:    Carbon (QZ, all electron, 7S 4P 2D 2F)
+orbital:  7S 4P 2D 2F
+old FIT:  13S 7P 5D 4F 3G
+new FIT:  12S 11P 10D 9F 7G 4H 3I  (wrote C.new)
+diagonal RI error (old): 2.279031e+00
+diagonal RI error (new): 2.890680e-06

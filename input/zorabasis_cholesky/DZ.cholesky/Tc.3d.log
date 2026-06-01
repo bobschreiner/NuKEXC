@@ -1,0 +1,6 @@
+title:    Technetium (II, 3d frozen)
+orbital:  7S 5P 3D
+old FIT:  20S 12P 9D 6F 4G
+new FIT:  16S 14P 13D 8F 5G  (wrote Tc.3d.new)
+diagonal RI error (old): 8.256699e-02
+diagonal RI error (new): 7.085700e-06

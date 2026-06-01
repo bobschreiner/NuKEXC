@@ -1,0 +1,6 @@
+title:    Thorium (IV, all electron)
+orbital:  16S 12P 9D 5F
+old FIT:  36S 19P 14D 10F 8G
+new FIT:  28S 27P 25D 21F 18G 13H 9I  (wrote Th.new)
+diagonal RI error (old): 1.120883e+02
+diagonal RI error (new): 5.846390e-05

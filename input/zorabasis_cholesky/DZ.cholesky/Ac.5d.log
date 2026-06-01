@@ -1,0 +1,6 @@
+title:    Actinium (II, 5d frozen)
+orbital:  9S 7P 5D 4F
+old FIT:  26S 19P 14D 10F 8G
+new FIT:  21S 19P 20D 18F 17G 10H 8I  (wrote Ac.5d.new)
+diagonal RI error (old): 8.506099e+00
+diagonal RI error (new): 1.644268e-05

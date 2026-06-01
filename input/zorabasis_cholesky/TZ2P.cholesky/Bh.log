@@ -1,0 +1,6 @@
+title:    Bohrium (V, all electron)
+orbital:  16S 12P 9D 6F
+old FIT:  37S 19P 14D 11F 8G
+new FIT:  29S 26P 25D 21F 19G 14H 11I  (wrote Bh.new)
+diagonal RI error (old): 1.867304e+02
+diagonal RI error (new): 7.364279e-05

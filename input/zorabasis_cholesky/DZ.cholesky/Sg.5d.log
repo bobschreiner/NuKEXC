@@ -1,0 +1,6 @@
+title:    Seaborgium (II, 5d frozen)
+orbital:  9S 7P 5D 4F
+old FIT:  26S 19P 14D 11F 8G
+new FIT:  20S 20P 20D 17F 16G 11H 8I  (wrote Sg.5d.new)
+diagonal RI error (old): 1.344823e+01
+diagonal RI error (new): 1.261796e-05

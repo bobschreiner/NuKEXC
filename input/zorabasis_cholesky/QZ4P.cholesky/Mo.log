@@ -1,0 +1,6 @@
+title:    Molybdenum (QZ, all electron, 17S 12P 7D 3F)
+orbital:  17S 12P 7D 3F
+old FIT:  36S 17P 14D 12F 8G
+new FIT:  25S 25P 22D 17F 13G 9H 5I  (wrote Mo.new)
+diagonal RI error (old): 7.541592e+01
+diagonal RI error (new): 2.925249e-05

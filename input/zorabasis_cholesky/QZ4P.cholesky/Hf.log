@@ -1,0 +1,6 @@
+title:    Hafnium (QZ, all electron, 22S 17P 11D 6F)
+orbital:  22S 17P 11D 6F
+old FIT:  47S 22P 18D 15F 11G
+new FIT:  34S 34P 30D 26F 20G 17H 11I  (wrote Hf.new)
+diagonal RI error (old): 2.474080e+03
+diagonal RI error (new): 4.276037e-05

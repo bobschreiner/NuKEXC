@@ -1,0 +1,6 @@
+title:    Actinium (II, all electron)
+orbital:  15S 12P 8D 5F
+old FIT:  36S 19P 14D 10F 8G
+new FIT:  27S 26P 25D 21F 17G 12H 9I  (wrote Ac.new)
+diagonal RI error (old): 1.101019e+02
+diagonal RI error (new): 6.975643e-05

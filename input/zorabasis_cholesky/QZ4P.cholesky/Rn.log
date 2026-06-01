@@ -1,0 +1,6 @@
+title:    Radon (QZ, all electron, 23S 19P 12D 7F)
+orbital:  23S 19P 12D 7F
+old FIT:  47S 23P 19D 16F 11G
+new FIT:  34S 33P 32D 26F 21G 17H 13I  (wrote Rn.new)
+diagonal RI error (old): 3.280306e+03
+diagonal RI error (new): 1.281741e-04

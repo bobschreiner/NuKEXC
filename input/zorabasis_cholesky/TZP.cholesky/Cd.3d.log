@@ -1,0 +1,6 @@
+title:    Cadmium (IV, 3d frozen)
+orbital:  8S 6P 4D
+old FIT:  20S 12P 9D 6F 4G
+new FIT:  17S 16P 15D 10F 8G  (wrote Cd.3d.new)
+diagonal RI error (old): 1.150383e-01
+diagonal RI error (new): 3.942620e-06

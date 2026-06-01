@@ -1,0 +1,6 @@
+title:    Molybdenum (IV, 3d frozen)
+orbital:  8S 6P 4D
+old FIT:  20S 12P 9D 6F 4G
+new FIT:  18S 15P 16D 10F 8G  (wrote Mo.3d.new)
+diagonal RI error (old): 1.585863e-01
+diagonal RI error (new): 5.926345e-06

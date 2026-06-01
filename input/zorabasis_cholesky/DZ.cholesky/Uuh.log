@@ -1,0 +1,6 @@
+title:    Ununhexium (II, all electron)
+orbital:  15S 13P 8D 5F
+old FIT:  39S 20P 16D 12F 9G
+new FIT:  29S 26P 25D 20F 16G 12H 9I  (wrote Uuh.new)
+diagonal RI error (old): 2.483227e+02
+diagonal RI error (new): 1.443251e-04

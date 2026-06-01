@@ -1,0 +1,6 @@
+title:    Magnesium (II, 1s frozen)
+orbital:  5S 3P
+old FIT:  12S 7P 6D 2F 1G
+new FIT:  10S 9P 5D  (wrote Mg.1s.new)
+diagonal RI error (old): 1.133750e-03
+diagonal RI error (new): 8.154140e-07

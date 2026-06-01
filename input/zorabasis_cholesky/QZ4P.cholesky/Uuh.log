@@ -1,0 +1,6 @@
+title:    Ununhexium (QZ, all electron, 26S 24P 15D 10F)
+orbital:  26S 24P 15D 10F
+old FIT:  52S 26P 22D 19F 14G
+new FIT:  40S 42P 40D 30F 24G 20H 16I  (wrote Uuh.new)
+diagonal RI error (old): 5.946785e+04
+diagonal RI error (new): 2.393147e-04

@@ -1,0 +1,6 @@
+title:    Holmium (QZ, all electron, 21S 16P 10D 6F)
+orbital:  21S 16P 10D 6F
+old FIT:  43S 22P 18D 15F 11G
+new FIT:  31S 30P 28D 23F 19G 15H 11I  (wrote Ho.new)
+diagonal RI error (old): 8.219255e+02
+diagonal RI error (new): 5.541968e-05

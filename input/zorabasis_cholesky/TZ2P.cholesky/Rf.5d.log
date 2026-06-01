@@ -1,0 +1,6 @@
+title:    Rutherfordium (V, 5d frozen)
+orbital:  11S 8P 6D 5F
+old FIT:  28S 19P 14D 11F 8G
+new FIT:  26S 23P 23D 20F 18G 14H 10I  (wrote Rf.5d.new)
+diagonal RI error (old): 1.320243e+01
+diagonal RI error (new): 2.288111e-05

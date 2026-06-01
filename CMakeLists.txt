@@ -69,6 +69,7 @@ include( nukexc-integratorxx ) # finds package integratorxx
 include( nukexc-kokkos) # finds package Kokkos 
 include( nukexc-kokkos-kernels) # finds package Kokkos-kernels
 include( nukexc-arborx) # finds package arborx
+include( nukexc-libxc ) # finds libxc
 
 
 set(export_properties

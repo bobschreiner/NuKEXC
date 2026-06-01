@@ -1,0 +1,6 @@
+title:    Chromium (IV)
+orbital:  9S 6P 3D
+old FIT:  19S 8P 7D 4F 3G
+new FIT:  16S 14P 12D 8F 6G  (wrote Cr.new)
+diagonal RI error (old): 1.639761e-01
+diagonal RI error (new): 5.556633e-06

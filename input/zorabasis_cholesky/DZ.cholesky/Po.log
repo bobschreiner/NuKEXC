@@ -1,0 +1,6 @@
+title:    Polonium (II, all electron)
+orbital:  13S 11P 6D 3F
+old FIT:  32S 16P 12D 9F 7G
+new FIT:  25S 24P 22D 16F 14G 8H 6I  (wrote Po.new)
+diagonal RI error (old): 1.014250e+02
+diagonal RI error (new): 2.557430e-05

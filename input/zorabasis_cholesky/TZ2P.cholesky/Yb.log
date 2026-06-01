@@ -1,0 +1,6 @@
+title:    Ytterbium (V, all electron)
+orbital:  14S 10P 7D 4F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  26S 26P 25D 19F 17G 12H 8I  (wrote Yb.new)
+diagonal RI error (old): 6.670870e+01
+diagonal RI error (new): 3.418891e-05

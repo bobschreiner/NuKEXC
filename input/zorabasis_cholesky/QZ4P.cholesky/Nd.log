@@ -1,0 +1,6 @@
+title:    Neodymium (QZ, all electron, 21S 16P 10D 6F)
+orbital:  21S 16P 10D 6F
+old FIT:  43S 22P 18D 15F 11G
+new FIT:  30S 29P 28D 23F 18G 15H 11I  (wrote Nd.new)
+diagonal RI error (old): 7.179359e+02
+diagonal RI error (new): 6.456847e-05

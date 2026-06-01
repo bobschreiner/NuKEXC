@@ -1,0 +1,6 @@
+title:    Oxygen (II, 1s frozen)
+orbital:  3S 2P
+old FIT:  8S 5P 4D 2F 1G
+new FIT:  8S 6P 3D  (wrote O.1s.new)
+diagonal RI error (old): 5.472435e-04
+diagonal RI error (new): 7.757388e-10

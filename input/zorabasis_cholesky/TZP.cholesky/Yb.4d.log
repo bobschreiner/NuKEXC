@@ -1,0 +1,6 @@
+title:    Ytterbium (IV, 4d frozen)
+orbital:  10S 6P 5D 3F
+old FIT:  25S 15P 12D 8F 7G
+new FIT:  22S 20P 20D 16F 15G 9H 6I  (wrote Yb.4d.new)
+diagonal RI error (old): 8.582597e+00
+diagonal RI error (new): 2.104085e-05

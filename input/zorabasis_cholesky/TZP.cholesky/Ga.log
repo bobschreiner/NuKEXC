@@ -1,0 +1,6 @@
+title:    Gallium (IV)
+orbital:  9S 7P 4D
+old FIT:  19S 8P 7D 4F 3G
+new FIT:  16S 17P 16D 11F 7G  (wrote Ga.new)
+diagonal RI error (old): 1.774360e+00
+diagonal RI error (new): 1.264287e-05

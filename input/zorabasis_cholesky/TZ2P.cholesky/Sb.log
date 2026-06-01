@@ -1,0 +1,6 @@
+title:    Antimony (V, all electron)
+orbital:  12S 10P 7D 1F
+old FIT:  27S 13P 11D 7F 5G
+new FIT:  23S 22P 20D 17F 12G 6H 1I  (wrote Sb.new)
+diagonal RI error (old): 2.770892e+01
+diagonal RI error (new): 2.770054e-05

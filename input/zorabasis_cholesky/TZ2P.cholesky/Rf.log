@@ -1,0 +1,6 @@
+title:    Rutherfordium (V, all electron)
+orbital:  16S 12P 9D 6F
+old FIT:  37S 19P 14D 11F 8G
+new FIT:  30S 27P 26D 22F 20G 15H 11I  (wrote Rf.new)
+diagonal RI error (old): 1.728375e+02
+diagonal RI error (new): 8.766853e-05

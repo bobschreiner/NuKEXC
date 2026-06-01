@@ -1,0 +1,6 @@
+title:    Nitrogen (IV)
+orbital:  5S 3P 1D
+old FIT:  10S 5P 4D 2F 1G
+new FIT:  10S 8P 7D 3F 1G  (wrote N.new)
+diagonal RI error (old): 9.317670e-03
+diagonal RI error (new): 9.288687e-07

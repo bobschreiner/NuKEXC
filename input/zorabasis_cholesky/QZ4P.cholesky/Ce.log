@@ -1,0 +1,6 @@
+title:    Cerium (QZ, all electron, 21S 16P 10D 6F)
+orbital:  21S 16P 10D 6F
+old FIT:  43S 22P 18D 15F 11G
+new FIT:  30S 30P 29D 21F 18G 14H 11I  (wrote Ce.new)
+diagonal RI error (old): 6.549027e+02
+diagonal RI error (new): 5.846488e-05

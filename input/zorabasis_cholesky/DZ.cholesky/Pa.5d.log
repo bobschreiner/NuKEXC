@@ -1,0 +1,6 @@
+title:    Protactinium (II, 5d frozen)
+orbital:  9S 7P 5D 4F
+old FIT:  26S 19P 14D 10F 8G
+new FIT:  20S 19P 20D 18F 16G 10H 8I  (wrote Pa.5d.new)
+diagonal RI error (old): 8.998107e+00
+diagonal RI error (new): 2.569835e-05

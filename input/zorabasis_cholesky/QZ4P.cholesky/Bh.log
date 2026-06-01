@@ -1,0 +1,6 @@
+title:    Bohrium (QZ, all electron, 25S 21P 14D 9F)
+orbital:  25S 21P 14D 9F
+old FIT:  52S 24P 20D 17F 13G
+new FIT:  39S 38P 37D 29F 24G 20H 15I  (wrote Bh.new)
+diagonal RI error (old): 1.899748e+04
+diagonal RI error (new): 3.753884e-04

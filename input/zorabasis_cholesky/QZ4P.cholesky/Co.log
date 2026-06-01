@@ -1,0 +1,6 @@
+title:    Cobalt (QZ, all electron, 13S 8P 5D 3F)
+orbital:  13S 8P 5D 3F
+old FIT:  25S 14P 11D 9F 6G
+new FIT:  20S 18P 17D 14F 11G 7H 5I  (wrote Co.new)
+diagonal RI error (old): 4.148642e+00
+diagonal RI error (new): 1.684119e-05

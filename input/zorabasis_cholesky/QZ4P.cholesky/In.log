@@ -1,0 +1,6 @@
+title:    Indium (QZ, all electron, 18S 15P 8D 3F)
+orbital:  18S 15P 8D 3F
+old FIT:  39S 17P 15D 12F 8G
+new FIT:  28S 28P 27D 18F 14G 10H 5I  (wrote In.new)
+diagonal RI error (old): 5.924343e+02
+diagonal RI error (new): 5.662111e-05

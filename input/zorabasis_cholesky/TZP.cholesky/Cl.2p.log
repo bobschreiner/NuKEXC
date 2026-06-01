@@ -1,0 +1,6 @@
+title:    Chlorine (IV, 2p frozen)
+orbital:  5S 4P 1D
+old FIT:  11S 7P 6D 2F 1G
+new FIT:  11S 10P 8D 4F 1G  (wrote Cl.2p.new)
+diagonal RI error (old): 4.737099e-02
+diagonal RI error (new): 7.136194e-07

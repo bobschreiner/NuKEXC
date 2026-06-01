@@ -1,0 +1,6 @@
+title:    Potassium (V)
+orbital:  9S 6P 2D 1F
+old FIT:  19S 8P 7D 3F 1G
+new FIT:  17S 14P 12D 9F 6G 2H 1I  (wrote K.new)
+diagonal RI error (old): 1.382353e+00
+diagonal RI error (new): 5.798965e-06

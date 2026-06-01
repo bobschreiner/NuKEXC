@@ -1,0 +1,6 @@
+title:    Samarium (II, 4d frozen)
+orbital:  8S 6P 4D 3F
+old FIT:  25S 15P 12D 8F 6G
+new FIT:  19S 17P 18D 14F 14G 8H 6I  (wrote Sm.4d.new)
+diagonal RI error (old): 6.031022e+00
+diagonal RI error (new): 1.138871e-05

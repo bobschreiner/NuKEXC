@@ -1,0 +1,6 @@
+title:    Holmium (II, 4d frozen)
+orbital:  8S 6P 4D 3F
+old FIT:  25S 15P 12D 8F 7G
+new FIT:  18S 17P 17D 15F 13G 8H 6I  (wrote Ho.4d.new)
+diagonal RI error (old): 6.626506e+00
+diagonal RI error (new): 2.195466e-05

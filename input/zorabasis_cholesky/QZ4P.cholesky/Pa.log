@@ -1,0 +1,6 @@
+title:    Protactinium (QZ, all electron, 25S 20P 14D 8F)
+orbital:  25S 20P 14D 8F
+old FIT:  50S 24P 20D 17F 13G
+new FIT:  35S 36P 33D 28F 23G 19H 14I  (wrote Pa.new)
+diagonal RI error (old): 3.764721e+03
+diagonal RI error (new): 1.147707e-04

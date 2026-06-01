@@ -1,0 +1,6 @@
+title:    Mercury (IV, 4d frozen)
+orbital:  10S 7P 5D 3F
+old FIT:  27S 15P 12D 8F 7G
+new FIT:  21S 19P 19D 16F 14G 9H 6I  (wrote Hg.4d.new)
+diagonal RI error (old): 1.303563e+01
+diagonal RI error (new): 7.777719e-06

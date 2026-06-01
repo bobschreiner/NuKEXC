@@ -1,0 +1,6 @@
+title:    Americium (QZ, all electron, 25S 20P 14D 8F)
+orbital:  25S 20P 14D 8F
+old FIT:  50S 24P 20D 17F 13G
+new FIT:  37S 36P 33D 28F 24G 19H 14I  (wrote Am.new)
+diagonal RI error (old): 4.151107e+03
+diagonal RI error (new): 3.460063e-04

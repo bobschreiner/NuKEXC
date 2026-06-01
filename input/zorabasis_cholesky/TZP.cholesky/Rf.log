@@ -1,0 +1,6 @@
+title:    Rutherfordium (IV, all electron)
+orbital:  16S 12P 9D 5F
+old FIT:  37S 19P 14D 11F 8G
+new FIT:  29S 27P 27D 20F 20G 13H 9I  (wrote Rf.new)
+diagonal RI error (old): 1.722326e+02
+diagonal RI error (new): 1.048923e-04

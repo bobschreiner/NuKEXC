@@ -1,0 +1,6 @@
+title:    Yttrium (QZ, all electron, 17S 12P 7D 3F)
+orbital:  17S 12P 7D 3F
+old FIT:  36S 17P 14D 12F 8G
+new FIT:  26S 23P 23D 17F 13G 9H 5I  (wrote Y.new)
+diagonal RI error (old): 6.269625e+01
+diagonal RI error (new): 2.998646e-05

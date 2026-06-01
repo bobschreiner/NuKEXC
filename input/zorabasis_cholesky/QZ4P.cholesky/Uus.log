@@ -1,0 +1,6 @@
+title:    Ununseptium (QZ, all electron, 26S 24P 15D 10F)
+orbital:  26S 24P 15D 10F
+old FIT:  53S 25P 21D 18F 13G
+new FIT:  42S 41P 39D 29F 24G 20H 16I  (wrote Uus.new)
+diagonal RI error (old): 6.077557e+04
+diagonal RI error (new): 3.072326e-04

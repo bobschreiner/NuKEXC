@@ -1,0 +1,6 @@
+title:    Ununnilium (V, all electron)
+orbital:  16S 12P 9D 6F
+old FIT:  37S 19P 14D 11F 8G
+new FIT:  29S 27P 25D 21F 18G 14H 11I  (wrote Uun.new)
+diagonal RI error (old): 2.047139e+02
+diagonal RI error (new): 8.136844e-05

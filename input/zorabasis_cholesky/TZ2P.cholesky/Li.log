@@ -1,0 +1,6 @@
+title:    Lithium (V)
+orbital:  5S 2P 1D 1F
+old FIT:  9S 4P 3D 2F 1G
+new FIT:  10S 8P 7D 7F 3G 1H 1I  (wrote Li.new)
+diagonal RI error (old): 9.516958e-01
+diagonal RI error (new): 3.970327e-07

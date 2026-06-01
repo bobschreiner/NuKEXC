@@ -1,0 +1,6 @@
+title:    Lead (QZ, all electron, 22S 19P 12D 6F)
+orbital:  22S 19P 12D 6F
+old FIT:  49S 23P 19D 15F 11G
+new FIT:  35S 34P 34D 26F 21G 16H 11I  (wrote Pb.new)
+diagonal RI error (old): 3.046424e+03
+diagonal RI error (new): 5.525627e-05

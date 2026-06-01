@@ -1,0 +1,6 @@
+title:    Scandium (II)
+orbital:  8S 5P 3D
+old FIT:  19S 8P 7D 4F 3G
+new FIT:  15S 14P 12D 8F 6G  (wrote Sc.new)
+diagonal RI error (old): 9.723942e-02
+diagonal RI error (new): 6.951298e-06

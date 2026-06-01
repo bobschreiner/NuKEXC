@@ -1,0 +1,6 @@
+title:    Berkelium (II, all electron)
+orbital:  15S 12P 8D 5F
+old FIT:  36S 19P 14D 10F 8G
+new FIT:  27S 27P 26D 20F 18G 13H 9I  (wrote Bk.new)
+diagonal RI error (old): 1.395468e+02
+diagonal RI error (new): 9.470796e-05

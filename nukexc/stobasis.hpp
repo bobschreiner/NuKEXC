@@ -505,6 +505,7 @@ void fill_collocation_transpose(
         collocation_values(g, i) = radial_part * angular_part;
       });
 }
+
 template <typename PointsView, typename ValuesView>
 void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
                            PointsView &collocation_points,
@@ -518,16 +519,16 @@ void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
 
   Kokkos::parallel_for(
       "Fill collocation grad", md_policy,
-      KOKKOS_LAMBDA(const int &i, const int &j) {
+      KOKKOS_LAMBDA(const int &i, const int &g) {
         const int n_val = basis_set.n(i);
         const int l_val = basis_set.l(i);
         const int m_val = basis_set.m(i);
         const double norm = basis_set.norm(i);
         const double zeta = basis_set.zeta(i);
 
-        double dx = collocation_points(j)[0] - basis_set.O(i)[0];
-        double dy = collocation_points(j)[1] - basis_set.O(i)[1];
-        double dz = collocation_points(j)[2] - basis_set.O(i)[2];
+        double dx = collocation_points(g)[0] - basis_set.O(i)[0];
+        double dy = collocation_points(g)[1] - basis_set.O(i)[1];
+        double dz = collocation_points(g)[2] - basis_set.O(i)[2];
         double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
                    epsilon_shift; // Avoid pow(0,0)
 
@@ -550,12 +551,63 @@ void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
         double dR_dr = ((n_val - l_val - 1) / r - zeta) * R_pre;
         double common_R = dR_dr / r;
 
-        collocation_values(i, j, 0) = R_pre * dS_dx + S_val * (dx * common_R);
-        collocation_values(i, j, 1) = R_pre * dS_dy + S_val * (dy * common_R);
-        collocation_values(i, j, 2) = R_pre * dS_dz + S_val * (dz * common_R);
+        collocation_values(i, g, 0) = R_pre * dS_dx + S_val * (dx * common_R);
+        collocation_values(i, g, 1) = R_pre * dS_dy + S_val * (dy * common_R);
+        collocation_values(i, g, 2) = R_pre * dS_dz + S_val * (dz * common_R);
       });
 }
 
+template <typename PointsView, typename ValuesView>
+void fill_grad_collocation_transpose(ExecSpace &space,
+                                     const STOBasisSet &basis_set,
+                                     PointsView &collocation_points,
+                                     ValuesView &collocation_values) {
+
+  size_t col_points = collocation_points.extent(0);
+  size_t nbasis_functions = basis_set.nbf();
+
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> md_policy(
+      space, {0, 0}, {nbasis_functions, col_points});
+
+  Kokkos::parallel_for(
+      "Fill collocation grad", md_policy,
+      KOKKOS_LAMBDA(const int &i, const int &g) {
+        const int n_val = basis_set.n(i);
+        const int l_val = basis_set.l(i);
+        const int m_val = basis_set.m(i);
+        const double norm = basis_set.norm(i);
+        const double zeta = basis_set.zeta(i);
+
+        double dx = collocation_points(g)[0] - basis_set.O(i)[0];
+        double dy = collocation_points(g)[1] - basis_set.O(i)[1];
+        double dz = collocation_points(g)[2] - basis_set.O(i)[2];
+        double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
+                   epsilon_shift; // Avoid pow(0,0)
+
+        // Angular part
+        double S_val;
+        S_val = real_solid_harmonic_cart(l_val, m_val, dx, dy, dz);
+
+        double dS_dx;
+        double dS_dy;
+        double dS_dz;
+
+        grad_real_solid_harmonic_cart(l_val, m_val, dx, dy, dz, dS_dx, dS_dy,
+                                      dS_dz);
+
+        // Radial part
+        double pow_term = safe_pow(r, n_val - l_val - 1);
+        double exp_term = Kokkos::exp(-zeta * r);
+        double R_pre = norm * pow_term * exp_term;
+
+        double dR_dr = ((n_val - l_val - 1) / r - zeta) * R_pre;
+        double common_R = dR_dr / r;
+
+        collocation_values(g, i, 0) = R_pre * dS_dx + S_val * (dx * common_R);
+        collocation_values(g, i, 1) = R_pre * dS_dy + S_val * (dy * common_R);
+        collocation_values(g, i, 2) = R_pre * dS_dz + S_val * (dz * common_R);
+      });
+}
 struct VG {
   double val; // Value
   double dx;  // d/dx

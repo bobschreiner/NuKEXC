@@ -1,0 +1,6 @@
+title:    Potassium (IV)
+orbital:  9S 6P 2D
+old FIT:  19S 8P 7D 3F 1G
+new FIT:  17S 14P 11D 8F 3G  (wrote K.new)
+diagonal RI error (old): 5.142813e-01
+diagonal RI error (new): 8.038764e-06

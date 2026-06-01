@@ -1,0 +1,6 @@
+title:    Platinum (IV, all electron)
+orbital:  14S 10P 7D 3F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  25S 23P 23D 17F 16G 9H 6I  (wrote Pt.new)
+diagonal RI error (old): 8.289287e+01
+diagonal RI error (new): 8.156269e-05

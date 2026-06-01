@@ -1,0 +1,6 @@
+title:    Meitnerium (V, all electron)
+orbital:  16S 12P 9D 6F
+old FIT:  37S 19P 14D 11F 8G
+new FIT:  28S 27P 25D 21F 18G 14H 11I  (wrote Mt.new)
+diagonal RI error (old): 1.982162e+02
+diagonal RI error (new): 9.269860e-05

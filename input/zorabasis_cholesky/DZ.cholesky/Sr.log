@@ -1,0 +1,6 @@
+title:    Strontium (II, all electron)
+orbital:  11S 7P 3D
+old FIT:  27S 12P 9D 6F 4G
+new FIT:  21S 18P 16D 10F 5G  (wrote Sr.new)
+diagonal RI error (old): 3.798361e-01
+diagonal RI error (new): 7.963273e-06

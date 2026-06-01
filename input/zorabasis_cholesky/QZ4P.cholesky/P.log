@@ -1,0 +1,6 @@
+title:    Phosphorus (QZ, all electron, 10S 7P 3D 2F)
+orbital:  10S 7P 3D 2F
+old FIT:  20S 10P 9D 7F 4G
+new FIT:  17S 14P 15D 10F 9G 5H 3I  (wrote P.new)
+diagonal RI error (old): 1.743613e+00
+diagonal RI error (new): 7.054993e-06

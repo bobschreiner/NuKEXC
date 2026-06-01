@@ -1,0 +1,6 @@
+title:    Cadmium (QZ, all electron, 18S 14P 8D 3F)
+orbital:  18S 14P 8D 3F
+old FIT:  39S 17P 14D 12F 8G
+new FIT:  26S 28P 24D 19F 14G 10H 5I  (wrote Cd.new)
+diagonal RI error (old): 5.928421e+02
+diagonal RI error (new): 9.001789e-05

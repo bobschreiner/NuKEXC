@@ -1,0 +1,6 @@
+title:    Rhodium (II, all electron)
+orbital:  11S 7P 5D
+old FIT:  27S 12P 9D 6F 4G
+new FIT:  21S 18P 17D 11F 9G  (wrote Rh.new)
+diagonal RI error (old): 1.886899e+00
+diagonal RI error (new): 1.218246e-05

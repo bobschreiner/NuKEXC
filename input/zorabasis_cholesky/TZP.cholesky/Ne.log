@@ -1,0 +1,6 @@
+title:    Neon (IV)
+orbital:  5S 3P 1D
+old FIT:  11S 5P 4D 2F 1G
+new FIT:  10S 9P 7D 3F 1G  (wrote Ne.new)
+diagonal RI error (old): 3.067179e-02
+diagonal RI error (new): 1.325011e-06

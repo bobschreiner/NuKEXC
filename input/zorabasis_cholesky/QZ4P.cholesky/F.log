@@ -1,0 +1,6 @@
+title:    Fluorine (QZ, all electron, 8S 4P 2D 2F)
+orbital:  8S 4P 2D 2F
+old FIT:  14S 8P 6D 5F 4G
+new FIT:  12S 11P 9D 9F 7G 4H 3I  (wrote F.new)
+diagonal RI error (old): 2.227971e+00
+diagonal RI error (new): 1.849292e-05

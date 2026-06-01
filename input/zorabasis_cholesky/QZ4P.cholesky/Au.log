@@ -1,0 +1,6 @@
+title:    Gold (QZ, all electron, 22S 18P 11D 6F)
+orbital:  22S 18P 11D 6F
+old FIT:  46S 22P 18D 15F 11G
+new FIT:  34S 34P 31D 25F 20G 15H 11I  (wrote Au.new)
+diagonal RI error (old): 2.855320e+03
+diagonal RI error (new): 7.793630e-05

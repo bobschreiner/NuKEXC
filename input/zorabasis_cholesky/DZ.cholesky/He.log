@@ -1,0 +1,6 @@
+title:    Helium (II)
+orbital:  2S
+old FIT:  5S 3P 2D 1F 1G
+new FIT:  3S  (wrote He.new)
+diagonal RI error (old): 7.617769e-07
+diagonal RI error (new): 2.220446e-16

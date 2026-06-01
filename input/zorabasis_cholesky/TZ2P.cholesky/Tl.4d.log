@@ -1,0 +1,6 @@
+title:    Thallium (V, 4d frozen)
+orbital:  10S 8P 5D 4F
+old FIT:  27S 16P 12D 9F 7G
+new FIT:  23S 21P 21D 18F 15G 11H 8I  (wrote Tl.4d.new)
+diagonal RI error (old): 1.488611e+01
+diagonal RI error (new): 5.563122e-06

@@ -1,0 +1,6 @@
+title:    Rubidium (IV, all electron)
+orbital:  12S 8P 5D
+old FIT:  27S 12P 9D 6F 4G
+new FIT:  23S 21P 17D 12F 9G  (wrote Rb.new)
+diagonal RI error (old): 1.206789e+00
+diagonal RI error (new): 5.466817e-06

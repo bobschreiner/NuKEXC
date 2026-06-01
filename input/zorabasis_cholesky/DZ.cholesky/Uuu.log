@@ -1,0 +1,6 @@
+title:    Unununium (II, all electron)
+orbital:  15S 12P 8D 5F
+old FIT:  37S 19P 14D 11F 8G
+new FIT:  28S 27P 24D 20F 16G 12H 9I  (wrote Uuu.new)
+diagonal RI error (old): 2.093716e+02
+diagonal RI error (new): 8.133890e-05

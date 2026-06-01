@@ -1,0 +1,6 @@
+title:    Strontium (QZ, all electron, 17S 12P 6D 3F)
+orbital:  17S 12P 6D 3F
+old FIT:  36S 17P 14D 12F 8G
+new FIT:  25S 24P 22D 18F 14G 8H 5I  (wrote Sr.new)
+diagonal RI error (old): 5.835254e+01
+diagonal RI error (new): 3.304399e-05

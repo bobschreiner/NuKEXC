@@ -1,0 +1,6 @@
+title:    Francium (II, all electron)
+orbital:  15S 12P 7D 4F
+old FIT:  35S 18P 14D 10F 8G
+new FIT:  28S 27P 26D 18F 18G 11H 8I  (wrote Fr.new)
+diagonal RI error (old): 1.102689e+02
+diagonal RI error (new): 3.017892e-05

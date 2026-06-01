@@ -1,0 +1,6 @@
+title:    Lutetium (IV, all electron)
+orbital:  14S 10P 7D 3F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  26S 25P 24D 18F 16G 10H 6I  (wrote Lu.new)
+diagonal RI error (old): 6.837178e+01
+diagonal RI error (new): 3.126645e-05

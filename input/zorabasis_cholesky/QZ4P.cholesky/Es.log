@@ -1,0 +1,6 @@
+title:    Einsteinium (QZ, all electron, 25S 20P 14D 9F)
+orbital:  25S 20P 14D 9F
+old FIT:  51S 24P 20D 17F 13G
+new FIT:  38S 37P 35D 28F 25G 20H 16I  (wrote Es.new)
+diagonal RI error (old): 4.555318e+03
+diagonal RI error (new): 8.681238e-05

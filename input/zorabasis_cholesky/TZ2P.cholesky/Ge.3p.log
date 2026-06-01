@@ -1,0 +1,6 @@
+title:    Germanium (V, 3p frozen)
+orbital:  6S 5P 4D 1F
+old FIT:  16S 8P 7D 4F 3G
+new FIT:  15S 14P 15D 12F 9G 4H 1I  (wrote Ge.3p.new)
+diagonal RI error (old): 1.244172e+00
+diagonal RI error (new): 5.993532e-06

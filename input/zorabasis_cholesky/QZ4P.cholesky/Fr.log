@@ -1,0 +1,6 @@
+title:    Francium (QZ, all electron, 25S 19P 12D 7F)
+orbital:  25S 19P 12D 7F
+old FIT:  51S 23P 19D 16F 11G
+new FIT:  36S 34P 32D 27F 23G 17H 13I  (wrote Fr.new)
+diagonal RI error (old): 3.405761e+03
+diagonal RI error (new): 1.221159e-04

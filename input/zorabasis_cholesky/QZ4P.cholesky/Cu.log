@@ -1,0 +1,6 @@
+title:    Copper (QZ, all electron, 14S 8P 5D 3F)
+orbital:  14S 8P 5D 3F
+old FIT:  29S 14P 11D 9F 6G
+new FIT:  22S 19P 17D 14F 11G 7H 5I  (wrote Cu.new)
+diagonal RI error (old): 3.930747e+00
+diagonal RI error (new): 2.475621e-05

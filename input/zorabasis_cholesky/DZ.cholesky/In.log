@@ -1,0 +1,6 @@
+title:    Indium (II, all electron)
+orbital:  11S 9P 5D
+old FIT:  27S 13P 11D 7F 5G
+new FIT:  23S 22P 20D 14F 9G  (wrote In.new)
+diagonal RI error (old): 2.593644e+01
+diagonal RI error (new): 6.739179e-06

@@ -1,0 +1,6 @@
+title:    Vanadium (IV)
+orbital:  9S 6P 3D
+old FIT:  19S 8P 7D 4F 3G
+new FIT:  16S 14P 13D 8F 6G  (wrote V.new)
+diagonal RI error (old): 1.520088e-01
+diagonal RI error (new): 7.055112e-06

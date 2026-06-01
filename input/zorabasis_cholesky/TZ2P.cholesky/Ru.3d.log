@@ -1,0 +1,6 @@
+title:    Ruthenium (V, 3d frozen)
+orbital:  8S 6P 4D 1F
+old FIT:  20S 12P 9D 6F 4G
+new FIT:  17S 16P 16D 11F 9G 4H 1I  (wrote Ru.3d.new)
+diagonal RI error (old): 1.161928e+00
+diagonal RI error (new): 3.444970e-06

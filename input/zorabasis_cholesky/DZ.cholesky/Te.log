@@ -1,0 +1,6 @@
+title:    Tellurium (II, all electron)
+orbital:  11S 9P 5D
+old FIT:  27S 13P 11D 7F 5G
+new FIT:  22S 20P 18D 13F 9G  (wrote Te.new)
+diagonal RI error (old): 2.788313e+01
+diagonal RI error (new): 2.065337e-05

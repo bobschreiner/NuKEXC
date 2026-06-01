@@ -1,0 +1,6 @@
+title:    Rubidium (II, 3p frozen)
+orbital:  7S 5P 3D
+old FIT:  20S 11P 8D 5F 4G
+new FIT:  16S 14P 13D 9F 5G  (wrote Rb.3p.new)
+diagonal RI error (old): 1.420571e-01
+diagonal RI error (new): 1.541341e-05

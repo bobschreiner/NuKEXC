@@ -1,0 +1,6 @@
+title:    Iodine (II, all electron)
+orbital:  11S 9P 5D
+old FIT:  27S 13P 11D 7F 5G
+new FIT:  22S 20P 18D 13F 9G  (wrote I.new)
+diagonal RI error (old): 2.714599e+01
+diagonal RI error (new): 1.687318e-05

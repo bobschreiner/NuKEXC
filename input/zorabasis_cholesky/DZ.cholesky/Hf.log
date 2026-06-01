@@ -1,0 +1,6 @@
+title:    Hafnium (II, all electron)
+orbital:  13S 10P 6D 3F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  25S 24P 22D 17F 14G 10H 6I  (wrote Hf.new)
+diagonal RI error (old): 6.948332e+01
+diagonal RI error (new): 7.519733e-05

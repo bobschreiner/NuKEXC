@@ -1,0 +1,6 @@
+title:    Meitnerium (IV, 5d frozen)
+orbital:  11S 7P 6D 4F
+old FIT:  28S 19P 14D 11F 8G
+new FIT:  23S 23P 22D 18F 16G 12H 8I  (wrote Mt.5d.new)
+diagonal RI error (old): 1.536204e+01
+diagonal RI error (new): 1.336335e-05

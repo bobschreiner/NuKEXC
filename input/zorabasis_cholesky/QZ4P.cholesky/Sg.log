@@ -1,0 +1,6 @@
+title:    Seaborgium (QZ, all electron, 25S 21P 14D 9F)
+orbital:  25S 21P 14D 9F
+old FIT:  52S 24P 20D 17F 13G
+new FIT:  39S 39P 37D 28F 24G 20H 15I  (wrote Sg.new)
+diagonal RI error (old): 1.873614e+04
+diagonal RI error (new): 3.339566e-04

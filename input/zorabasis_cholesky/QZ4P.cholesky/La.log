@@ -1,0 +1,6 @@
+title:    Lanthanum (QZ, all electron, 21S 16P 10D 6F)
+orbital:  21S 16P 10D 6F
+old FIT:  43S 22P 18D 15F 11G
+new FIT:  29S 30P 27D 22F 17G 14H 11I  (wrote La.new)
+diagonal RI error (old): 6.347630e+02
+diagonal RI error (new): 1.045869e-04

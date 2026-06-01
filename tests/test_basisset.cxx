@@ -190,6 +190,9 @@ TEST_CASE("H2O_adf_QZ4P_AUX", "[h20][adf][fit]") {
   Kokkos::deep_copy(cutoff_h, basis.cutoff_radii);
 
 #if 1
+  std::cout << "--------------------------------------------------"
+            << std::endl;
+
   std::cout << "Auxillary ADF QZ4P" << std::endl;
 
   for (int i = 0; i < basis.nbf(); ++i) {
@@ -208,6 +211,68 @@ TEST_CASE("H2O_adf_QZ4P_AUX", "[h20][adf][fit]") {
             << std::endl;
 #endif
 };
+
+TEST_CASE("H2O_adf_QZ4P_AUX_cholesky", "[h20][adf][fit][cholesky]") {
+  Molecule mol;
+  read_xyz("input/water.xyz", mol);
+  const bool fit = true;
+  const double tol = 1e-10;
+
+  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", tol);
+  STOBasisSet basis_cholesky =
+      load_adf_basis(mol, "input/zorabasis_cholesky/QZ4P.cholesky", tol);
+  STOBasisSet basis_aux = load_adf_basis(mol, "input/zorabasis/QZ4P", tol, fit);
+  STOBasisSet basis_aux_cholesky =
+      load_adf_basis(mol, "input/zorabasis_cholesky/QZ4P.cholesky", tol, fit);
+
+  // On CPU we can print out the basis set
+  // Copy to host device
+  auto n_h = Kokkos::create_mirror_view(basis_aux_cholesky.n);
+  auto l_h = Kokkos::create_mirror_view(basis_aux_cholesky.l);
+  auto m_h = Kokkos::create_mirror_view(basis_aux_cholesky.m);
+  auto norm_h = Kokkos::create_mirror_view(basis_aux_cholesky.norm);
+  auto zeta_h = Kokkos::create_mirror_view(basis_aux_cholesky.zeta);
+  auto O_h = Kokkos::create_mirror_view(basis_aux_cholesky.O);
+  auto cutoff_h = Kokkos::create_mirror_view(basis_aux_cholesky.cutoff_radii);
+
+  Kokkos::deep_copy(n_h, basis_aux_cholesky.n);
+  Kokkos::deep_copy(l_h, basis_aux_cholesky.l);
+  Kokkos::deep_copy(m_h, basis_aux_cholesky.m);
+  Kokkos::deep_copy(zeta_h, basis_aux_cholesky.zeta);
+  Kokkos::deep_copy(norm_h, basis_aux_cholesky.norm);
+  Kokkos::deep_copy(O_h, basis_aux_cholesky.O);
+  Kokkos::deep_copy(cutoff_h, basis_aux_cholesky.cutoff_radii);
+
+#if 1
+  std::cout << "--------------------------------------------------"
+            << std::endl;
+
+  std::cout << "Auxillary ADF QZ4P Cholesky" << std::endl;
+
+  for (int i = 0; i < basis_aux_cholesky.nbf(); ++i) {
+    std::cout << "Basis function " << i << std::endl;
+    std::cout << "n " << n_h(i) << std::endl;
+    std::cout << "l " << l_h(i) << std::endl;
+    std::cout << "m " << m_h(i) << std::endl;
+    std::cout << "zeta " << zeta_h(i) << std::endl;
+    std::cout << "norm " << norm_h(i) << std::endl;
+    std::cout << "cutoff " << cutoff_h(i) << std::endl;
+    std::cout << "O_h " << O_h(i)[0] << " " << O_h(i)[0] << " " << O_h(i)[2]
+              << " " << std::endl
+              << std::endl;
+  }
+  std::cout << "--------------------------------------------------"
+            << std::endl;
+#endif
+
+  // Check that both regular basis sets are the same
+  REQUIRE(basis.nbf() == basis_cholesky.nbf());
+
+  // Check that the auxillary basis set created with auto Aux is blarger then
+  // the regular ADF auxillary basis
+  REQUIRE(basis_aux.nbf() < basis_aux_cholesky.nbf());
+};
+
 TEST_CASE("Basis Cutoff", "[h20][cutoff]") {
 
   using bk_type = IntegratorXX::Becke<double, double>;

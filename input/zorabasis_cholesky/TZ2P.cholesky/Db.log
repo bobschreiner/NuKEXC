@@ -1,0 +1,6 @@
+title:    Dubnium (V, all electron)
+orbital:  16S 12P 9D 6F
+old FIT:  37S 19P 14D 11F 8G
+new FIT:  29S 28P 26D 21F 19G 14H 11I  (wrote Db.new)
+diagonal RI error (old): 1.763451e+02
+diagonal RI error (new): 8.267063e-05

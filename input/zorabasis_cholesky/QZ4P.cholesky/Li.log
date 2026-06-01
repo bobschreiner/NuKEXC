@@ -1,0 +1,6 @@
+title:    Lithium (QZ, all electron, 7S 3P 2D 2F)
+orbital:  7S 3P 2D 2F
+old FIT:  12S 6P 5D 4F 3G
+new FIT:  11S 10P 9D 9F 6G 4H 3I  (wrote Li.new)
+diagonal RI error (old): 1.386399e+00
+diagonal RI error (new): 2.269261e-06

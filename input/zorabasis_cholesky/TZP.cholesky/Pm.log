@@ -1,0 +1,6 @@
+title:    Promethium (IV, all electron)
+orbital:  14S 10P 7D 3F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  25S 24P 23D 17F 15G 10H 6I  (wrote Pm.new)
+diagonal RI error (old): 4.502909e+01
+diagonal RI error (new): 4.431780e-05

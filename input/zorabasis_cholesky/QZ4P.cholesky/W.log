@@ -1,0 +1,6 @@
+title:    Tungsten (QZ, all electron, 22S 17P 11D 6F)
+orbital:  22S 17P 11D 6F
+old FIT:  47S 22P 18D 15F 11G
+new FIT:  34S 32P 31D 24F 19G 15H 11I  (wrote W.new)
+diagonal RI error (old): 2.553914e+03
+diagonal RI error (new): 2.086693e-04

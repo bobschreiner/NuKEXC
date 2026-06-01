@@ -1,0 +1,6 @@
+title:    Thallium (V, all electron)
+orbital:  14S 12P 7D 4F
+old FIT:  32S 16P 12D 9F 7G
+new FIT:  27S 25P 24D 20F 16G 11H 8I  (wrote Tl.new)
+diagonal RI error (old): 9.737550e+01
+diagonal RI error (new): 7.614340e-05

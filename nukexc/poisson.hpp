@@ -22,6 +22,7 @@
 
 #include "density.hpp"
 #include "grid.hpp"
+#include "nukexc/partitioning.hpp"
 #include "nukexc_config.hpp"
 #include "nukexc_utils.hpp"
 #include "stobasis.hpp"
@@ -127,13 +128,17 @@ DeviceView2DLeft compute_poisson(const STOBasisSet basis,
   DeviceView2DLeft potential_collocation =
       sto_potential_collocation(space, basis_aux, grid, basis_aux_collocation);
 
+  Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
+  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+
   Kokkos::parallel_for(
-      "Scale potential",
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>(space, {0, 0}, {N_bf_aux, N_quad}),
-      KOKKOS_LAMBDA(const int i, const int g) {
-        potential_collocation(i, g) *= grid.weights(g);
+      "Scale potential", policy, KOKKOS_LAMBDA(const member_type &team_member) {
+        const int g = team_member.league_rank();
+        const double w_g = grid.weights(g);
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadRange(team_member, N_bf_aux),
+            [=](const int i) { potential_collocation(i, g) *= w_g; });
       });
-  space.fence();
 
   KokkosBlas::gemv(space, "N", 1.0, potential_collocation, density, 0.0,
                    expansion_coeff);
@@ -141,24 +146,23 @@ DeviceView2DLeft compute_poisson(const STOBasisSet basis,
   KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
                    potential_collocation, 0.0, aux_overlap);
 
-  space.fence();
-
   KokkosLapack::gesv(space, aux_overlap, expansion_coeff, piv);
 
   KokkosBlas::gemv(space, "T", 1.0, potential_collocation, expansion_coeff, 0.0,
                    potential_on_grid);
 
   Kokkos::parallel_for(
-      "Scale basis",
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>(space, {0, 0}, {N_bf, N_quad}),
-      KOKKOS_LAMBDA(const int i, const int g) {
-        basis_collocation_scaled(i, g) =
-            basis_collocation(i, g) * potential_on_grid(g);
+      "Scale basis by potential", policy,
+      KOKKOS_LAMBDA(const member_type &team_member) {
+        const int g = team_member.league_rank();
+        const double pot_g = potential_on_grid(g);
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadRange(team_member, N_bf), [=](const int i) {
+              basis_collocation_scaled(i, g) = basis_collocation(i, g) * pot_g;
+            });
       });
-
   KokkosBlas::gemm(space, "N", "T", 1.0, basis_collocation,
                    basis_collocation_scaled, 0.0, result);
-  space.fence();
 
   return result;
 }

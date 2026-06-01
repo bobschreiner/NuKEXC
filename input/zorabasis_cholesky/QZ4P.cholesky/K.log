@@ -1,0 +1,6 @@
+title:    Potassium (QZ, all electron, 13S 8P 3D 3F)
+orbital:  13S 8P 4D 3F
+old FIT:  24S 13P 11D 9F 6G
+new FIT:  18S 17P 15D 14F 10G 7H 5I  (wrote K.new)
+diagonal RI error (old): 2.561596e+00
+diagonal RI error (new): 7.498000e-05

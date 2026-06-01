@@ -1,0 +1,6 @@
+title:    Zinc (IV)
+orbital:  9S 6P 3D
+old FIT:  19S 8P 7D 4F 3G
+new FIT:  16S 14P 13D 9F 6G  (wrote Zn.new)
+diagonal RI error (old): 2.284680e-01
+diagonal RI error (new): 7.764183e-06

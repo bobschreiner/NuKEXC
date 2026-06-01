@@ -1,0 +1,6 @@
+title:    Gallium (IV, 3p frozen)
+orbital:  6S 5P 4D
+old FIT:  16S 8P 7D 4F 3G
+new FIT:  15S 15P 14D 10F 7G  (wrote Ga.3p.new)
+diagonal RI error (old): 5.588426e-01
+diagonal RI error (new): 6.254296e-06

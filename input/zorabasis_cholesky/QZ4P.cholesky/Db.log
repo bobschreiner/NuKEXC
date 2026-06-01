@@ -1,0 +1,6 @@
+title:    Dubnium (QZ, all electron, 25S 21P 14D 9F)
+orbital:  25S 21P 14D 9F
+old FIT:  53S 24P 20D 17F 13G
+new FIT:  39S 39P 38D 28F 25G 20H 15I  (wrote Db.new)
+diagonal RI error (old): 1.848812e+04
+diagonal RI error (new): 3.855123e-04

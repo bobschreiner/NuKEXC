@@ -1,0 +1,6 @@
+title:    Berkelium (II, 5d frozen)
+orbital:  9S 7P 5D 4F
+old FIT:  26S 19P 14D 10F 8G
+new FIT:  21S 20P 21D 17F 16G 10H 8I  (wrote Bk.5d.new)
+diagonal RI error (old): 1.008421e+01
+diagonal RI error (new): 4.249914e-05

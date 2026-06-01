@@ -1,0 +1,6 @@
+title:    Lutetium (QZ, all electron, 22S 17P 11D 6F)
+orbital:  22S 17P 11D 6F
+old FIT:  47S 22P 18D 15F 11G
+new FIT:  35S 34P 32D 26F 21G 16H 11I  (wrote Lu.new)
+diagonal RI error (old): 2.476649e+03
+diagonal RI error (new): 3.493396e-05

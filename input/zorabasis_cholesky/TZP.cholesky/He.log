@@ -1,0 +1,6 @@
+title:    Helium (IV)
+orbital:  3S 1P
+old FIT:  5S 3P 2D 1F 1G
+new FIT:  6S 3P 1D  (wrote He.new)
+diagonal RI error (old): 5.668296e-03
+diagonal RI error (new): 8.782576e-09

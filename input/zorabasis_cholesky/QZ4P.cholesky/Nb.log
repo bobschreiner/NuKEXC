@@ -1,0 +1,6 @@
+title:    Niobium (QZ, all electron, 17S 12P 7D 3F)
+orbital:  17S 12P 7D 3F
+old FIT:  36S 17P 14D 12F 8G
+new FIT:  24S 24P 22D 17F 13G 9H 5I  (wrote Nb.new)
+diagonal RI error (old): 7.206034e+01
+diagonal RI error (new): 4.139146e-05

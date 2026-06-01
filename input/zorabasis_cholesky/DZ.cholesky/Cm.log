@@ -1,0 +1,6 @@
+title:    Curium (II, all electron)
+orbital:  15S 12P 8D 5F
+old FIT:  36S 19P 14D 10F 8G
+new FIT:  27S 27P 25D 20F 17G 13H 9I  (wrote Cm.new)
+diagonal RI error (old): 1.350326e+02
+diagonal RI error (new): 1.026950e-04

@@ -1,0 +1,6 @@
+title:    Ununseptium (II, all electron)
+orbital:  15S 13P 8D 5F
+old FIT:  39S 20P 16D 12F 9G
+new FIT:  29S 27P 25D 20F 16G 12H 9I  (wrote Uus.new)
+diagonal RI error (old): 1.871826e+02
+diagonal RI error (new): 1.058178e-04

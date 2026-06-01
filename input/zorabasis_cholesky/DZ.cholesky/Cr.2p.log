@@ -1,0 +1,6 @@
+title:    Chromium (II, 2p frozen)
+orbital:  6S 4P 3D
+old FIT:  15S 7P 6D 4F 3G
+new FIT:  13S 12P 12D 8F 6G  (wrote Cr.2p.new)
+diagonal RI error (old): 1.081661e-01
+diagonal RI error (new): 3.233927e-06

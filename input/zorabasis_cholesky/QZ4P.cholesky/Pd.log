@@ -1,0 +1,6 @@
+title:    Palladium (QZ, all electron, 18S 14P 7D 3F)
+orbital:  18S 14P 7D 3F
+old FIT:  39S 17P 14D 12F 8G
+new FIT:  28S 28P 25D 19F 14G 9H 5I  (wrote Pd.new)
+diagonal RI error (old): 5.614378e+02
+diagonal RI error (new): 3.092727e-05

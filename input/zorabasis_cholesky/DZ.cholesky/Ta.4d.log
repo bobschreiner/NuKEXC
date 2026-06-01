@@ -1,0 +1,6 @@
+title:    Tantalum (II, 4d frozen)
+orbital:  8S 6P 4D 3F
+old FIT:  25S 15P 12D 8F 7G
+new FIT:  19S 18P 19D 15F 13G 8H 6I  (wrote Ta.4d.new)
+diagonal RI error (old): 8.601289e+00
+diagonal RI error (new): 7.001616e-06

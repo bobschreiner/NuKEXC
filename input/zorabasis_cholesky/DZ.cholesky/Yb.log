@@ -1,0 +1,6 @@
+title:    Ytterbium (II, all electron)
+orbital:  13S 10P 6D 3F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  25S 25P 22D 18F 14G 10H 6I  (wrote Yb.new)
+diagonal RI error (old): 6.562530e+01
+diagonal RI error (new): 3.067411e-05

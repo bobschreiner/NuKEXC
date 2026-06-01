@@ -1,0 +1,6 @@
+title:    Lanthanum (II, all electron)
+orbital:  13S 10P 6D 3F
+old FIT:  32S 15P 12D 8F 6G
+new FIT:  25S 23P 22D 16F 14G 9H 6I  (wrote La.new)
+diagonal RI error (old): 4.036537e+01
+diagonal RI error (new): 4.791738e-05

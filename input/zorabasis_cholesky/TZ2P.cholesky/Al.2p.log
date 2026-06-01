@@ -1,0 +1,6 @@
+title:    Aluminium (V, 2p frozen)
+orbital:  5S 4P 1D 1F
+old FIT:  11S 7P 6D 2F 1G
+new FIT:  11S 9P 10D 7F 5G 1H 1I  (wrote Al.2p.new)
+diagonal RI error (old): 9.830686e-01
+diagonal RI error (new): 7.663157e-06

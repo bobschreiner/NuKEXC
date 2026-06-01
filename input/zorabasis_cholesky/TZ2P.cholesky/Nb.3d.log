@@ -1,0 +1,6 @@
+title:    Niobium (V, 3d frozen)
+orbital:  8S 6P 4D 1F
+old FIT:  20S 12P 9D 6F 4G
+new FIT:  17S 15P 17D 11F 9G 4H 1I  (wrote Nb.3d.new)
+diagonal RI error (old): 1.103344e+00
+diagonal RI error (new): 3.260836e-06

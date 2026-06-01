@@ -1,0 +1,6 @@
+title:    Tantalum (QZ, all electron, 22S 17P 11D 6F)
+orbital:  22S 17P 11D 6F
+old FIT:  47S 22P 18D 15F 11G
+new FIT:  34S 33P 31D 25F 20G 17H 11I  (wrote Ta.new)
+diagonal RI error (old): 2.515903e+03
+diagonal RI error (new): 8.915177e-05

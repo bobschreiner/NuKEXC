@@ -1,0 +1,6 @@
+title:    Europium (QZ, all electron, 21S 16P 10D 6F)
+orbital:  23S 14P 10D 6F
+old FIT:  43S 22P 18D 15F 11G
+new FIT:  30S 29P 26D 21F 18G 15H 11I  (wrote Eu.new)
+diagonal RI error (old): 7.673698e+02
+diagonal RI error (new): 9.825045e-05
