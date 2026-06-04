@@ -38,8 +38,6 @@
 #include <Kokkos_Macros.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
 
-#include <decl/Kokkos_Declare_OPENMP.hpp>
-#include <impl/Kokkos_CheckUsage.hpp>
 #include <stdexcept>
 #include <xc.h>
 
