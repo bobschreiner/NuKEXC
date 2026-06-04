@@ -509,7 +509,9 @@ void fill_collocation_transpose(
 template <typename PointsView, typename ValuesView>
 void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
                            PointsView &collocation_points,
-                           ValuesView &collocation_values) {
+                           ValuesView &collocation_gx,
+                           ValuesView &collocation_gy,
+                           ValuesView &collocation_gz) {
 
   size_t col_points = collocation_points.extent(0);
   size_t nbasis_functions = basis_set.nbf();
@@ -551,9 +553,9 @@ void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
         double dR_dr = ((n_val - l_val - 1) / r - zeta) * R_pre;
         double common_R = dR_dr / r;
 
-        collocation_values(i, g, 0) = R_pre * dS_dx + S_val * (dx * common_R);
-        collocation_values(i, g, 1) = R_pre * dS_dy + S_val * (dy * common_R);
-        collocation_values(i, g, 2) = R_pre * dS_dz + S_val * (dz * common_R);
+        collocation_gx(i, g) = R_pre * dS_dx + S_val * (dx * common_R);
+        collocation_gy(i, g) = R_pre * dS_dy + S_val * (dy * common_R);
+        collocation_gz(i, g) = R_pre * dS_dz + S_val * (dz * common_R);
       });
 }
 
@@ -561,7 +563,9 @@ template <typename PointsView, typename ValuesView>
 void fill_grad_collocation_transpose(ExecSpace &space,
                                      const STOBasisSet &basis_set,
                                      PointsView &collocation_points,
-                                     ValuesView &collocation_values) {
+                                     ValuesView &collocation_gx,
+                                     ValuesView &collocation_gy,
+                                     ValuesView &collocation_gz) {
 
   size_t col_points = collocation_points.extent(0);
   size_t nbasis_functions = basis_set.nbf();
@@ -603,9 +607,9 @@ void fill_grad_collocation_transpose(ExecSpace &space,
         double dR_dr = ((n_val - l_val - 1) / r - zeta) * R_pre;
         double common_R = dR_dr / r;
 
-        collocation_values(g, i, 0) = R_pre * dS_dx + S_val * (dx * common_R);
-        collocation_values(g, i, 1) = R_pre * dS_dy + S_val * (dy * common_R);
-        collocation_values(g, i, 2) = R_pre * dS_dz + S_val * (dz * common_R);
+        collocation_gx(g, i) = R_pre * dS_dx + S_val * (dx * common_R);
+        collocation_gy(g, i) = R_pre * dS_dy + S_val * (dy * common_R);
+        collocation_gz(g, i) = R_pre * dS_dz + S_val * (dz * common_R);
       });
 }
 struct VG {

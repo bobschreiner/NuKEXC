@@ -93,7 +93,7 @@ DeviceView2DLeft sto_potential_collocation(const ExecSpace space,
   return potential_collocation;
 }
 
-DeviceView2DLeft compute_poisson(const STOBasisSet basis,
+DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
                                  const STOBasisSet basis_aux,
                                  const FlatGrid grid,
                                  const DeviceView2D density_matrix) {
@@ -103,28 +103,21 @@ DeviceView2DLeft compute_poisson(const STOBasisSet basis,
   const int N_bf_aux = basis_aux.nbf();
   const int N_quad = grid.quad_points.extent(0);
 
+  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
   DeviceView2DLeft basis_aux_collocation("Auxillary basis collocation",
                                          N_bf_aux, N_quad);
-
-  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
   DeviceView2DLeft basis_collocation_scaled("Basis collocation Scaled", N_bf,
                                             N_quad);
-
   DeviceView1DLeft expansion_coeff("Expansion coeff", N_bf_aux);
-
   DeviceView1DLeft potential_on_grid("Expansion coeff scaled", N_quad);
-
-  DeviceView1DLeft density = compute_density(basis, grid, density_matrix);
-
-  DeviceView2DLeft result("Poisson matrix", N_bf, N_bf);
-
+  DeviceView2DLeft result("Coulomb matrix", N_bf, N_bf);
   DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
-
   Kokkos::View<int *, Kokkos::LayoutLeft, ExecSpace> piv("pivot", N_bf_aux);
 
-  fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
   fill_collocation(space, basis, grid.quad_points, basis_collocation);
+  fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
 
+  DeviceView1DLeft density = compute_density(basis_collocation, density_matrix);
   DeviceView2DLeft potential_collocation =
       sto_potential_collocation(space, basis_aux, grid, basis_aux_collocation);
 
@@ -142,12 +135,9 @@ DeviceView2DLeft compute_poisson(const STOBasisSet basis,
 
   KokkosBlas::gemv(space, "N", 1.0, potential_collocation, density, 0.0,
                    expansion_coeff);
-
   KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
                    potential_collocation, 0.0, aux_overlap);
-
   KokkosLapack::gesv(space, aux_overlap, expansion_coeff, piv);
-
   KokkosBlas::gemv(space, "T", 1.0, potential_collocation, expansion_coeff, 0.0,
                    potential_on_grid);
 

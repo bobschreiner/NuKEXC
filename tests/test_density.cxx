@@ -229,6 +229,117 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
   REQUIRE_THAT(integrated_density, Catch::Matchers::WithinRel(1.0, 1e-5));
 }
 
+TEST_CASE("compute_simga -- hydrogen 1s sigma", "[density][sigma]") {
+
+  ExecSpace space;
+  const double ref_integrated_sigma = 1.0 / (2.0 * M_PI);
+
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 200, 20);
+
+  const int N_quad = grid.quad_points.extent(0);
+  // Primary basis: single 1s STOf
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+
+  const int N_bf = basis.nbf();
+  // Density matrix: fully occupied single orbital, D_11 = 1
+  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", 1, 1);
+  auto dm_h = Kokkos::create_mirror_view(density_matrix);
+  dm_h(0, 0) = 1.0;
+  Kokkos::deep_copy(density_matrix, dm_h);
+
+  DeviceView1D rho("Rho", N_quad);
+  DeviceView1D gx_rho("Rho dx", N_quad);
+  DeviceView1D gy_rho("Rho dy", N_quad);
+  DeviceView1D gz_rho("Rho dz", N_quad);
+  DeviceView1D sigma("Sigma", N_quad);
+
+  DeviceView2DLeft collocation_values("collocation values", N_bf, N_quad);
+  DeviceView2DLeft collocation_gx("collocation gx", N_bf, N_quad);
+  DeviceView2DLeft collocation_gy("collocation gy", N_bf, N_quad);
+  DeviceView2DLeft collocation_gz("collocation gz", N_bf, N_quad);
+
+  fill_collocation(space, basis, grid.quad_points, collocation_values);
+
+  fill_grad_collocation(space, basis, grid.quad_points, collocation_gx,
+                        collocation_gy, collocation_gz);
+
+  compute_density_and_sigma(collocation_values, collocation_gx, collocation_gy,
+                            collocation_gz, density_matrix, rho, gx_rho, gy_rho,
+                            gz_rho, sigma);
+
+  double integrated_sigma = 0.0;
+  double integrated_rho = 0.0;
+  Kokkos::parallel_reduce(
+      "Integrate sigma", grid.quad_points.extent(0),
+      KOKKOS_LAMBDA(const int g, double &sum_sigma, double &sum_rho) {
+        sum_sigma += sigma(g) * grid.weights(g);
+        sum_rho += rho(g) * grid.weights(g);
+      },
+      integrated_sigma, integrated_rho);
+
+  REQUIRE_THAT(integrated_rho, Catch::Matchers::WithinRel(1.0, 1e-10));
+  REQUIRE_THAT(integrated_sigma,
+               Catch::Matchers::WithinRel(ref_integrated_sigma, 1e-10));
+}
+
+TEST_CASE("compute_densities -- Helium 1s sigma", "[density][He]") {
+
+  ExecSpace space;
+  const double zeta = 1.6875;
+  // Exact analytical value for integrated Libxc sigma (4 / 8*pi)
+  const double ref_integrated_sigma = 2 * std::pow(zeta, 5.) / M_PI;
+
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{2u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 200, 20);
+
+  const int N_quad = grid.quad_points.extent(0);
+  // Primary basis: single 1s STO
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, zeta, 0., 0., 0.}});
+
+  const int N_bf = basis.nbf();
+  // Density matrix: fully occupied single orbital, D_11 = 1
+  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", 1, 1);
+  auto dm_h = Kokkos::create_mirror_view(density_matrix);
+  dm_h(0, 0) = 2.0;
+  Kokkos::deep_copy(density_matrix, dm_h);
+
+  DeviceView1D rho("Rho", N_quad);
+  DeviceView1D gx_rho("Rho dx", N_quad);
+  DeviceView1D gy_rho("Rho dy", N_quad);
+  DeviceView1D gz_rho("Rho dz", N_quad);
+  DeviceView1D sigma("Sigma", N_quad);
+
+  DeviceView2DLeft collocation_values("collocation values", N_bf, N_quad);
+  DeviceView2DLeft collocation_gx("collocation gx", N_bf, N_quad);
+  DeviceView2DLeft collocation_gy("collocation gy", N_bf, N_quad);
+  DeviceView2DLeft collocation_gz("collocation gz", N_bf, N_quad);
+
+  fill_collocation(space, basis, grid.quad_points, collocation_values);
+
+  fill_grad_collocation(space, basis, grid.quad_points, collocation_gx,
+                        collocation_gy, collocation_gz);
+
+  compute_density_and_sigma(collocation_values, collocation_gx, collocation_gy,
+                            collocation_gz, density_matrix, rho, gx_rho, gy_rho,
+                            gz_rho, sigma);
+
+  double integrated_sigma = 0.0;
+  double integrated_rho = 0.0;
+  Kokkos::parallel_reduce(
+      "Integrate sigma", grid.quad_points.extent(0),
+      KOKKOS_LAMBDA(const int g, double &sum_sigma, double &sum_rho) {
+        sum_sigma += sigma(g) * grid.weights(g);
+        sum_rho += rho(g) * grid.weights(g);
+      },
+      integrated_sigma, integrated_rho);
+
+  REQUIRE_THAT(integrated_rho, Catch::Matchers::WithinRel(2.0, 1e-10));
+  REQUIRE_THAT(integrated_sigma,
+               Catch::Matchers::WithinRel(ref_integrated_sigma, 1e-10));
+}
 int main() {
   Kokkos::initialize();
   int result = Catch::Session().run();

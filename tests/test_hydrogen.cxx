@@ -30,16 +30,19 @@
 #include <integratorxx/quadratures/s2.hpp>
 
 #include <nukexc/core_hamiltonian.hpp>
+#include <nukexc/coulomb.hpp>
 #include <nukexc/diagonalizer.hpp>
 #include <nukexc/grid.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/partitioning.hpp>
-#include <nukexc/poisson.hpp>
 #include <nukexc/stobasis.hpp>
+#include <nukexc/xc_integrals.hpp>
 
 #include <cmath>
 #include <vector>
 
+#include <xc.h>
+#include <xc_funcs.h>
 using namespace NuKEXC;
 
 using bk_type = IntegratorXX::Becke<double, double>;
@@ -524,7 +527,7 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
 #endif
 }
 
-TEST_CASE("compute_poisson -- hydrogen 1s self-repulsion", "[poisson]") {
+TEST_CASE("compute_coulomb -- hydrogen 1s self-repulsion", "[coulomb]") {
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
   auto grid = make_flat_grid<ta_type, ll_type>(mol, 100, 20);
@@ -549,13 +552,73 @@ TEST_CASE("compute_poisson -- hydrogen 1s self-repulsion", "[poisson]") {
   dm_h(0, 0) = 1.0;
   Kokkos::deep_copy(density_matrix, dm_h);
 
-  DeviceView2DLeft J = compute_poisson(basis, basis_aux, grid, density_matrix);
+  DeviceView2DLeft J = compute_coulomb(basis, basis_aux, grid, density_matrix);
 
   auto J_h = Kokkos::create_mirror_view(J);
   Kokkos::deep_copy(J_h, J);
 
   // Analytical self-repulsion of hydrogen 1s: 5/8 hartree
   REQUIRE_THAT(J_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
+}
+
+TEST_CASE("compute_lda -- hydrogen 1s lda", "[lda]") {
+  // Analytical Slater Exchange LDA energy for a 1s STO (zeta = 1.0)
+  const double ref_value = -0.2127415030860106;
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<ta_type, ll_type>(mol, 100, 20);
+
+  // Primary basis: single 1s STO
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+
+  xc_func_type func;
+  const int func_id = 1;
+  if (xc_func_init(&func, func_id, XC_UNPOLARIZED) != 0) {
+    throw std::runtime_error("Failed to initialize Libxc functional");
+  }
+
+  // Density matrix: fully occupied single orbital, D_11 = 1
+  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", 1, 1);
+  auto dm_h = Kokkos::create_mirror_view(density_matrix);
+  dm_h(0, 0) = 1.0;
+  Kokkos::deep_copy(density_matrix, dm_h);
+
+  auto lda_result = compute_lda(basis, grid, density_matrix, func);
+
+  // Clean up Libxc internal pointers
+  xc_func_end(&func);
+
+  REQUIRE_THAT(lda_result.first, Catch::Matchers::WithinRel(ref_value, 1e-10));
+}
+
+TEST_CASE("compute_gga -- hydrogen 1s gga", "[gga]") {
+  // Analytical Slater Exchange LDA energy for a 1s STO (zeta = 1.0)
+  const double ref_value = -0.253995708307881;
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<ta_type, ll_type>(mol, 1000, 40);
+
+  // Primary basis: single 1s STO
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+
+  xc_func_type func;
+  const int func_id = XC_GGA_X_PBE;
+  if (xc_func_init(&func, func_id, XC_UNPOLARIZED) != 0) {
+    throw std::runtime_error("Failed to initialize Libxc functional");
+  }
+
+  // Density matrix: fully occupied single orbital, D_11 = 1
+  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", 1, 1);
+  auto dm_h = Kokkos::create_mirror_view(density_matrix);
+  dm_h(0, 0) = 1.0;
+  Kokkos::deep_copy(density_matrix, dm_h);
+
+  auto gga_result = compute_gga(basis, grid, density_matrix, func);
+
+  // Clean up Libxc internal pointers
+  xc_func_end(&func);
+
+  REQUIRE_THAT(gga_result.first, Catch::Matchers::WithinRel(ref_value, 1e-10));
 }
 
 // ============================================================

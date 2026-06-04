@@ -38,76 +38,238 @@
 #include <impl/Kokkos_Profiling.hpp>
 
 namespace NuKEXC {
+
 DeviceView1D
 compute_density(const STOBasisSet basis, const FlatGrid grid,
                 Kokkos::View<double **, ExecSpace> density_matrix) {
 
   ExecSpace space;
-  Kokkos::View<Point *, ExecSpace> collocation_points = grid.quad_points;
-  const int N_quad = collocation_points.extent(0);
   const int N_bf = basis.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  DeviceView2DLeft collocation_values("Basis collocation", N_bf, N_quad);
+  fill_collocation(space, basis, grid.quad_points, collocation_values);
 
   DeviceView1D density("density", N_quad);
-  DeviceView2D collocation_values("collocation values", N_quad, N_bf);
-  DeviceView2D intermediate_matrix("intermediate", N_quad, N_bf);
+  DeviceView2D intermediate_matrix("intermediate", N_bf, N_quad);
 
-  fill_collocation_transpose(space, basis, collocation_points,
-                             collocation_values);
-  KokkosBlas::gemm(space, "N", "N", 1.0, collocation_values, density_matrix,
+  KokkosBlas::gemm(space, "N", "N", 1.0, density_matrix, collocation_values,
                    0.0, intermediate_matrix);
+
+  Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
+  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
 
   // Contract the basis in order to get the density
   Kokkos::parallel_for(
-      "Contract Basis", N_quad, KOKKOS_LAMBDA(const int g) {
+      "Contract Basis", policy, KOKKOS_LAMBDA(const member_type &team_member) {
+        const int g = team_member.league_rank();
         double sum = 0;
-        for (int i = 0; i < N_bf; ++i) {
-          sum += collocation_values(g, i) * intermediate_matrix(g, i);
-        }
+        auto collocation_subview =
+            Kokkos::subview(collocation_values, Kokkos::ALL(), g);
+        auto intermediate_subview =
+            Kokkos::subview(intermediate_matrix, Kokkos::ALL(), g);
+
+        Kokkos::parallel_reduce(
+            Kokkos::TeamThreadRange(team_member, N_bf),
+            [=](const int i, double &update_sum) {
+              update_sum += collocation_subview(i) * intermediate_subview(i);
+            },
+            sum);
+        team_member.team_barrier();
         density(g) = sum;
       });
 
   return density;
 };
 
-void compute_density_and_sigma(
-    const STOBasisSet basis, const FlatGrid grid,
-    Kokkos::View<double **, ExecSpace> density_matrix, DeviceView1D rho,
-    DeviceView1D sigma) {
+DeviceView1D
+compute_density(DeviceView2DLeft collocation_values,
+                Kokkos::View<double **, ExecSpace> density_matrix) {
 
   ExecSpace space;
-  Kokkos::View<Point *, ExecSpace> collocation_points = grid.quad_points;
-  const int N_quad = collocation_points.extent(0);
-  const int N_bf = basis.nbf();
+  const int N_bf = collocation_values.extent(0);
+  const int N_quad = collocation_values.extent(1);
 
-  DeviceView2D collocation_values("collocation values", N_quad, N_bf);
-  Kokkos::View<double **[3], ExecSpace> collocation_gradients(
-      "collocation gradients", N_quad, N_bf);
-  DeviceView2D intermediate_matrix("intermediate", N_quad, N_bf);
+  DeviceView1D density("density", N_quad);
+  DeviceView2D intermediate_matrix("intermediate", N_bf, N_quad);
 
-  fill_collocation_transpose(space, basis, collocation_points,
-                             collocation_values);
-
-  fill_grad_collocation_transpose(space, basis, collocation_points,
-                                  collocation_gradients);
-
-  KokkosBlas::gemm(space, "N", "N", 1.0, collocation_values, density_matrix,
+  KokkosBlas::gemm(space, "N", "N", 1.0, density_matrix, collocation_values,
                    0.0, intermediate_matrix);
+
+  Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
+  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
 
   // Contract the basis in order to get the density
   Kokkos::parallel_for(
-      "Contract Basis", N_quad, KOKKOS_LAMBDA(const int g) {
+      "Contract Basis", policy, KOKKOS_LAMBDA(const member_type &team_member) {
+        const int g = team_member.league_rank();
+        double sum = 0;
+        auto collocation_subview =
+            Kokkos::subview(collocation_values, Kokkos::ALL(), g);
+        auto intermediate_subview =
+            Kokkos::subview(intermediate_matrix, Kokkos::ALL(), g);
+
+        Kokkos::parallel_reduce(
+            Kokkos::TeamThreadRange(team_member, N_bf),
+            [=](const int i, double &update_sum) {
+              update_sum += collocation_subview(i) * intermediate_subview(i);
+            },
+            sum);
+        team_member.team_barrier();
+        density(g) = sum;
+      });
+
+  return density;
+};
+
+void compute_density_and_sigma(const DeviceView2DLeft collocation_values,
+                               const DeviceView2DLeft collocation_gx,
+                               const DeviceView2DLeft collocation_gy,
+                               const DeviceView2DLeft collocation_gz,
+                               const DeviceView2D density_matrix,
+                               DeviceView1D rho, DeviceView1D gx_rho,
+                               DeviceView1D gy_rho, DeviceView1D gz_rho,
+                               DeviceView1D sigma) {
+
+  ExecSpace space;
+  const int N_bf = collocation_values.extent(0);
+  const int N_quad = collocation_values.extent(1);
+
+  DeviceView2D intermediate_matrix("intermediate", N_bf, N_quad);
+
+  KokkosBlas::gemm(space, "N", "N", 1.0, density_matrix, collocation_values,
+                   0.0, intermediate_matrix);
+
+  Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
+  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+
+  // Contract the basis in order to get the density
+  Kokkos::parallel_for(
+      "Contract Basis", policy, KOKKOS_LAMBDA(const member_type &team_member) {
+        const int g = team_member.league_rank();
         double sum_values = 0;
         double sum_gx = 0;
         double sum_gy = 0;
         double sum_gz = 0;
-        for (int i = 0; i < N_bf; ++i) {
-          sum_values += collocation_values(g, i) * intermediate_matrix(g, i);
-          sum_gx += collocation_gradients(g, i, 0) * intermediate_matrix(g, i);
-          sum_gy += collocation_gradients(g, i, 1) * intermediate_matrix(g, i);
-          sum_gz += collocation_gradients(g, i, 2) * intermediate_matrix(g, i);
-        }
+        auto collocation_subview =
+            Kokkos::subview(collocation_values, Kokkos::ALL(), g);
+        auto collocation_gx_subview =
+            Kokkos::subview(collocation_gx, Kokkos::ALL(), g);
+        auto collocation_gy_subview =
+            Kokkos::subview(collocation_gy, Kokkos::ALL(), g);
+        auto collocation_gz_subview =
+            Kokkos::subview(collocation_gz, Kokkos::ALL(), g);
+
+        auto intermediate_subview =
+            Kokkos::subview(intermediate_matrix, Kokkos::ALL(), g);
+
+        Kokkos::parallel_reduce(
+            Kokkos::TeamThreadRange(team_member, N_bf),
+            [=](const int i, double &update_sum, double &update_sum_gx,
+                double &update_sum_gy, double &update_sum_gz) {
+              update_sum += collocation_subview(i) * intermediate_subview(i);
+              update_sum_gx +=
+                  collocation_gx_subview(i) * intermediate_subview(i);
+              update_sum_gy +=
+                  collocation_gy_subview(i) * intermediate_subview(i);
+              update_sum_gz +=
+                  collocation_gz_subview(i) * intermediate_subview(i);
+            },
+            sum_values, sum_gx, sum_gy, sum_gz);
+        team_member.team_barrier();
         rho(g) = sum_values;
-        sigma(g) = sum_gx * sum_gx + sum_gy * sum_gy + sum_gz * sum_gz;
+        gx_rho(g) = 2.0 * sum_gx;
+        gy_rho(g) = 2.0 * sum_gy;
+        gz_rho(g) = 2.0 * sum_gz;
+        sigma(g) = 4.0 * (sum_gx * sum_gx + sum_gy * sum_gy + sum_gz * sum_gz);
+      });
+};
+
+void compute_density_and_sigma_and_tau(
+    const DeviceView2DLeft collocation_values,
+    const DeviceView2DLeft collocation_gx,
+    const DeviceView2DLeft collocation_gy,
+    const DeviceView2DLeft collocation_gz, const DeviceView2D density_matrix,
+    DeviceView1D rho, DeviceView1D gx_rho, DeviceView1D gy_rho,
+    DeviceView1D gz_rho, DeviceView1D sigma, DeviceView1D tau) {
+
+  ExecSpace space;
+  const int N_bf = collocation_values.extent(0);
+  const int N_quad = collocation_values.extent(1);
+
+  DeviceView2D intermediate_matrix("intermediate", N_bf, N_quad);
+  DeviceView2D intermediate_matrix_gx("intermediate gx", N_bf, N_quad);
+  DeviceView2D intermediate_matrix_gy("intermediate gy", N_bf, N_quad);
+  DeviceView2D intermediate_matrix_gz("intermediate gz", N_bf, N_quad);
+
+  KokkosBlas::gemm(space, "N", "N", 1.0, density_matrix, collocation_values,
+                   0.0, intermediate_matrix);
+  KokkosBlas::gemm(space, "N", "N", 1.0, density_matrix, collocation_gx, 0.0,
+                   intermediate_matrix_gx);
+
+  KokkosBlas::gemm(space, "N", "N", 1.0, density_matrix, collocation_gy, 0.0,
+                   intermediate_matrix_gy);
+
+  KokkosBlas::gemm(space, "N", "N", 1.0, density_matrix, collocation_gz, 0.0,
+                   intermediate_matrix_gz);
+
+  Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
+  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+
+  // Contract the basis in order to get the density
+  Kokkos::parallel_for(
+      "Contract Basis", policy, KOKKOS_LAMBDA(const member_type &team_member) {
+        const int g = team_member.league_rank();
+        double sum_values = 0;
+        double sum_gx = 0;
+        double sum_gy = 0;
+        double sum_gz = 0;
+        double sum_tau = 0;
+        auto collocation_subview =
+            Kokkos::subview(collocation_values, Kokkos::ALL(), g);
+        auto collocation_gx_subview =
+            Kokkos::subview(collocation_gx, Kokkos::ALL(), g);
+        auto collocation_gy_subview =
+            Kokkos::subview(collocation_gy, Kokkos::ALL(), g);
+        auto collocation_gz_subview =
+            Kokkos::subview(collocation_gz, Kokkos::ALL(), g);
+
+        auto intermediate_subview =
+            Kokkos::subview(intermediate_matrix, Kokkos::ALL(), g);
+        auto intermediate_gx_subview =
+            Kokkos::subview(intermediate_matrix_gx, Kokkos::ALL(), g);
+
+        auto intermediate_gy_subview =
+            Kokkos::subview(intermediate_matrix_gy, Kokkos::ALL(), g);
+
+        auto intermediate_gz_subview =
+            Kokkos::subview(intermediate_matrix_gz, Kokkos::ALL(), g);
+
+        Kokkos::parallel_reduce(
+            Kokkos::TeamThreadRange(team_member, N_bf),
+            [=](const int i, double &update_sum, double &update_sum_gx,
+                double &update_sum_gy, double &update_sum_gz,
+                double &update_tau) {
+              update_sum += collocation_subview(i) * intermediate_subview(i);
+              update_sum_gx +=
+                  collocation_gx_subview(i) * intermediate_subview(i);
+              update_sum_gy +=
+                  collocation_gy_subview(i) * intermediate_subview(i);
+              update_sum_gz +=
+                  collocation_gz_subview(i) * intermediate_subview(i);
+              update_tau +=
+                  collocation_gx_subview(i) * intermediate_gx_subview(i) +
+                  collocation_gy_subview(i) * intermediate_gy_subview(i) +
+                  collocation_gz_subview(i) * intermediate_gz_subview(i);
+            },
+            sum_values, sum_gx, sum_gy, sum_gz, sum_tau);
+        team_member.team_barrier();
+        rho(g) = sum_values;
+        gx_rho(g) = 2.0 * sum_gx;
+        gy_rho(g) = 2.0 * sum_gy;
+        gz_rho(g) = 2.0 * sum_gz;
+        sigma(g) = 4.0 * (sum_gx * sum_gx + sum_gy * sum_gy + sum_gz * sum_gz);
+        tau(g) = 0.5 * sum_tau;
       });
 };
 }; // namespace NuKEXC

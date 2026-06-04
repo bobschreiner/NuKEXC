@@ -199,10 +199,6 @@ kinetic_integral(STOBasisSet &basis,
 
   DeviceView2DLeft kinetic_matrix("Kinetic matrix", N, N);
 
-  // Pre-allocate double buffers — grad collocation has 3 components
-  Kokkos::View<double **[3], ExecSpace> grad_a("grad_a", N, CHUNK_SIZE);
-  Kokkos::View<double **[3], ExecSpace> grad_b("grad_b", N, CHUNK_SIZE);
-
   // Weighted gradient buffers — one per spatial direction per stream
   DeviceView2DLeft Gx_a("Gx_a", N, CHUNK_SIZE), Gx_b("Gx_b", N, CHUNK_SIZE);
   DeviceView2DLeft Gy_a("Gy_a", N, CHUNK_SIZE), Gy_b("Gy_b", N, CHUNK_SIZE);
@@ -214,7 +210,6 @@ kinetic_integral(STOBasisSet &basis,
     int cur = std::min(CHUNK_SIZE, total_quad_points - start);
     bool even = (start / CHUNK_SIZE) % 2 == 0;
 
-    auto &grad_cur = even ? grad_a : grad_b;
     auto &Gx_cur = even ? Gx_a : Gx_b;
     auto &Gy_cur = even ? Gy_a : Gy_b;
     auto &Gz_cur = even ? Gz_a : Gz_b;
@@ -227,14 +222,13 @@ kinetic_integral(STOBasisSet &basis,
         Kokkos::subview(quadrature_weights, std::make_pair(start, start + cur));
 
     // Subviews into current chunk size
-    auto grad_view = Kokkos::subview(grad_cur, Kokkos::ALL,
-                                     std::make_pair(0, cur), Kokkos::ALL);
     auto Gx_view = Kokkos::subview(Gx_cur, Kokkos::ALL, std::make_pair(0, cur));
     auto Gy_view = Kokkos::subview(Gy_cur, Kokkos::ALL, std::make_pair(0, cur));
     auto Gz_view = Kokkos::subview(Gz_cur, Kokkos::ALL, std::make_pair(0, cur));
 
     // Fill grad collocation on space_cur — overlaps with GEMM on space_prev
-    fill_grad_collocation(space_cur, basis, batch_pts, grad_view);
+    fill_grad_collocation(space_cur, basis, batch_pts, Gx_view, Gy_view,
+                          Gz_view);
 
     // Weight the gradients: G{xyz}(i,g) = grad(i,g,d) * sqrt(w(g))
     Kokkos::parallel_for(
@@ -243,9 +237,9 @@ kinetic_integral(STOBasisSet &basis,
                                                           {N, cur}),
         KOKKOS_LAMBDA(int i, int g) {
           double wf = Kokkos::sqrt(batch_wts(g));
-          Gx_view(i, g) = grad_view(i, g, 0) * wf;
-          Gy_view(i, g) = grad_view(i, g, 1) * wf;
-          Gz_view(i, g) = grad_view(i, g, 2) * wf;
+          Gx_view(i, g) *= wf;
+          Gy_view(i, g) *= wf;
+          Gz_view(i, g) *= wf;
         });
 
     // Wait for previous iteration's GEMMs before writing to kinetic_matrix

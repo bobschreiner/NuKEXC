@@ -14,6 +14,7 @@ add_executable(test_neighborlist test_neighborlist.cxx standards.cxx)
 add_executable(test_potential test_potential.cxx)
 add_executable(test_density test_density.cxx)
 add_executable(test_libxc test_libxc.cxx)
+add_executable(test_helium test_helium.cxx)
 
 add_executable(convergence_integration convergence_integration.cxx standards.cxx)
 add_executable(convergence_h2plus convergence_h2plus.cxx)
@@ -44,6 +45,7 @@ set(ALL_TEST_TARGETS
     test_potential
     test_density
     test_libxc
+    test_helium
     convergence_integration
     convergence_h2plus
     convergence_coreH
@@ -74,4 +76,5 @@ add_test( NAME COREH_CONVERGENCE_TEST COMMAND $<TARGET_FILE:convergence_coreH> )
 add_test( NAME POTENTIAL_TEST COMMAND $<TARGET_FILE:test_potential> )
 add_test( NAME DENSITY_TEST COMMAND $<TARGET_FILE:test_density> )
 add_test( NAME LIBXC_TEST COMMAND $<TARGET_FILE:test_libxc> )
+add_test( NAME HELIUM_TEST COMMAND $<TARGET_FILE:test_helium> )
 

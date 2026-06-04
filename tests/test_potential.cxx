@@ -31,7 +31,7 @@
 #include <integratorxx/quadratures/s2.hpp>
 
 #include "standards.hpp"
-#include <nukexc/poisson.hpp>
+#include <nukexc/coulomb.hpp>
 
 #include <map>
 #include <vector>
