@@ -23,6 +23,11 @@
 #include "nukexc/nukexc_config.hpp"
 #include <Kokkos_Core.hpp>
 
+#include <KokkosBlas3_gemm.hpp>
+#include <KokkosBlas3_gemm_impl.hpp>
+
+#include <KokkosLapack_svd.hpp>
+
 namespace Nukexc {
 
 KOKKOS_INLINE_FUNCTION
@@ -161,4 +166,26 @@ double upper_gamma(const int n, const double x) {
   return result;
 }
 
+void compute_invserse(DeviceView2DLeft &overlap_matrix) {
+
+  const int N = overlap_matrix.extent(0);
+  DeviceView2DLeft Us("U", N, N);
+  DeviceView2DLeft VTs("VTs", N, N);
+  DeviceView1D sigma("sigma", N);
+
+  // SVD of S to handle potential singularity
+  KokkosLapack::svd("S", "S", overlap_matrix, sigma, Us, VTs);
+
+  // Build X = Us * sigma^-1/2 (Canonical Orthogonalization)
+  Kokkos::parallel_for(
+      "Invert overlap", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N, N}),
+      KOKKOS_LAMBDA(const int i, const int k) {
+        if (sigma(k) > 1e-7) {
+          Us(i, k) /= sigma(k);
+        } else {
+          Us(i, k) = 0.0;
+        }
+      });
+  KokkosBlas::gemm("T", "T", 1.0, VTs, Us, 0.0, overlap_matrix);
+}
 } // namespace Nukexc

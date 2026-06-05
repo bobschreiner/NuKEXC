@@ -32,6 +32,7 @@
 #include <nukexc/core_hamiltonian.hpp>
 #include <nukexc/coulomb.hpp>
 #include <nukexc/diagonalizer.hpp>
+#include <nukexc/exact_exchange.hpp>
 #include <nukexc/grid.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/partitioning.hpp>
@@ -564,6 +565,45 @@ TEST_CASE("compute_coulomb -- hydrogen 1s self-repulsion", "[coulomb]") {
 
   // Analytical self-repulsion of hydrogen 1s: 5/8 hartree
   REQUIRE_THAT(J_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
+}
+
+TEST_CASE("compute_exchange -- hydrogen 1s self-exchange", "[exchange]") {
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<ta_type, ll_type>(mol, 100, 20);
+
+  // Primary basis: single 1s STO
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+
+  // Aux basis: needs to be rich enough to represent the density ρ = φ^2,
+  // which for a 1s STO with ζ=1 is a 1s-like function with ζ=2.
+  // Use a few s-type STOs spanning a range of exponents.
+
+  STOBasisSet basis_aux = make_manual_basis({
+      {1, 0, 0, 0.5, 0., 0., 0.},
+      {1, 0, 0, 1.0, 0., 0., 0.},
+      {1, 0, 0, 2.0, 0., 0., 0.},
+      {1, 0, 0, 3.0, 0., 0., 0.},
+      {1, 0, 0, 4.0, 0., 0., 0.},
+  });
+  // Density matrix: fully occupied single orbital, D_11 = 1
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  DeviceView2DLeft K =
+      compute_exact_exchange(basis, basis_aux, grid, mo_orbitals, mo_coeff);
+
+  auto K_h = Kokkos::create_mirror_view(K);
+  Kokkos::deep_copy(K_h, K);
+
+  // Analytical self-repulsion of hydrogen 1s: 5/8 hartree
+  REQUIRE_THAT(K_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
 }
 
 TEST_CASE("compute_lda -- hydrogen 1s lda", "[lda]") {
