@@ -30,7 +30,7 @@
 #include <iostream>
 #include <vector>
 
-using namespace NuKEXC;
+using namespace Nukexc;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

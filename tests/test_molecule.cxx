@@ -22,12 +22,12 @@
 
 #include <nukexc/molecule.hpp>
 
-#include <catch2/catch_assertion_info.hpp>
 #include <catch2/catch_all.hpp>
+#include <catch2/catch_assertion_info.hpp>
 
 TEST_CASE("H20", "[h20_molecule]") {
-  NuKEXC::Molecule mol;
-  NuKEXC::read_xyz("input/water.xyz", mol);
+  Nukexc::Molecule mol;
+  Nukexc::read_xyz("input/water.xyz", mol);
   std::cout << "Loaded " << mol.natoms << " atoms." << std::endl;
   REQUIRE(mol.natoms == 3);
 };

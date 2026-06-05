@@ -36,7 +36,7 @@
 #include "standards.hpp"
 #include <Kokkos_Core.hpp>
 
-using namespace NuKEXC;
+using namespace Nukexc;
 
 using bk_type = IntegratorXX::Becke<double, double>;
 using mk_type = IntegratorXX::MuraKnowles<double, double>;

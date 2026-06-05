@@ -18,35 +18,4 @@
  *
  */
 
-#include "standards.hpp"
-#include <nukexc/molecule.hpp>
 
-namespace Nukexc {
-
-Molecule make_water() {
-  Molecule mol;
-  read_xyz("input/water.xyz", mol);
-  return mol;
-}
-Molecule make_benzene() {
-  Molecule mol;
-  read_xyz("input/benzene.xyz", mol);
-  return mol;
-}
-Molecule make_taxol() {
-  Molecule mol;
-  read_xyz("input/taxol.xyz", mol);
-  return mol;
-}
-Molecule make_ubiquitin() {
-  Molecule mol;
-  read_xyz("input/ubiquitin.xyz", mol);
-  return mol;
-}
-
-void make_water(Molecule &mol) { read_xyz("input/water.xyz", mol); }
-void make_benzene(Molecule &mol) { read_xyz("input/benzene.xyz", mol); }
-void make_taxol(Molecule &mol) { read_xyz("input/taxol.xyz", mol); }
-void make_ubiquitin(Molecule &mol) { read_xyz("input/ubiquitin.xyz", mol); }
-
-} // namespace Nukexc

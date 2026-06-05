@@ -36,7 +36,7 @@
 #include <nukexc/molecule.hpp>
 #include <nukexc/partitioning.hpp>
 
-using namespace NuKEXC;
+using namespace Nukexc;
 
 using bk_type = IntegratorXX::Becke<double, double>;
 using mk_type = IntegratorXX::MuraKnowles<double, double>;

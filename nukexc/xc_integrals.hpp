@@ -41,11 +41,16 @@
 #include <stdexcept>
 #include <xc.h>
 
-namespace NuKEXC {
+namespace Nukexc {
 
-std::pair<double, DeviceView2DLeft>
-compute_lda(const STOBasisSet basis, const FlatGrid grid,
-            const DeviceView2D density_matrix, const xc_func_type func) {
+struct XC_result {
+  double energy;
+  DeviceView2DLeft potential;
+};
+
+XC_result compute_lda(const STOBasisSet basis, const FlatGrid grid,
+                      const DeviceView2DLeft mo_orbitals,
+                      const DeviceView1D mo_coeff, const xc_func_type func) {
 
   ExecSpace space;
   // Make sure that the porovided xc functional is a LDA
@@ -66,7 +71,7 @@ compute_lda(const STOBasisSet basis, const FlatGrid grid,
 
   fill_collocation(space, basis, grid.quad_points, collocation_values);
 
-  rho = compute_density(collocation_values, density_matrix);
+  rho = compute_density(collocation_values, mo_orbitals, mo_coeff);
 
   // Copy densities rho and sigma to the host device
   auto rho_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, rho);
@@ -131,12 +136,12 @@ compute_lda(const STOBasisSet basis, const FlatGrid grid,
       },
       xc_energy);
 
-  return std::make_pair(xc_energy, V_result);
+  return XC_result{xc_energy, V_result};
 }
 
-std::pair<double, DeviceView2DLeft>
-compute_gga(const STOBasisSet basis, const FlatGrid grid,
-            const DeviceView2D density_matrix, const xc_func_type func) {
+XC_result compute_gga(const STOBasisSet basis, const FlatGrid grid,
+                      const DeviceView2DLeft mo_orbitals,
+                      const DeviceView1D mo_coeff, const xc_func_type func) {
 
   ExecSpace space;
   // Make sure that the porovided xc functional is a GGA
@@ -171,8 +176,8 @@ compute_gga(const STOBasisSet basis, const FlatGrid grid,
                         collocation_gy, collocation_gz);
 
   compute_density_and_sigma(collocation_values, collocation_gx, collocation_gy,
-                            collocation_gz, density_matrix, rho, gx_rho, gy_rho,
-                            gz_rho, sigma);
+                            collocation_gz, mo_orbitals, mo_coeff, rho, gx_rho,
+                            gy_rho, gz_rho, sigma);
 
   // Copy densities rho and sigma to the host device
   auto rho_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, rho);
@@ -256,12 +261,12 @@ compute_gga(const STOBasisSet basis, const FlatGrid grid,
       },
       xc_energy);
 
-  return std::make_pair(xc_energy, V_result);
+  return XC_result{xc_energy, V_result};
 }
 
-std::pair<double, DeviceView2DLeft>
-compute_mgga(const STOBasisSet basis, const FlatGrid grid,
-             const DeviceView2D density_matrix, const xc_func_type func) {
+XC_result compute_mgga(const STOBasisSet basis, const FlatGrid grid,
+                       const DeviceView2DLeft mo_orbitals,
+                       const DeviceView1D mo_coeff, const xc_func_type func) {
 
   // TODO:: Actually compute lapalcian and compute contribution to V
   // Right now we assue the the mgga funcitonal is indepdentant of the
@@ -307,7 +312,7 @@ compute_mgga(const STOBasisSet basis, const FlatGrid grid,
 
   compute_density_and_sigma_and_tau(
       collocation_values, collocation_gx, collocation_gy, collocation_gz,
-      density_matrix, rho, gx_rho, gy_rho, gz_rho, sigma, tau);
+      mo_orbitals, mo_coeff, rho, gx_rho, gy_rho, gz_rho, sigma, tau);
 
   // Copy densities rho and sigma to the host device
   auto rho_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, rho);
@@ -418,7 +423,7 @@ compute_mgga(const STOBasisSet basis, const FlatGrid grid,
       },
       xc_energy);
 
-  return std::make_pair(xc_energy, V_result);
+  return XC_result{xc_energy, V_result};
 }
 
-} // namespace NuKEXC
+} // namespace Nukexc

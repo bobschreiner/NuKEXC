@@ -29,7 +29,7 @@
 #include "nukexc_utils.hpp"
 #include <iostream>
 
-namespace NuKEXC {
+namespace Nukexc {
 
 KOKKOS_INLINE_FUNCTION
 double poly_A(double x, double y, unsigned m) {
@@ -1703,4 +1703,4 @@ void real_solid_harmonic_cart_and_grad_precomputed(
     break;
   }
 }
-} // namespace NuKEXC
+} // namespace Nukexc

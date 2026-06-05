@@ -24,7 +24,7 @@
 #include "nukexc_utils.hpp"
 #include <iostream>
 
-namespace NuKEXC {
+namespace Nukexc {
 
 KOKKOS_INLINE_FUNCTION
 double compute_mu(const double r_i, const double r_j, const double R_ij) {
@@ -140,7 +140,7 @@ void partition_becke_team(const Kokkos::View<Point *> &atom_centers,
         for (int j = 0; j < natoms; ++j) {
           if (i == j)
             continue;
-          double d = NuKEXC::dist(atom_centers(i), atom_centers(j));
+          double d = dist(atom_centers(i), atom_centers(j));
           R_ij(i, j) = d + epsilon_shift;
           if (R_ij(i, j) < R_screen) {
             n_neighbors(i) += 1;
@@ -208,10 +208,9 @@ void partition_becke_team(const Kokkos::View<Point *> &atom_centers,
         Point pt = quadrature_points(p, g);
 
         // Phase 1: parallel distance cache over atoms
-        Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, natoms),
-                             [=](const int i) {
-                               r_cache(i) = NuKEXC::dist(pt, atom_centers(i));
-                             });
+        Kokkos::parallel_for(
+            Kokkos::TeamVectorRange(team_member, natoms),
+            [=](const int i) { r_cache(i) = dist(pt, atom_centers(i)); });
         team_member.team_barrier();
 
         // Phase 2: parallel w_i computation
@@ -240,4 +239,4 @@ void partition_becke_team(const Kokkos::View<Point *> &atom_centers,
                        [=]() { weights(p, g) *= w_cache(p) / normalization; });
       });
 }
-} // namespace NuKEXC
+} // namespace Nukexc

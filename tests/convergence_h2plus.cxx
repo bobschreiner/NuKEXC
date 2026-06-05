@@ -62,7 +62,7 @@
 #include <iostream>
 #include <vector>
 
-using namespace NuKEXC;
+using namespace Nukexc;
 
 using bk_type = IntegratorXX::Becke<double, double>;
 using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;

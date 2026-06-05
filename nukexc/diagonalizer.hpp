@@ -33,7 +33,7 @@
 // We use svd instead
 // #include <KokkosLapack_potrf.hpp>
 
-namespace NuKEXC {
+namespace Nukexc {
 
 class Diagonalizer {
 public:
@@ -71,8 +71,8 @@ public:
   }
 
   // Repeatedly call this with updated Fock matrices
-  void solve(const DeviceView2DLeft &fock_matrix, DeviceView2DLeft &mo_coeff,
-             DeviceView1D &mo_energies) {
+  void solve(const DeviceView2DLeft &fock_matrix, DeviceView2DLeft &mo_orbitals,
+             DeviceView1D &mo_coeff) {
 
     Kokkos::deep_copy(_F, fock_matrix);
 
@@ -81,7 +81,7 @@ public:
     KokkosBlas::gemm("N", "N", 1.0, _XT_F, _X, 0.0, _F);
 
     // 2. Diagonalize the transformed F
-    KokkosLapack::svd("S", "S", _F, mo_energies, _U, _VT);
+    KokkosLapack::svd("S", "S", _F, mo_coeff, _U, _VT);
 
     // 3. Restore signs for symmetric singular values
     auto U_local = _U;
@@ -94,38 +94,38 @@ public:
             dot += U_local(k, j) * VT_local(j, k);
           }
           if (dot < 0)
-            mo_energies(j) = -mo_energies(j);
+            mo_coeff(j) = -mo_coeff(j);
         });
 
     // 4. Back-transform: C = X * U
-    KokkosBlas::gemm("N", "N", 1.0, _X, _U, 0.0, mo_coeff);
+    KokkosBlas::gemm("N", "N", 1.0, _X, _U, 0.0, mo_orbitals);
 
     // 5. Final Sorting
-    sort(mo_coeff, mo_energies);
+    sort(mo_orbitals, mo_coeff);
   }
 
 private:
   int _N;
   DeviceView2DLeft _X, _XT_F, _U, _VT, _S, _F;
 
-  void sort(DeviceView2DLeft &mo_coeff, DeviceView1D &mo_energies) {
+  void sort(DeviceView2DLeft &mo_orbitals, DeviceView1D &mo_coeff) {
     int N = _N;
     Kokkos::parallel_for(
         "SerialSort", 1, KOKKOS_LAMBDA(const int) {
           for (int i = 0; i < N - 1; i++) {
             int min_idx = i;
             for (int j = i + 1; j < N; j++) {
-              if (mo_energies(j) < mo_energies(min_idx))
+              if (mo_coeff(j) < mo_coeff(min_idx))
                 min_idx = j;
             }
             if (min_idx != i) {
-              double e_tmp = mo_energies(i);
-              mo_energies(i) = mo_energies(min_idx);
-              mo_energies(min_idx) = e_tmp;
+              double e_tmp = mo_coeff(i);
+              mo_coeff(i) = mo_coeff(min_idx);
+              mo_coeff(min_idx) = e_tmp;
               for (int k = 0; k < N; k++) {
-                double c_tmp = mo_coeff(k, i);
-                mo_coeff(k, i) = mo_coeff(k, min_idx);
-                mo_coeff(k, min_idx) = c_tmp;
+                double c_tmp = mo_orbitals(k, i);
+                mo_orbitals(k, i) = mo_orbitals(k, min_idx);
+                mo_orbitals(k, min_idx) = c_tmp;
               }
             }
           }
@@ -133,4 +133,4 @@ private:
   }
 };
 
-} // namespace NuKEXC
+} // namespace Nukexc

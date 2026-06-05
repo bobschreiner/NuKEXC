@@ -28,7 +28,7 @@
 #include <string>
 #include <vector>
 #
-namespace NuKEXC {
+namespace Nukexc {
 
 struct Molecule {
 
@@ -119,4 +119,4 @@ inline bool operator==(const Molecule &m1, const Molecule &m2) {
   }
   return true;
 };
-} // namespace NuKEXC
+} // namespace Nukexc

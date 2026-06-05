@@ -34,7 +34,7 @@
 
 #include "standards.hpp"
 
-using namespace NuKEXC;
+using namespace Nukexc;
 
 // ── Confg  ───────────────────────────────────────────────────────────────
 

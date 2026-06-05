@@ -24,7 +24,6 @@
 #include <Kokkos_Macros.hpp>
 #include <cctype>
 #include <fstream>
-#include <map>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -35,7 +34,7 @@
 #include "nukexc_utils.hpp"
 #include "spherical_harmonics.hpp"
 
-namespace NuKEXC {
+namespace Nukexc {
 
 struct STOBasisSet {
   Kokkos::View<int *> n;
@@ -667,4 +666,4 @@ void basis_eval_with_grad(const ScratchBasisParams &basis, const Point &p,
   gradz = R_pre * dS_dz + S_val * (dz * common_R);
 }
 
-} // namespace NuKEXC
+} // namespace Nukexc

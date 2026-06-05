@@ -35,7 +35,7 @@
 #include <catch2/catch_assertion_info.hpp>
 #include <vector>
 
-using namespace NuKEXC;
+using namespace Nukexc;
 
 TEST_CASE("H2O_thakkar", "[h20_thakkar]") {
   Molecule mol;

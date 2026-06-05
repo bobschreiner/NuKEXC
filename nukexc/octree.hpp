@@ -30,7 +30,7 @@
 #include <integratorxx/quadratures/s2/lebedev_laikov.hpp>
 #include <sorting/Kokkos_SortByKeyPublicAPI.hpp>
 
-namespace NuKEXC {
+namespace Nukexc {
 
 using Point = ArborX::Point<3, double>;
 using Box = ArborX::Box<3, double>;
@@ -224,4 +224,4 @@ void build_neighbor_list(const BASIS basis,
   neighbor_list.total_points = total_points;
 }
 
-} // namespace NuKEXC
+} // namespace Nukexc

@@ -25,7 +25,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace NuKEXC {
+namespace Nukexc {
 namespace detail {
 
 const double ang_to_bohr = 1.8897261246;
@@ -66,4 +66,4 @@ inline unsigned get_atomic_number(const std::string &symbol) {
   return (it != pt.end()) ? it->second : 0;
 }
 } // namespace detail
-} // namespace NuKEXC
+} // namespace Nukexc

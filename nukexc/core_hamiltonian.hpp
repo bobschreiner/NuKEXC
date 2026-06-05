@@ -37,7 +37,7 @@
 #include <impl/Kokkos_Profiling.hpp>
 #include <stdexcept>
 
-namespace NuKEXC {
+namespace Nukexc {
 // A helper to determine batch size based on available memory or a fixed
 // constant
 const size_t CHUNK_SIZE = 50000;
@@ -1274,6 +1274,6 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_sparse(
   Kokkos::fence();
   return result;
 }
-} // namespace NuKEXC
+} // namespace Nukexc
   //
   //

@@ -20,7 +20,7 @@
 
 #include <nukexc/molecule.hpp>
 
-namespace NuKEXC {
+namespace Nukexc {
 
 Molecule make_water();
 Molecule make_benzene();
@@ -32,4 +32,4 @@ void make_benzene(Molecule &);
 void make_ubiquitin(Molecule &);
 void make_taxol(Molecule &);
 
-} // namespace NuKEXC
+} // namespace Nukexc

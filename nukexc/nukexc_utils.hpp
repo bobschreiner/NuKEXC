@@ -23,7 +23,7 @@
 #include "nukexc/nukexc_config.hpp"
 #include <Kokkos_Core.hpp>
 
-namespace NuKEXC {
+namespace Nukexc {
 
 KOKKOS_INLINE_FUNCTION
 double rad_dist(const Kokkos::View<double *, Kokkos::LayoutStride> &a,
@@ -161,4 +161,4 @@ double upper_gamma(const int n, const double x) {
   return result;
 }
 
-} // namespace NuKEXC
+} // namespace Nukexc

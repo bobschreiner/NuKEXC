@@ -43,7 +43,7 @@
 
 #include <xc.h>
 #include <xc_funcs.h>
-using namespace NuKEXC;
+using namespace Nukexc;
 
 using bk_type = IntegratorXX::Becke<double, double>;
 using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
@@ -227,7 +227,7 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
   // ---- Diagonalization Test ----
   int n_basis = 4;
   // 1. Prepare Batched Views on Device
-  DeviceView2DLeft H("mo_coeffs", n_basis, n_basis);
+  DeviceView2DLeft H("H", n_basis, n_basis);
   DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, n_basis);
   DeviceView1D mo_energies("mo_energies", n_basis);
 
@@ -241,7 +241,7 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
         H(i, j) = T(i, j) + V(i, j);
       });
 
-  NuKEXC::Diagonalizer diagonalizer(n_basis);
+  Nukexc::Diagonalizer diagonalizer(n_basis);
   diagonalizer.compute_transformation(S);
   diagonalizer.solve(H, mo_coeffs, mo_energies);
 
@@ -406,7 +406,7 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
         H(i, j) = T(i, j) + V(i, j);
       });
 
-  NuKEXC::Diagonalizer diagonalizer(n_basis);
+  Nukexc::Diagonalizer diagonalizer(n_basis);
   diagonalizer.compute_transformation(S);
   diagonalizer.solve(H, mo_coeffs, mo_energies);
 
@@ -484,7 +484,7 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
   auto S_h = Kokkos::create_mirror_view(hamiltonian.overlap);
   Kokkos::deep_copy(S_h, hamiltonian.overlap);
 
-  NuKEXC::Diagonalizer diagonalizer(n_basis);
+  Nukexc::Diagonalizer diagonalizer(n_basis);
   diagonalizer.compute_transformation(hamiltonian.overlap);
   diagonalizer.solve(hamiltonian.hamiltonian, mo_coeffs, mo_energies);
 
@@ -547,12 +547,17 @@ TEST_CASE("compute_coulomb -- hydrogen 1s self-repulsion", "[coulomb]") {
       {1, 0, 0, 4.0, 0., 0., 0.},
   });
   // Density matrix: fully occupied single orbital, D_11 = 1
-  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", 1, 1);
-  auto dm_h = Kokkos::create_mirror_view(density_matrix);
-  dm_h(0, 0) = 1.0;
-  Kokkos::deep_copy(density_matrix, dm_h);
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
 
-  DeviceView2DLeft J = compute_coulomb(basis, basis_aux, grid, density_matrix);
+  DeviceView2DLeft J =
+      compute_coulomb(basis, basis_aux, grid, mo_orbitals, mo_coeff);
 
   auto J_h = Kokkos::create_mirror_view(J);
   Kokkos::deep_copy(J_h, J);
@@ -578,22 +583,28 @@ TEST_CASE("compute_lda -- hydrogen 1s lda", "[lda]") {
   }
 
   // Density matrix: fully occupied single orbital, D_11 = 1
-  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", 1, 1);
-  auto dm_h = Kokkos::create_mirror_view(density_matrix);
-  dm_h(0, 0) = 1.0;
-  Kokkos::deep_copy(density_matrix, dm_h);
 
-  auto lda_result = compute_lda(basis, grid, density_matrix, func);
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  auto lda_result = compute_lda(basis, grid, mo_orbitals, mo_coeff, func);
 
   // Clean up Libxc internal pointers
   xc_func_end(&func);
 
-  REQUIRE_THAT(lda_result.first, Catch::Matchers::WithinRel(ref_value, 1e-10));
+  REQUIRE_THAT(lda_result.energy, Catch::Matchers::WithinRel(ref_value, 1e-10));
 }
 
 TEST_CASE("compute_gga -- hydrogen 1s gga", "[gga]") {
   // Analytical Slater Exchange LDA energy for a 1s STO (zeta = 1.0)
-  const double ref_value = -0.253995708307881;
+  const double ref_energy = -0.253995708307881;
+  const double ref_potential = -0.320733669386709;
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
   auto grid = make_flat_grid<ta_type, ll_type>(mol, 1000, 40);
@@ -608,17 +619,24 @@ TEST_CASE("compute_gga -- hydrogen 1s gga", "[gga]") {
   }
 
   // Density matrix: fully occupied single orbital, D_11 = 1
-  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", 1, 1);
-  auto dm_h = Kokkos::create_mirror_view(density_matrix);
-  dm_h(0, 0) = 1.0;
-  Kokkos::deep_copy(density_matrix, dm_h);
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
 
-  auto gga_result = compute_gga(basis, grid, density_matrix, func);
+  auto gga_result = compute_gga(basis, grid, mo_orbitals, mo_coeff, func);
 
   // Clean up Libxc internal pointers
   xc_func_end(&func);
 
-  REQUIRE_THAT(gga_result.first, Catch::Matchers::WithinRel(ref_value, 1e-10));
+  REQUIRE_THAT(gga_result.energy,
+               Catch::Matchers::WithinRel(ref_energy, 1e-10));
+  REQUIRE_THAT(gga_result.potential(0, 0),
+               Catch::Matchers::WithinRel(ref_potential, 1e-10));
 }
 
 // ============================================================

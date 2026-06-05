@@ -29,7 +29,7 @@
 #include <nukexc/nukexc_config.hpp>
 #include <nukexc/stobasis.hpp>
 
-using namespace NuKEXC;
+using namespace Nukexc;
 
 using bk_type = IntegratorXX::Becke<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
@@ -87,6 +87,7 @@ void write_density_vtk(const std::string &filename, const FlatGrid &grid,
   for (int g = 0; g < N; ++g)
     out << weights_h(g) << "\n";
 }
+
 TEST_CASE("hydrogen 1s -- normalization, eigenvalues, virial",
           "[hydrogen_1s]") {
 
@@ -98,13 +99,18 @@ TEST_CASE("hydrogen 1s -- normalization, eigenvalues, virial",
   // For a single occupied orbital with coefficient 1.0,
   // the density matrix is a 1x1 identity (one basis function, fully occupied)
   const int N_bf = basis.nbf();
-  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", N_bf,
-                                                    N_bf);
-  Kokkos::deep_copy(density_matrix, 1.0); // D_ij = c_i * c_j = 1 * 1
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
 
   CoreHamiltonianResult result = compute_core_hamiltonian(basis, grid);
 
-  DeviceView1D density = compute_density(basis, grid, density_matrix);
+  DeviceView1D density = compute_density(basis, grid, mo_orbitals, mo_coeff);
 
   // Integrate density against quadrature weights: ∫ρ(r)dr should equal N_elec =
   // 1
@@ -148,15 +154,17 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
   // The density matrix is D_ij = c_i * c_j where c_i = N for all i.
   //
   const double N_bond = 1.0 / std::sqrt(2.0 + 2.0 * S_h(0, 1));
-  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", 2, 2);
-  auto dm_h = Kokkos::create_mirror_view(density_matrix);
-  for (int i = 0; i < 2; ++i)
-    for (int j = 0; j < 2; ++j) {
-      dm_h(i, j) = N_bond * N_bond;
-    }
-  Kokkos::deep_copy(density_matrix, dm_h);
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 2, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = N_bond;
+  orbitals_h(1, 0) = N_bond;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
 
-  DeviceView1D density = compute_density(basis, grid, density_matrix);
+  DeviceView1D density = compute_density(basis, grid, mo_orbitals, mo_coeff);
   write_density_vtk("h2plus_density_1s.vtk", grid, density);
 
   double integrated_density = 0.0;
@@ -194,7 +202,7 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
   DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, n_basis);
   DeviceView1D mo_energies("mo_energies", n_basis);
 
-  NuKEXC::Diagonalizer diagonalizer(n_basis);
+  Nukexc::Diagonalizer diagonalizer(n_basis);
   diagonalizer.compute_transformation(hamiltonian.overlap);
   diagonalizer.solve(hamiltonian.hamiltonian, mo_coeffs, mo_energies);
 
@@ -202,20 +210,17 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
   // Construct the Density Matrix for H2+ (1 electron in the lowest MO)
   // Formula: D(i, j) = n_occ * C(i, 0) * C(j, 0)  where n_occ = 1.0
   // =========================================================================
-  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", n_basis,
-                                                    n_basis);
-
-  Kokkos::parallel_for(
-      "Build H2+ Density Matrix",
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>, ExecSpace>({0, 0},
-                                                        {n_basis, n_basis}),
-      KOKKOS_LAMBDA(const int i, const int j) {
-        // mo_coeffs layout matches DeviceView2DLeft, so indices are (basis, mo)
-        density_matrix(i, j) = 1.0 * mo_coeffs(i, 0) * mo_coeffs(j, 0);
-      });
   // =========================================================================
 
-  DeviceView1D density = compute_density(basis, grid, density_matrix);
+  auto mo_occ_orbitals =
+      Kokkos::subview(mo_coeffs, Kokkos::ALL(), std::make_pair(0, 1));
+
+  // Occupation number for H2+: 1 electron
+  DeviceView1D mo_occ_coeff("MO occ coeff", 1);
+  Kokkos::deep_copy(mo_occ_coeff, 1.0);
+
+  DeviceView1D density =
+      compute_density(basis, grid, mo_occ_orbitals, mo_occ_coeff);
   write_density_vtk("h2plus_density_QZ4P.vtk", grid, density);
 
   double integrated_density = 0.0;
@@ -244,10 +249,14 @@ TEST_CASE("compute_simga -- hydrogen 1s sigma", "[density][sigma]") {
 
   const int N_bf = basis.nbf();
   // Density matrix: fully occupied single orbital, D_11 = 1
-  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", 1, 1);
-  auto dm_h = Kokkos::create_mirror_view(density_matrix);
-  dm_h(0, 0) = 1.0;
-  Kokkos::deep_copy(density_matrix, dm_h);
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
 
   DeviceView1D rho("Rho", N_quad);
   DeviceView1D gx_rho("Rho dx", N_quad);
@@ -266,8 +275,8 @@ TEST_CASE("compute_simga -- hydrogen 1s sigma", "[density][sigma]") {
                         collocation_gy, collocation_gz);
 
   compute_density_and_sigma(collocation_values, collocation_gx, collocation_gy,
-                            collocation_gz, density_matrix, rho, gx_rho, gy_rho,
-                            gz_rho, sigma);
+                            collocation_gz, mo_orbitals, mo_coeff, rho, gx_rho,
+                            gy_rho, gz_rho, sigma);
 
   double integrated_sigma = 0.0;
   double integrated_rho = 0.0;
@@ -301,10 +310,14 @@ TEST_CASE("compute_densities -- Helium 1s sigma", "[density][He]") {
 
   const int N_bf = basis.nbf();
   // Density matrix: fully occupied single orbital, D_11 = 1
-  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", 1, 1);
-  auto dm_h = Kokkos::create_mirror_view(density_matrix);
-  dm_h(0, 0) = 2.0;
-  Kokkos::deep_copy(density_matrix, dm_h);
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 2.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
 
   DeviceView1D rho("Rho", N_quad);
   DeviceView1D gx_rho("Rho dx", N_quad);
@@ -323,8 +336,8 @@ TEST_CASE("compute_densities -- Helium 1s sigma", "[density][He]") {
                         collocation_gy, collocation_gz);
 
   compute_density_and_sigma(collocation_values, collocation_gx, collocation_gy,
-                            collocation_gz, density_matrix, rho, gx_rho, gy_rho,
-                            gz_rho, sigma);
+                            collocation_gz, mo_orbitals, mo_coeff, rho, gx_rho,
+                            gy_rho, gz_rho, sigma);
 
   double integrated_sigma = 0.0;
   double integrated_rho = 0.0;

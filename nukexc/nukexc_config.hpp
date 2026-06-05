@@ -23,7 +23,7 @@
 #include <ArborX.hpp>
 #include <Kokkos_Core.hpp>
 
-namespace NuKEXC {
+namespace Nukexc {
 
 // Maximal angular momentum
 
@@ -68,4 +68,4 @@ using HostView1D = Kokkos::View<double *, HostSpace>;
 using Point = ArborX::Point<3, double>;
 using Box = ArborX::Box<3, double>;
 
-} // namespace NuKEXC
+} // namespace Nukexc

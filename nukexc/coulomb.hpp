@@ -22,10 +22,9 @@
 
 #include "density.hpp"
 #include "grid.hpp"
-#include "nukexc/partitioning.hpp"
 #include "nukexc_config.hpp"
-#include "nukexc_utils.hpp"
 #include "stobasis.hpp"
+#include "stopotential.hpp"
 
 #include <KokkosBlas2_gemv.hpp>
 #include <KokkosBlas2_gemv_impl.hpp>
@@ -37,66 +36,13 @@
 #include <Kokkos_Macros.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
 
-namespace NuKEXC {
-KOKKOS_INLINE_FUNCTION
-double I_tilde(const int n, const int l, const double r, const double zeta) {
-  int a = n + l + 2;
-  int b = n - l + 1;
-  double zr = zeta * r;
-  return lower_gamma(a, zr) /
-             (Kokkos::pow(zeta, a) * Kokkos::pow(r, 2 * l + 1)) +
-         upper_gamma(b, zr) / Kokkos::pow(zeta, b);
-}
-
-KOKKOS_INLINE_FUNCTION
-double C_prefactor(const int n, const int l, const double zeta) {
-  return 4 * M_PI * Kokkos::pow(2 * zeta, n + 0.5) /
-         (Kokkos::sqrt(factorial(2 * n)) * (2 * l + 1));
-}
-
-// Potential — just three multiplications
-KOKKOS_INLINE_FUNCTION
-double sto_potential(const int n, const int l, const int m, const double x,
-                     const double y, const double z, const double r,
-                     const double zeta) {
-  double val;
-  real_solid_harmonic_cart_precomputed(l, m, x, y, z, val);
-  return C_prefactor(n, l, zeta) * val * I_tilde(n, l, r, zeta);
-}
-
-DeviceView2DLeft sto_potential_collocation(const ExecSpace space,
-                                           const STOBasisSet basis,
-                                           const FlatGrid grid,
-                                           const DeviceView2DLeft basis_vals) {
-
-  const int N_bf = basis.nbf();
-  const int N_quad = grid.quad_points.extent(0);
-
-  DeviceView2DLeft potential_collocation("Potential collocation", N_bf, N_quad);
-
-  Kokkos::parallel_for(
-      "Compute potentials",
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf, N_quad}),
-      KOKKOS_LAMBDA(const int i, const int g) {
-        const int n = basis.n(i);
-        const int l = basis.l(i);
-        const int m = basis.m(i);
-        const double zeta = basis.zeta(i);
-        const double x = grid.quad_points(g)[0] - basis.O(i)[0];
-        const double y = grid.quad_points(g)[1] - basis.O(i)[1];
-        const double z = grid.quad_points(g)[2] - basis.O(i)[2];
-        const double r = dist(grid.quad_points(g), basis.O(i));
-        potential_collocation(i, g) =
-            sto_potential(n, l, m, x, y, z, r, zeta) + epsilon_shift;
-      });
-  space.fence();
-  return potential_collocation;
-}
+namespace Nukexc {
 
 DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
                                  const STOBasisSet basis_aux,
                                  const FlatGrid grid,
-                                 const DeviceView2D density_matrix) {
+                                 const DeviceView2DLeft mo_orbitals,
+                                 const DeviceView1D mo_coeff) {
 
   ExecSpace space;
   const int N_bf = basis.nbf();
@@ -117,7 +63,8 @@ DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
   fill_collocation(space, basis, grid.quad_points, basis_collocation);
   fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
 
-  DeviceView1DLeft density = compute_density(basis_collocation, density_matrix);
+  DeviceView1DLeft density =
+      compute_density(basis_collocation, mo_orbitals, mo_coeff);
   DeviceView2DLeft potential_collocation =
       sto_potential_collocation(space, basis_aux, grid, basis_aux_collocation);
 
@@ -157,4 +104,4 @@ DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
   return result;
 }
 
-} // namespace NuKEXC
+} // namespace Nukexc

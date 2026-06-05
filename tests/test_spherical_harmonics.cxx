@@ -37,7 +37,7 @@
 
 #include <iostream>
 
-using namespace NuKEXC;
+using namespace Nukexc;
 using namespace IntegratorXX;
 
 using bk_type = IntegratorXX::Becke<double, double>;

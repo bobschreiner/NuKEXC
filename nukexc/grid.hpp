@@ -47,7 +47,7 @@
 // overlap/kinetic/potential integrals.  All the repetitive Kokkos
 // boilerplate lives here so test cases stay readable.
 
-namespace NuKEXC {
+namespace Nukexc {
 
 const std::vector<double> BECKE_SLATER_RADII = {
     0.00,       // 0: Dummy
@@ -176,4 +176,4 @@ FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 50,
   return {qp_1d, wt_1d, ac_dev, Z_dev, (unsigned)nrad, (unsigned)nang};
 }
 
-} // namespace NuKEXC
+} // namespace Nukexc

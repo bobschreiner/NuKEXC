@@ -44,13 +44,14 @@
 #include <xc.h>
 #include <xc_funcs.h>
 
-using namespace NuKEXC;
+using namespace Nukexc;
 using bk_type = IntegratorXX::Becke<double, double>;
 using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 
 TEST_CASE("compute_gga -- Helium 1s gga", "[gga]") {
   const double ref_energy = -1.032549417787429;
+  const double ref_potential = -0.657943275538615;
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{2u});
@@ -66,17 +67,24 @@ TEST_CASE("compute_gga -- Helium 1s gga", "[gga]") {
   }
 
   // Density matrix: fully occupied single orbital, D_11 = 1
-  Kokkos::View<double **, ExecSpace> density_matrix("density_matrix", 1, 1);
-  auto dm_h = Kokkos::create_mirror_view(density_matrix);
-  dm_h(0, 0) = 2.0;
-  Kokkos::deep_copy(density_matrix, dm_h);
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 2.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
 
-  auto gga_result = compute_gga(basis, grid, density_matrix, func);
+  auto gga_result = compute_gga(basis, grid, mo_orbitals, mo_coeff, func);
 
   // Clean up Libxc internal pointers
   xc_func_end(&func);
 
-  REQUIRE_THAT(gga_result.first, Catch::Matchers::WithinRel(ref_energy, 1e-10));
+  REQUIRE_THAT(gga_result.energy,
+               Catch::Matchers::WithinRel(ref_energy, 1e-10));
+  REQUIRE_THAT(gga_result.potential(0, 0),
+               Catch::Matchers::WithinRel(ref_potential, 1e-10));
 }
 
 // ============================================================
