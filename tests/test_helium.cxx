@@ -81,9 +81,12 @@ TEST_CASE("compute_gga -- Helium 1s gga", "[gga]") {
   // Clean up Libxc internal pointers
   xc_func_end(&func);
 
+  auto gga_potential_h =
+      Kokkos::create_mirror_view_and_copy(HostSpace{}, gga_result.potential);
+
   REQUIRE_THAT(gga_result.energy,
                Catch::Matchers::WithinRel(ref_energy, 1e-10));
-  REQUIRE_THAT(gga_result.potential(0, 0),
+  REQUIRE_THAT(gga_potential_h(0, 0),
                Catch::Matchers::WithinRel(ref_potential, 1e-10));
 }
 
