@@ -12,6 +12,8 @@ if(NOT Armadillo_FOUND)
     )
 
     FetchContent_MakeAvailable(armadillo)
-
+    set(Armadillo_DIR
+        "${armadillo_BINARY_DIR}"
+        CACHE PATH "" FORCE)
     find_package(Armadillo CONFIG REQUIRED)
 endif()
