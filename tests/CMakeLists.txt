@@ -1,6 +1,6 @@
 include (nukexc-catch2)
 include (nukexc-armadillo)
-include( nukexc-openorbitaloptimizer )  
+include (nukexc-openorbitaloptimizer)  
 
 add_executable(test_grid standards.cxx test_grid.cxx )
 add_executable(test_partition standards.cxx test_partition.cxx )
