@@ -17,7 +17,6 @@
  *
  */
 
-#include "nukexc/nukexc_config.hpp"
 #include <Kokkos_Core.hpp>
 #include <catch2/catch_all.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -34,6 +33,7 @@
 #include <nukexc/diagonalizer.hpp>
 #include <nukexc/grid.hpp>
 #include <nukexc/molecule.hpp>
+#include <nukexc/nukexc_config.hpp>
 #include <nukexc/partitioning.hpp>
 #include <nukexc/stobasis.hpp>
 #include <nukexc/xc_integrals.hpp>

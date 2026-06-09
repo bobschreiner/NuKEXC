@@ -56,13 +56,11 @@ DeviceView2DLeft compute_exact_exchange(const STOBasisSet basis,
   DeviceView2DLeft basis_collocation_scaled("Basis collocation Scaled", N_bf,
                                             N_quad);
   DeviceView1DLeft expansion_coeff("Expansion coeff", N_quad);
-  DeviceView2DLeft result("Coulomb matrix", N_bf, N_bf);
+  DeviceView2DLeft result("Exchange matrix", N_bf, N_bf);
   DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
   DeviceView2DLeft three_center_integral("Three_center_integral", N_bf_aux,
                                          N_bf);
-  DeviceView2DLeft intermediate_solve("Intermediate solve", N_bf_aux, N_bf);
 
-  Kokkos::View<int *, Kokkos::LayoutLeft, ExecSpace> piv("pivot", N_bf_aux);
 
   fill_collocation(space, basis, grid.quad_points, basis_collocation);
   fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
@@ -87,7 +85,10 @@ DeviceView2DLeft compute_exact_exchange(const STOBasisSet basis,
   KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
                    potential_collocation, 0.0, aux_overlap);
   // Invert (A|B)
-  compute_invserse(aux_overlap);
+  DeviceView2DLeft X = compute_half_invserse(aux_overlap, 1e-7);
+  const int K = X.extent(1);
+  DeviceView2DLeft three_center_integral_scaled("Three_center_integral_scaled",
+                                                N_bf, K);
 
   // Loop over the occupied orbitals and compute contributions for each occupied
   // orbital
@@ -114,11 +115,11 @@ DeviceView2DLeft compute_exact_exchange(const STOBasisSet basis,
     KokkosBlas::gemm(space, "N", "T", 1.0, potential_collocation,
                      basis_collocation_scaled, 0.0, three_center_integral);
 
-    KokkosBlas::gemm(space, "N", "N", 1.0, aux_overlap, three_center_integral,
-                     0.0, intermediate_solve);
+    KokkosBlas::gemm(space, "T", "N", 1.0, three_center_integral, X, 0.0,
+                     three_center_integral_scaled);
 
-    KokkosBlas::gemm(space, "T", "N", 1.0, intermediate_solve,
-                     three_center_integral, 1.0, result);
+    KokkosBlas::gemm(space, "N", "T", mo_coeff(i), three_center_integral_scaled,
+                     three_center_integral_scaled, 1.0, result);
   }
   return result;
 }

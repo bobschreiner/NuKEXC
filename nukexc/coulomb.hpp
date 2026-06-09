@@ -44,7 +44,6 @@ DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
                                  const DeviceView2DLeft mo_orbitals,
                                  const DeviceView1D mo_coeff) {
 
-  // TODO::Replace Lapack::gesv by an svd
 
   ExecSpace space;
   const int N_bf = basis.nbf();
@@ -57,7 +56,6 @@ DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
   DeviceView2DLeft basis_collocation_scaled("Basis collocation Scaled", N_bf,
                                             N_quad);
   DeviceView1DLeft expansion_coeff("Expansion coeff", N_bf_aux);
-  DeviceView1DLeft scaling_factor("Scaling factor", N_bf_aux);
   DeviceView1DLeft potential_on_grid("Expansion coeff scaled", N_quad);
   DeviceView2DLeft result("Coulomb matrix", N_bf, N_bf);
   DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
@@ -91,14 +89,16 @@ DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
                    potential_collocation, 0.0, aux_overlap);
 
   // Invert (A|B) using svd
-  compute_invserse(aux_overlap);
+  DeviceView2DLeft X = compute_half_invserse(aux_overlap, 1e-8);
+  const int K = X.extent(1);
+  DeviceView1DLeft scaling_factor("Scaling factor", K);
 
   // Apply (A|B)^{-1}
-  KokkosBlas::gemv(space, "N", 1.0, aux_overlap, expansion_coeff, 0.0,
-                   scaling_factor);
+  KokkosBlas::gemv(space, "T", 1.0, X, expansion_coeff, 0.0, scaling_factor);
+  KokkosBlas::gemv(space, "N", 1.0, X, scaling_factor, 0.0, expansion_coeff);
 
   // Compute potential on grid
-  KokkosBlas::gemv(space, "T", 1.0, potential_collocation, scaling_factor, 0.0,
+  KokkosBlas::gemv(space, "T", 1.0, potential_collocation, expansion_coeff, 0.0,
                    potential_on_grid);
   // Compute (mu nu | A)
   Kokkos::parallel_for(

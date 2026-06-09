@@ -32,6 +32,7 @@
 #include <integratorxx/quadratures/s2.hpp>
 
 #include "molecule.hpp"
+#include "nukexc/atomic_properties.hpp"
 #include "partitioning.hpp"
 #include "stobasis.hpp"
 
@@ -128,14 +129,17 @@ FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 50,
 
     if (typeid(IntegratorXX::TreutlerAhlrichs<double, double>).name() ==
         typeid(radial_type).name()) {
+	    /*
       if (atomic_number < TA_XI.size()) {
-         r_atomic = TA_XI[atomic_number];
+        r_atomic = TA_XI[atomic_number];
       }
+      */
 
     } else if ((typeid(IntegratorXX::Becke<double, double>).name() ==
                 typeid(radial_type).name())) {
       if (atomic_number < BECKE_SLATER_RADII.size()) {
-        r_atomic = 0.5 * BECKE_SLATER_RADII[atomic_number];
+        r_atomic =
+            0.5 * BECKE_SLATER_RADII[atomic_number] * detail::ang_to_bohr;
       }
     }
 

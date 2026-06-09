@@ -1,6 +1,5 @@
 include (nukexc-catch2)
-include (nukexc-integratorxx)
-include (nukexc-kokkos)
+include( nukexc-openorbitaloptimizer )  
 
 add_executable(test_grid standards.cxx test_grid.cxx )
 add_executable(test_partition standards.cxx test_partition.cxx )
@@ -24,6 +23,8 @@ add_executable(benchmark_partition  standards.cxx benchmark_partition.cxx )
 add_executable(benchmark_scf standards.cxx benchmark_scf.cxx )
 add_executable(benchmark_coreH standards.cxx benchmark_coreH.cxx )
 add_executable(benchmark_cutoff standards.cxx benchmark_cutoff.cxx )
+
+add_executable(standalone_hf standards.cxx standalone_hf.cxx)
 
 add_custom_target(copy_test_inputs 
     COMMAND  ${CMAKE_COMMAND} -E copy_directory
@@ -53,7 +54,7 @@ set(ALL_TEST_TARGETS
     benchmark_scf
     benchmark_coreH
     benchmark_cutoff
-
+    standalone_hf 
 )
 
 # Apply linking to all of them at once
@@ -62,6 +63,8 @@ foreach(tgt IN LISTS ALL_TEST_TARGETS)
 
     add_dependencies(${tgt} copy_test_inputs)
 endforeach()
+
+target_link_libraries( standalone_hf PRIVATE OpenOrbitalOptimizer::OpenOrbitalOptimizer )
 
 add_test( NAME GRID_TEST COMMAND $<TARGET_FILE:test_grid> )
 add_test( NAME PARTITION_TEST COMMAND $<TARGET_FILE:test_partition> )

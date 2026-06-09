@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include "nukexc/nukexc_utils.hpp"
 #include "nukexc_config.hpp"
 
 #include <KokkosBlas3_gemm.hpp>
@@ -37,92 +38,75 @@ namespace Nukexc {
 
 class Diagonalizer {
 public:
-  Diagonalizer(int N) : _N(N) {
-    _X = DeviceView2DLeft("TransformationMatrix_X", _N, _N);
-    _XT_F = DeviceView2DLeft("XT_F_temp", _N, _N);
-    _U = DeviceView2DLeft("U_temp", _N, _N);
-    _VT = DeviceView2DLeft("VT_temp", _N, _N);
-    _F = DeviceView2DLeft("LocalF", _N, _N);
-    _S = DeviceView2DLeft("LocalS", _N, _N);
-  }
+  Diagonalizer(int N) : _N(N) {}
 
   // Call this only when the overlap matrix S changes (e.g., new geometry)
-  void compute_transformation(const DeviceView2DLeft &overlap_matrix) {
-    Kokkos::deep_copy(_S, overlap_matrix);
-
-    DeviceView2DLeft Us("U", _N, _N);
-    DeviceView2DLeft VTs("VTs", _N, _N);
-    DeviceView1D sigma("sigma", _N);
-
-    // SVD of S to handle potential singularity
-    KokkosLapack::svd("S", "S", _S, sigma, Us, VTs);
-
-    // Build X = Us * sigma^-1/2 (Canonical Orthogonalization)
-    auto X_local = _X;
-    Kokkos::parallel_for(
-        "BuildX", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {_N, _N}),
-        KOKKOS_LAMBDA(const int i, const int k) {
-          if (sigma(k) > 1e-7) {
-            X_local(i, k) = Us(i, k) / Kokkos::sqrt(sigma(k));
-          } else {
-            X_local(i, k) = 0.0;
-          }
-        });
+  DeviceView2DLeft
+  compute_transformation(const DeviceView2DLeft &overlap_matrix,
+                         const double lin_dep_threshold = 1e-7) {
+    _X = compute_half_invserse(overlap_matrix, lin_dep_threshold);
+    return _X;
   }
 
   // Repeatedly call this with updated Fock matrices
   void solve(const DeviceView2DLeft &fock_matrix, DeviceView2DLeft &mo_orbitals,
              DeviceView1D &mo_coeff) {
 
-    Kokkos::deep_copy(_F, fock_matrix);
-
     // 1. Transform Fock Matrix: F' = X^T * F * X
-    KokkosBlas::gemm("T", "N", 1.0, _X, _F, 0.0, _XT_F);
-    KokkosBlas::gemm("N", "N", 1.0, _XT_F, _X, 0.0, _F);
+    const int K = _X.extent(1);
+
+    DeviceView2DLeft XT_F("XT_F", K, _N);
+    DeviceView2DLeft F("Fock Reduced", K, K);
+    DeviceView2DLeft U("U", K, K);
+    DeviceView2DLeft VT("VT", K, K);
+
+    KokkosBlas::gemm("T", "N", 1.0, _X, fock_matrix, 0.0, XT_F);
+    KokkosBlas::gemm("N", "N", 1.0, XT_F, _X, 0.0, F);
 
     // 2. Diagonalize the transformed F
-    KokkosLapack::svd("S", "S", _F, mo_coeff, _U, _VT);
+    KokkosLapack::svd("S", "S", F, mo_coeff, U, VT);
 
-    // 3. Restore signs for symmetric singular values
-    auto U_local = _U;
-    auto VT_local = _VT;
-    int N = _N;
     Kokkos::parallel_for(
-        "SwitchSigns", N, KOKKOS_LAMBDA(const int j) {
+        "SwitchSigns", K, KOKKOS_LAMBDA(const int j) {
           double dot = 0.0;
-          for (int k = 0; k < N; ++k) {
-            dot += U_local(k, j) * VT_local(j, k);
+          for (int k = 0; k < K; ++k) {
+            dot += U(k, j) * VT(j, k);
           }
-          if (dot < 0)
+          if (dot < 0) {
             mo_coeff(j) = -mo_coeff(j);
+          }
         });
 
     // 4. Back-transform: C = X * U
-    KokkosBlas::gemm("N", "N", 1.0, _X, _U, 0.0, mo_orbitals);
+    KokkosBlas::gemm("N", "N", 1.0, _X, U, 0.0, mo_orbitals);
 
     // 5. Final Sorting
-    sort(mo_orbitals, mo_coeff);
+    sort(mo_orbitals, mo_coeff, K);
   }
 
 private:
   int _N;
-  DeviceView2DLeft _X, _XT_F, _U, _VT, _S, _F;
-
-  void sort(DeviceView2DLeft &mo_orbitals, DeviceView1D &mo_coeff) {
-    int N = _N;
+  DeviceView2DLeft _X;
+  // Sort K orbitals (columns of mo_orbitals, entries of mo_coeff) by
+  // ascending energy.  mo_orbitals has _N rows and K columns.
+  void sort(DeviceView2DLeft &mo_orbitals, DeviceView1D &mo_coeff,
+            const int K) {
+    const int N = _N; // row count — captured separately from K (column count)
     Kokkos::parallel_for(
         "SerialSort", 1, KOKKOS_LAMBDA(const int) {
-          for (int i = 0; i < N - 1; i++) {
+          for (int i = 0; i < K - 1; i++) { // Bug 1 fixed: was N-1
             int min_idx = i;
-            for (int j = i + 1; j < N; j++) {
+            for (int j = i + 1; j < K; j++) { // Bug 1 fixed: was N
               if (mo_coeff(j) < mo_coeff(min_idx))
                 min_idx = j;
             }
             if (min_idx != i) {
+              // Swap energies
               double e_tmp = mo_coeff(i);
               mo_coeff(i) = mo_coeff(min_idx);
               mo_coeff(min_idx) = e_tmp;
-              for (int k = 0; k < N; k++) {
+              // Swap orbital columns — loop over N rows
+              for (int k = 0; k < N; k++) { // Bug 2 clarified: N rows
                 double c_tmp = mo_orbitals(k, i);
                 mo_orbitals(k, i) = mo_orbitals(k, min_idx);
                 mo_orbitals(k, min_idx) = c_tmp;

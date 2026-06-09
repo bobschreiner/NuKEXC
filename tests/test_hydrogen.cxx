@@ -150,7 +150,7 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
-  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 40);
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 200, 40);
 
   CoreHamiltonianResult result = compute_core_hamiltonian(basis, grid);
   DeviceView2DLeft S = result.overlap;
@@ -243,7 +243,20 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
       });
 
   Nukexc::Diagonalizer diagonalizer(n_basis);
-  diagonalizer.compute_transformation(S);
+  auto X = diagonalizer.compute_transformation(S);
+  auto X_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, X);
+  int K = X.extent(1);
+
+  for (int i = 0; i < K; ++i) {
+    for (int j = 0; j < K; ++j) {
+      double sum = 0.0;
+      for (int a = 0; a < n_basis; ++a)
+        for (int b = 0; b < n_basis; ++b)
+          sum += X_h(a, i) * S_h(a, b) * X_h(b, j);
+      double expected = (i == j) ? 1.0 : 0.0;
+      REQUIRE_THAT(sum, Catch::Matchers::WithinAbs(expected, 1e-8));
+    }
+  }
   diagonalizer.solve(H, mo_coeffs, mo_energies);
 
   Kokkos::deep_copy(mo_coeffs_h, mo_coeffs);
@@ -531,7 +544,7 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
 TEST_CASE("compute_coulomb -- hydrogen 1s self-repulsion", "[coulomb]") {
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
-  auto grid = make_flat_grid<ta_type, ll_type>(mol, 100, 20);
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
 
   // Primary basis: single 1s STO
   STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
@@ -570,7 +583,7 @@ TEST_CASE("compute_coulomb -- hydrogen 1s self-repulsion", "[coulomb]") {
 TEST_CASE("compute_exchange -- hydrogen 1s self-exchange", "[exchange]") {
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
-  auto grid = make_flat_grid<ta_type, ll_type>(mol, 100, 20);
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
 
   // Primary basis: single 1s STO
   STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
@@ -611,7 +624,7 @@ TEST_CASE("compute_lda -- hydrogen 1s lda", "[lda]") {
   const double ref_value = -0.2127415030860106;
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
-  auto grid = make_flat_grid<ta_type, ll_type>(mol, 100, 20);
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
 
   // Primary basis: single 1s STO
   STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
@@ -647,7 +660,7 @@ TEST_CASE("compute_gga -- hydrogen 1s gga", "[gga]") {
   const double ref_potential = -0.320733669386709;
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
-  auto grid = make_flat_grid<ta_type, ll_type>(mol, 1000, 40);
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 1000, 40);
 
   // Primary basis: single 1s STO
   STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});

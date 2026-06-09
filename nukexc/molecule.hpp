@@ -27,7 +27,7 @@
 #include <set>
 #include <string>
 #include <vector>
-#
+
 namespace Nukexc {
 
 struct Molecule {
@@ -113,7 +113,7 @@ inline bool operator==(const Molecule &m1, const Molecule &m2) {
     if (m1.Z(i) != m2.Z(i))
       return false;
     for (unsigned int j = 0; j < 3; ++j) {
-      if (m1.atom_centers(i)[j] != m2.atom_centers(i)[3])
+      if (m1.atom_centers(i)[j] != m2.atom_centers(i)[j])
         return false;
     }
   }

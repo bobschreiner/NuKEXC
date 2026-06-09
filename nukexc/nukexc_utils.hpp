@@ -166,26 +166,46 @@ double upper_gamma(const int n, const double x) {
   return result;
 }
 
-void compute_invserse(DeviceView2DLeft &overlap_matrix) {
+DeviceView2DLeft compute_half_invserse(const DeviceView2DLeft &overlap_matrix,
+                                       const double lin_dep_threshold = 1e-7) {
 
   const int N = overlap_matrix.extent(0);
   DeviceView2DLeft Us("U", N, N);
   DeviceView2DLeft VTs("VTs", N, N);
   DeviceView1D sigma("sigma", N);
+  DeviceView2DLeft A("matrix A", N, N);
+  Kokkos::deep_copy(A, overlap_matrix);
 
   // SVD of S to handle potential singularity
-  KokkosLapack::svd("S", "S", overlap_matrix, sigma, Us, VTs);
+  KokkosLapack::svd("S", "S", A, sigma, Us, VTs);
 
-  // Build X = Us * sigma^-1/2 (Canonical Orthogonalization)
+  auto sigma_h =
+      Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, sigma);
+
+  int K = 0;
+  std::vector<int> kept;
+  kept.reserve(N);
+  for (int i = 0; i < N; ++i) {
+    if (sigma_h(i) > lin_dep_threshold) {
+      kept.push_back(i);
+      ++K;
+    }
+  }
+
+  // Upload the index map so the kernel can use it on device
+  Kokkos::View<int *, Kokkos::HostSpace> kept_h(kept.data(), K);
+  Kokkos::View<int *> kept_d("kept_d", K);
+  Kokkos::deep_copy(kept_d, kept_h);
+
+  DeviceView2DLeft X("Half inverse", N, K);
+
   Kokkos::parallel_for(
-      "Invert overlap", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N, N}),
+      "Invert overlap", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N, K}),
       KOKKOS_LAMBDA(const int i, const int k) {
-        if (sigma(k) > 1e-7) {
-          Us(i, k) /= sigma(k);
-        } else {
-          Us(i, k) = 0.0;
-        }
+        const int src = kept_d(k);
+        X(i, k) = Us(i, src) / Kokkos::sqrt(sigma(src));
       });
-  KokkosBlas::gemm("T", "T", 1.0, VTs, Us, 0.0, overlap_matrix);
+
+  return X;
 }
 } // namespace Nukexc

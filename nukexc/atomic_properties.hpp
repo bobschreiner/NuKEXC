@@ -28,7 +28,7 @@
 namespace Nukexc {
 namespace detail {
 
-const double ang_to_bohr = 1.8897261246;
+constexpr double ang_to_bohr = 1.8897259885681697;
 static const std::map<std::string, int> am_map = {{"S", 0}, {"P", 1}, {"D", 2},
                                                   {"F", 3}, {"G", 4}, {"H", 5},
                                                   {"I", 6}, {"J", 7}};
