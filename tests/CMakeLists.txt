@@ -1,4 +1,5 @@
 include (nukexc-catch2)
+include (nukexc-armadillo)
 include( nukexc-openorbitaloptimizer )  
 
 add_executable(test_grid standards.cxx test_grid.cxx )
