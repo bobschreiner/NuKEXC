@@ -1,7 +1,8 @@
 include(FetchContent)
 
 find_package(Armadillo CONFIG QUIET)
-
+get_property(allTargets GLOBAL PROPERTY TARGETS)
+message(STATUS "Targets=${allTargets}")
 if(NOT Armadillo_FOUND)
     message(STATUS "Armadillo not found, fetching...")
 
@@ -12,8 +13,6 @@ if(NOT Armadillo_FOUND)
     )
 
     FetchContent_MakeAvailable(armadillo)
-    set(Armadillo_DIR
-        "${armadillo_BINARY_DIR}"
-        CACHE PATH "" FORCE)
-    find_package(Armadillo CONFIG REQUIRED)
 endif()
+
+target_link_libraries( libnukexc INTERFACE armadillo )
