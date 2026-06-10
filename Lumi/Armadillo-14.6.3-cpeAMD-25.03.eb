@@ -1,0 +1,52 @@
+easyblock = 'CMakeMake'
+
+name =    'Armadillo'
+version = '14.6.3'
+
+homepage = 'https://arma.sourceforge.net/'
+
+whatis = [
+    "Description: Armadillo is a high quality C++ library for linear algebra and scientific computing"
+]
+
+description = """
+Armadillo is a high quality C++ library for linear algebra and scientific 
+computing, aiming towards a good balance between speed and ease of use.
+"""
+
+toolchain = {'name': 'cpeAMD', 'version': '25.03'}
+toolchainopts = {'verbose': False}
+
+sources = [{
+    'filename': '%(name)s-%(version)s.tar.gz',
+    'git_config': {
+        'url': 'https://gitlab.com/conradsnicta',
+        'repo_name': 'armadillo-code',
+        'tag': '%(version)s',
+    }
+}]
+
+builddependencies = [
+    ('buildtools', '%(toolchain_version)s', '', True),
+]
+
+dependencies = [
+    ('cray-libsci', EXTERNAL_MODULE),
+]
+
+configopts = ' '.join([
+    '-D BUILD_SHARED_LIBS=ON',
+    '-D ARMA_USE_LAPACK=ON',
+    '-D ARMA_USE_BLAS=ON',
+    '-D DETECT_HDF5=OFF',
+])
+
+sanity_check_paths = {
+    'files': [
+        'lib64/libarmadillo.%s' % SHLIB_EXT,
+        'include/armadillo',
+    ],
+    'dirs': ['lib64', 'include'],
+}
+
+moduleclass = 'numlib'
