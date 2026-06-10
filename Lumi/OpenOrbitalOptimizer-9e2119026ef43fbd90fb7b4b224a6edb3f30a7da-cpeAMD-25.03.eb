@@ -1,0 +1,50 @@
+easyblock = 'CMakeMake'
+
+name =    'OpenOrbitalOptimizer'
+version = '9e2119026ef43fbd90fb7b4b224a6edb3f30a7da'
+
+homepage = 'https://github.com/susilehtola/OpenOrbitalOptimizer'
+
+whatis = [
+    "Description: OpenOrbitalOptimizer is a library for orbital optimization in quantum chemistry"
+]
+
+description = """
+OpenOrbitalOptimizer is an open-source library for orbital optimization 
+in quantum chemistry calculations.
+"""
+
+toolchain = {'name': 'cpeAMD', 'version': '25.03'}
+toolchainopts = {'verbose': False}
+
+sources = [{
+    'filename': '%(name)s-%(version)s.tar.gz',
+    'git_config': {
+        'url': 'https://github.com/susilehtola',
+        'repo_name': 'OpenOrbitalOptimizer',
+        'commit': '%(version)s',
+    }
+}]
+
+builddependencies = [
+    ('buildtools', '%(toolchain_version)s', '', True),
+]
+
+dependencies = [
+    ('Armadillo', '14.6.3'),
+]
+
+configopts = ' '.join([
+    '-D BUILD_SHARED_LIBS=ON',
+    '-D OpenOrbitalOptimizer_BUILD_TESTING=OFF',
+    '-D OpenOrbitalOptimizer_BUILD_PYTHON=OFF',
+])
+
+sanity_check_paths = {
+    'files': [
+        'lib64/cmake/OpenOrbitalOptimizer/OpenOrbitalOptimizerConfig.cmake',
+    ],
+    'dirs': ['lib64/cmake/OpenOrbitalOptimizer', 'include'],
+}
+
+moduleclass = 'chem'
