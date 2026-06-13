@@ -68,7 +68,7 @@ struct Molecule {
       atom_centers_h(i)[1] = atom_centers_v[i][1];
       atom_centers_h(i)[2] = atom_centers_v[i][2];
       Z_h(i) = Z_v[i];
-      Z_total += Z(i);
+      Z_total += Z_v[i];
     }
     Kokkos::deep_copy(Z, Z_h);
     Kokkos::deep_copy(atom_centers, atom_centers_h);
