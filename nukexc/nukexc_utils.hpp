@@ -27,7 +27,6 @@
 #include <KokkosBlas3_gemm_impl.hpp>
 
 #include <KokkosLapack_svd.hpp>
-#include <impl/Kokkos_CheckUsage.hpp>
 
 namespace Nukexc {
 
