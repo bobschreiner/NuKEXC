@@ -33,7 +33,6 @@
 
 #include <Kokkos_Macros.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
-#include <impl/Kokkos_CheckUsage.hpp>
 
 namespace Nukexc {
 

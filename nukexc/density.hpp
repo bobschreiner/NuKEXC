@@ -35,7 +35,6 @@
 #include <Kokkos_MathematicalFunctions.hpp>
 #include <Kokkos_Pair.hpp>
 #include <decl/Kokkos_Declare_OPENMP.hpp>
-#include <impl/Kokkos_Profiling.hpp>
 
 namespace Nukexc {
 

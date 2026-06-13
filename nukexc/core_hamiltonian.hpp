@@ -34,7 +34,6 @@
 #include <Kokkos_Core_fwd.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
 #include <Kokkos_Pair.hpp>
-#include <impl/Kokkos_Profiling.hpp>
 #include <stdexcept>
 
 namespace Nukexc {
