@@ -39,6 +39,8 @@ configopts = ' '.join([
     '-D ARMA_USE_LAPACK=ON',
     '-D ARMA_USE_BLAS=ON',
     '-D DETECT_HDF5=OFF',
+    '-D BLAS_LIBRARY=$CRAY_LIBSCI_PREFIX_DIR/lib/libsci_amd.so',
+    '-D LAPACK_LIBRARY=$CRAY_LIBSCI_PREFIX_DIR/lib/libsci_amd.so',
 ])
 
 sanity_check_paths = {
