@@ -21,6 +21,7 @@
 
 #include "atomic_properties.hpp"
 #include "nukexc_config.hpp"
+#include <Kokkos_Core.hpp>
 #include <decl/Kokkos_Declare_OPENMP.hpp>
 #include <fstream>
 #include <iostream>
@@ -32,10 +33,10 @@ namespace Nukexc {
 
 struct Molecule {
 
-  Kokkos::View<Point *, Kokkos::HostSpace>
+  Kokkos::View<Point *, ExecSpace>
       atom_centers; // Atom centers in cartesian coordinates (bohr)
-  Kokkos::View<unsigned *, Kokkos::HostSpace> Z; // atomic numbers
-  unsigned natoms; // number of atoms in the molecule
+  Kokkos::View<unsigned *, ExecSpace> Z; // atomic numbers
+  unsigned natoms;                       // number of atoms in the molecule
   std::set<unsigned>
       element_list; // contains a list of all elements present in the list
   unsigned Z_total;
@@ -53,20 +54,24 @@ struct Molecule {
 
     // Initialize datastructures
     natoms = Z_v.size();
-    atom_centers =
-        Kokkos::View<Point *, Kokkos::HostSpace>("Atom centers", natoms);
-    Z = Kokkos::View<unsigned *, Kokkos::HostSpace>("Atomic numbers ", natoms);
+    atom_centers = Kokkos::View<Point *, ExecSpace>("Atom centers", natoms);
+    Z = Kokkos::View<unsigned *, ExecSpace>("Atomic numbers ", natoms);
     element_list = std::set<unsigned>(Z_v.begin(), Z_v.end());
     Z_total = 0;
 
+    auto Z_h = Kokkos::create_mirror_view(Z);
+    auto atom_centers_h = Kokkos::create_mirror_view(atom_centers);
+
     // Fill Kokkos::View with data
     for (size_t i = 0; i < natoms; ++i) {
-      atom_centers(i)[0] = atom_centers_v[i][0];
-      atom_centers(i)[1] = atom_centers_v[i][1];
-      atom_centers(i)[2] = atom_centers_v[i][2];
-      Z(i) = Z_v[i];
+      atom_centers_h(i)[0] = atom_centers_v[i][0];
+      atom_centers_h(i)[1] = atom_centers_v[i][1];
+      atom_centers_h(i)[2] = atom_centers_v[i][2];
+      Z_h(i) = Z_v[i];
       Z_total += Z(i);
     }
+    Kokkos::deep_copy(Z, Z_h);
+    Kokkos::deep_copy(atom_centers, atom_centers_h);
   };
 }; // struct Molecule
 

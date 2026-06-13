@@ -215,9 +215,10 @@ STOBasisSet load_adf_basis(const Molecule &mol,
                            const bool fit = false) {
 
   std::vector<STOFunc> temp_basis;
+  auto Z_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, mol.Z);
 
   for (size_t i = 0; i < mol.natoms; ++i) {
-    std::string element_symbol = detail::symbols[mol.Z(i)];
+    std::string element_symbol = detail::symbols[Z_h(i)];
     element_symbol[0] = std::toupper(element_symbol[0]);
 
     std::string filename = data_dir + "/" + element_symbol;
@@ -260,12 +261,14 @@ STOBasisSet load_adf_basis(const Molecule &mol,
           int n = std::stoi(label.substr(0, 1));
           int l = label_to_l(label[1]);
 
+          auto atom_centers_h = Kokkos::create_mirror_view_and_copy(
+              HostSpace{}, mol.atom_centers);
+
           // 4. Expand for each m component (-l to +l)
           // This accounts for the degeneracy of higher l states
           for (int m = -l; m <= l; ++m) {
-            temp_basis.push_back({n, l, m, zeta, mol.atom_centers(i)[0],
-                                  mol.atom_centers(i)[1],
-                                  mol.atom_centers(i)[2]});
+            temp_basis.push_back({n, l, m, zeta, atom_centers_h(i)[0],
+                                  atom_centers_h(i)[1], atom_centers_h(i)[2]});
           }
         }
       }
@@ -337,12 +340,13 @@ load_thakkar_basis(const Molecule &mol,
         while (ss >> c)
           coeffs.push_back(c);
 
+        auto atom_centers_h =
+            Kokkos::create_mirror_view_and_copy(HostSpace{}, mol.atom_centers);
         // 4. Expand for each m component (-l to +l)
         // This accounts for the degeneracy of higher l states
         for (int m = -current_l; m <= current_l; ++m) {
-          temp_basis.push_back({n, current_l, m, zeta, mol.atom_centers(i)[0],
-                                mol.atom_centers(i)[1],
-                                mol.atom_centers(i)[2]});
+          temp_basis.push_back({n, current_l, m, zeta, atom_centers_h(i)[0],
+                                atom_centers_h(i)[1], atom_centers_h(i)[2]});
         }
       }
     }
