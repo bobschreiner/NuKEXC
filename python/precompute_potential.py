@@ -86,7 +86,7 @@ cases  = make_cases(n_max)
 k_max  = 2 * n_max + 3
 
 print("KOKKOS_INLINE_FUNCTION")
-print("double sto_potential(")
+print("double sto_potential_pre(")
 print("    const int    idx,")
 print("    const double x, const double y, const double z,")
 print("    const double r, const double zeta) {")
@@ -106,3 +106,14 @@ for (idx, n, l, m) in cases:
 print("  default: return 0.0;")
 print("  }")
 print("}")
+
+C1 = C_prefactor(1,0).evalf(25)
+I1 = I_tilde(1,0).evalf(25)
+S1 = simplify(solid_harmonic(0, 0, x, y, z)).evalf(25)
+
+print(f"C1 : {C1}")
+print(f"I1 : {I1}")
+print(f"S1 : {S1}")
+
+
+

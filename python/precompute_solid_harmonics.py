@@ -3,7 +3,6 @@ from sympy.printing.c import ccode
 x, y, z, r = symbols('x y z r', real=True)
 
 def poly_P(r, z, l, m):
-    """Your existing poly_P in SymPy"""
     result = 0
     for k in range((l - m)//2 + 1):
         result += ((-1)**k * Rational(1, 2**l) * 

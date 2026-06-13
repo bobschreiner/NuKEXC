@@ -38,6 +38,7 @@ struct Molecule {
   unsigned natoms; // number of atoms in the molecule
   std::set<unsigned>
       element_list; // contains a list of all elements present in the list
+  unsigned Z_total;
 
   /**
    * @ brief Default constructor
@@ -55,8 +56,8 @@ struct Molecule {
     atom_centers =
         Kokkos::View<Point *, Kokkos::HostSpace>("Atom centers", natoms);
     Z = Kokkos::View<unsigned *, Kokkos::HostSpace>("Atomic numbers ", natoms);
-
     element_list = std::set<unsigned>(Z_v.begin(), Z_v.end());
+    Z_total = 0;
 
     // Fill Kokkos::View with data
     for (size_t i = 0; i < natoms; ++i) {
@@ -64,6 +65,7 @@ struct Molecule {
       atom_centers(i)[1] = atom_centers_v[i][1];
       atom_centers(i)[2] = atom_centers_v[i][2];
       Z(i) = Z_v[i];
+      Z_total += Z(i);
     }
   };
 }; // struct Molecule
@@ -98,9 +100,7 @@ inline void read_xyz(const std::string &filename, Molecule &mol) {
   }
 
   Molecule mol_tmp(centers_v, Z_v);
-  mol.atom_centers = mol_tmp.atom_centers; // shallow copies
-  mol.Z = mol_tmp.Z;                       // shallow copies
-  mol.natoms = mol_tmp.natoms;
+  mol = mol_tmp;
 }
 
 /**

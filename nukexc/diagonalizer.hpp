@@ -43,8 +43,8 @@ public:
   // Call this only when the overlap matrix S changes (e.g., new geometry)
   DeviceView2DLeft
   compute_transformation(const DeviceView2DLeft &overlap_matrix,
-                         const double lin_dep_threshold = 1e-7) {
-    _X = compute_half_invserse(overlap_matrix, lin_dep_threshold);
+                         const double lin_dep_threshold = 1e-5) {
+    _X = compute_half_inverse(overlap_matrix, lin_dep_threshold);
     return _X;
   }
 

@@ -42,6 +42,112 @@ using bk_type = IntegratorXX::Becke<double, double>;
 using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 
+struct Config {
+  std::string xyz_file = "input/water.xyz";
+  std::string basis_file = "input/zorabasis_cholesky/TZP.cholesky";
+  int nrad = 100;
+  int nang = 30;
+  double lin_dep_threshold = 1e-6;
+  double conv_thr = 1e-8;
+  int charge = 0;
+  int multiplicity = 1;
+};
+
+Config parse_args(int argc, char *argv[]) {
+  Config cfg;
+  for (int i = 1; i < argc; ++i) {
+    std::string arg = argv[i];
+
+    auto parse_string = [&](const std::string &prefix, std::string &out) {
+      if (arg.rfind(prefix, 0) == 0) {
+        out = arg.substr(prefix.size());
+        return true;
+      }
+      return false;
+    };
+    auto parse_int = [&](const std::string &prefix, int &out) {
+      if (arg.rfind(prefix, 0) == 0) {
+        out = std::stoi(arg.substr(prefix.size()));
+        return true;
+      }
+      return false;
+    };
+    auto parse_double = [&](const std::string &prefix, double &out) {
+      if (arg.rfind(prefix, 0) == 0) {
+        out = std::stod(arg.substr(prefix.size()));
+        return true;
+      }
+      return false;
+    };
+
+    if (arg == "--help" || arg == "-h") {
+      std::cout
+          << "Usage: " << argv[0] << " [options]\n"
+          << "  --xyz=<file>          Molecule XYZ file        (default: "
+          << cfg.xyz_file << ")\n"
+          << "  --basis=<file>        Basis set file           (default: "
+          << cfg.basis_file << ")\n"
+          << "  --nrad=<int>          Radial grid points       (default: "
+          << cfg.nrad << ")\n"
+          << "  --nang=<int>          Angular grid points      (default: "
+          << cfg.nang << ")\n"
+          << "  --lin-dep=<float>     Linear dep. threshold    (default: "
+          << "  --conv-thr=<float>    SCF convergence threshold (default: "
+
+          << cfg.conv_thr << ")\n"
+          << cfg.lin_dep_threshold << ")\n";
+
+      std::exit(0);
+    } else if (!parse_string("--xyz=", cfg.xyz_file) &&
+               !parse_string("--basis=", cfg.basis_file) &&
+               !parse_int("--nrad=", cfg.nrad) &&
+               !parse_int("--nang=", cfg.nang) &&
+               !parse_double("--lin-dep=", cfg.lin_dep_threshold) &&
+               !parse_double("--conv-thr=", cfg.conv_thr) &&
+               !parse_int("--charge=", cfg.charge) &&
+               !parse_int("--multiplicity=", cfg.multiplicity)) {
+      throw std::runtime_error("Unknown argument: " + arg + " (try --help)");
+    }
+  }
+  if (cfg.nrad <= 0 || cfg.nang <= 0)
+    throw std::runtime_error("--nrad and --nang must be positive");
+  return cfg;
+}
+
+auto repeat(const std::string &s, int n) {
+  std::string r;
+  for (int i = 0; i < n; ++i)
+    r += s;
+  return r;
+}
+void print_config(const Config &cfg) {
+  int width =
+      std::max({cfg.xyz_file.size(), cfg.basis_file.size(), size_t(20)});
+  std::string h = repeat("─", width + 2);
+
+  std::cout << "\n";
+  std::cout << "┌───────────────────────" << h << "┐\n";
+  std::cout << "│    HF Configuration" << repeat(" ", width + 5) << "│\n";
+  std::cout << "├───────────────────────" << h << "┤\n";
+  std::cout << "│ Molecule file        │ " << std::setw(width) << std::left
+            << cfg.xyz_file << " │\n";
+  std::cout << "│ Basis file           │ " << std::setw(width) << std::left
+            << cfg.basis_file << " │\n";
+  std::cout << "│ Radial points        │ " << std::setw(width) << cfg.nrad
+            << " │\n";
+  std::cout << "│ Angular order        │ " << std::setw(width) << cfg.nang
+            << " │\n";
+  std::cout << "│ Lin. dep. threshold  │ " << std::setw(width)
+            << cfg.lin_dep_threshold << " │\n";
+  std::cout << "│ Conv. threshold      │ " << std::setw(width) << cfg.conv_thr
+            << " │\n";
+  std::cout << "│ Charge               │ " << std::setw(width) << cfg.charge
+            << " │\n";
+  std::cout << "│ Multiplicity         │ " << std::setw(width)
+            << cfg.multiplicity << " │\n";
+  std::cout << "└──────────────────────┴" << h << "┘\n\n";
+  std::cout << std::flush;
+}
 // ---------------------------------------------------------------------------
 // Helper: Kokkos DeviceView2DLeft → arma::mat (column-major copy)
 // OOO expects arma::mat where columns are MOs; NuKEXC stores mo_coeff(nbf, nmo)
@@ -82,30 +188,27 @@ DeviceView1D arma_to_kokkos1d(const arma::vec &v, const std::string &label) {
   return kv;
 }
 
-int main() {
-
+int main(int argc, char *argv[]) {
+  Config cfg;
+  try {
+    cfg = parse_args(argc, argv);
+  } catch (const std::exception &e) {
+    std::cerr << "Error: " << e.what() << "\n";
+    return 1;
+  }
+  print_config(cfg);
   Kokkos::initialize();
   {
-    // ---- Geometry & grid --------------------------------------------------
     Molecule mol;
-    read_xyz("input/water.xyz", mol);
+    read_xyz(cfg.xyz_file, mol);
 
-    const int nrad = 100;
-    const int nang = 30;
+    auto grid = make_flat_grid<bk_type, ll_type>(mol, cfg.nrad, cfg.nang);
+
     const double screening_tol = 1e-10;
-    const double conv_thr = 1e-8;
-
-    auto grid = make_flat_grid<bk_type, ll_type>(mol, nrad, nang);
-
-    // ---- Basis sets -------------------------------------------------------
-    // Primary basis
-    STOBasisSet basis = load_adf_basis(
-        mol, "input/zorabasis_cholesky/TZP.cholesky", screening_tol);
-    // Auxiliary basis for density fitting (Coulomb + exchange)
+    STOBasisSet basis = load_adf_basis(mol, cfg.basis_file, screening_tol);
     STOBasisSet basis_aux =
-        load_adf_basis(mol, "input/zorabasis_cholesky/TZP.cholesky",
-                       screening_tol, /*fit=*/true);
-
+        load_adf_basis(mol, cfg.basis_file, screening_tol, /*fit=*/true);
+    // ...
     const int nbf = basis.nbf();
 
     // ---- Core Hamiltonian (overlap + H_core in Kokkos views) -------------
@@ -117,12 +220,23 @@ int main() {
     // Diagonalizer already computes X = S^{-1/2} internally;
     // we reuse it each SCF cycle to solve F C = S C ε  in the AO basis.
     Diagonalizer diag(nbf);
-    DeviceView2DLeft X = diag.compute_transformation(hcore.overlap);
+    DeviceView2DLeft X =
+        diag.compute_transformation(hcore.overlap, cfg.lin_dep_threshold);
 
     arma::mat h_core = kokkos_to_arma(hcore.hamiltonian);
     arma::mat X_arma = kokkos_to_arma(X);
     arma::mat S_arma = kokkos_to_arma(hcore.overlap); // need S on host
     arma::mat h_core_orth = X_arma.t() * h_core * X_arma;
+
+    // Derive electron counts from geometry + charge + multiplicity
+    int n_elec = mol.Z_total - cfg.charge;
+    std::cout << "Number of Electrons: " << n_elec << std::endl;
+    std::cout << "Z_total: " << mol.Z_total << std::endl;
+    if ((n_elec + cfg.multiplicity - 1) % 2 != 0)
+      throw std::runtime_error("Charge and multiplicity are inconsistent with "
+                               "the number of electrons");
+    double n_alpha = (n_elec + (cfg.multiplicity - 1)) / 2.0;
+    double n_beta = (n_elec - (cfg.multiplicity - 1)) / 2.0;
 
     // ---- OOO setup
     // -------------------------------------------------------- For a
@@ -130,7 +244,7 @@ int main() {
     // type, one block containing all nbf basis functions.
     arma::uvec blocks_per_type = {1, 1};    // 2 spin blocks (α and β)
     arma::vec max_occupations = {1.0, 1.0}; // max 1 electron per spin channel
-    arma::vec number_of_particles = {5.0, 5.0}; // 5α + 5β for water singlet
+    arma::vec number_of_particles = {n_alpha, n_beta};
     std::vector<std::string> block_descriptions = {"alpha", "beta"};
 
     // Compute the nuclear repulsion energy once and pass it to the fock_builder
@@ -139,8 +253,8 @@ int main() {
     // Captures by value everything that doesn't change between iterations.
     // OOO calls this every SCF iteration with the current DensityMatrix.
     auto fock_builder =
-        [basis, basis_aux, grid, h_core, X_arma, nbf, E_nuc,
-         S_arma](const OpenOrbitalOptimizer::DensityMatrix<double, double> &dm)
+        [basis, basis_aux, grid, h_core, X_arma, nbf, E_nuc, S_arma,
+         cfg](const OpenOrbitalOptimizer::DensityMatrix<double, double> &dm)
         -> std::pair<double, OpenOrbitalOptimizer::FockMatrix<double>> {
       const auto &orbitals = dm.first;     // vector<arma::mat>, one per block
       const auto &occupations = dm.second; // vector<arma::vec>, one per block
@@ -178,8 +292,8 @@ int main() {
       DeviceView1D k_occ_tot = arma_to_kokkos1d(occ_combined, "occ_combined");
 
       // J built from total density — same as RHF
-      DeviceView2DLeft J =
-          compute_coulomb(basis, basis_aux, grid, k_C_tot, k_occ_tot);
+      DeviceView2DLeft J = compute_coulomb(basis, basis_aux, grid, k_C_tot,
+                                           k_occ_tot, cfg.lin_dep_threshold);
 
       // K built separately per spin — pass 0/1 occupations (no occ prefactor)
       DeviceView2DLeft k_C_alpha = arma_to_kokkos(C_alpha, "C_alpha");
@@ -187,8 +301,9 @@ int main() {
       DeviceView1D k_occ_alpha = arma_to_kokkos1d(occ_alpha, "occ_alpha");
       DeviceView1D k_occ_beta = arma_to_kokkos1d(occ_beta, "occ_beta");
 
-      DeviceView2DLeft K_alpha = compute_exact_exchange(basis, basis_aux, grid,
-                                                        k_C_alpha, k_occ_alpha);
+      DeviceView2DLeft K_alpha =
+          compute_exact_exchange(basis, basis_aux, grid, k_C_alpha, k_occ_alpha,
+                                 cfg.lin_dep_threshold);
       DeviceView2DLeft K_beta =
           compute_exact_exchange(basis, basis_aux, grid, k_C_beta, k_occ_beta);
       // Convert to Kokkos for NuKEXC compute_coulomb / compute_exact_exchange
@@ -224,13 +339,27 @@ int main() {
       return std::make_pair(Etot, fock_arma); // two Fock matrices for OOO
     };
 
+    // ---- GWH initial guess (replaces h_core_orth as the starting Fock) ----
+    arma::mat F_gwh(nbf, nbf, arma::fill::zeros);
+    const double K_gwh = 1.75;
+    for (int i = 0; i < nbf; ++i) {
+      for (int j = 0; j < nbf; ++j) {
+        if (i == j) {
+          F_gwh(i, j) = h_core(i, i);
+        } else {
+          F_gwh(i, j) =
+              0.5 * K_gwh * (h_core(i, i) + h_core(j, j)) * S_arma(i, j);
+        }
+      }
+    }
+    arma::mat F_gwh_orth = X_arma.t() * F_gwh * X_arma;
     // ---- Construct and run SCF solver -------------------------------------
     OpenOrbitalOptimizer::SCFSolver<double, double> solver(
         blocks_per_type, max_occupations, number_of_particles, fock_builder,
         block_descriptions);
-    solver.convergence_threshold(conv_thr);
+    solver.convergence_threshold(cfg.conv_thr);
     solver.verbosity(5);
-    solver.initialize_with_fock({h_core_orth, h_core_orth});
+    solver.initialize_with_fock({F_gwh_orth, F_gwh_orth});
     solver.run();
 
     // ---- Check SCF converged to a sensible energy -------------------------

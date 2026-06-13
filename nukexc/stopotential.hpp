@@ -31,11 +31,32 @@ KOKKOS_INLINE_FUNCTION
 double I_tilde(const int n, const int l, const double r, const double zeta) {
   int a = n + l + 2;
   int b = n - l + 1;
+
+  if (r < 1e-12) {
+    // lower_gamma(a, 0)/r^(2l+1) -> 0 in the limit; only the upper_gamma term
+    // survives
+    double fact_b_minus_1 = 1.0;
+    for (int i = 2; i < b; ++i)
+      fact_b_minus_1 *= i;
+    return fact_b_minus_1 / Kokkos::pow(zeta, b);
+  }
+
   double zr = zeta * r;
   return lower_gamma(a, zr) /
              (Kokkos::pow(zeta, a) * Kokkos::pow(r, 2 * l + 1)) +
          upper_gamma(b, zr) / Kokkos::pow(zeta, b);
 }
+/*
+KOKKOS_INLINE_FUNCTION
+double I_tilde(const int n, const int l, const double r, const double zeta) {
+  int a = n + l + 2;
+  int b = n - l + 1;
+  double zr = zeta * r;
+  return lower_gamma(a, zr) /
+             (Kokkos::pow(zeta, a) * Kokkos::pow(r, 2 * l + 1)) +
+         upper_gamma(b, zr) / Kokkos::pow(zeta, b);
+}
+*/
 
 KOKKOS_INLINE_FUNCTION
 double C_prefactor(const int n, const int l, const double zeta) {
@@ -50,7 +71,14 @@ double sto_potential(const int n, const int l, const int m, const double x,
                      const double zeta) {
   double val;
   real_solid_harmonic_cart_precomputed(l, m, x, y, z, val);
-  return C_prefactor(n, l, zeta) * val * I_tilde(n, l, r, zeta);
+  double C = C_prefactor(n, l, zeta);
+  double I = I_tilde(n, l, r, zeta);
+
+  double python_val =
+      (r + 1.0) * exp(-r * zeta) +
+      (-2.0 * (0.5 * r * r + r * zeta + 1.0) * exp(-r * zeta) + 2.0) / (r);
+
+  return C * val * I;
 }
 
 DeviceView2DLeft sto_potential_collocation(const ExecSpace space,
@@ -75,8 +103,7 @@ DeviceView2DLeft sto_potential_collocation(const ExecSpace space,
         const double y = grid.quad_points(g)[1] - basis.O(i)[1];
         const double z = grid.quad_points(g)[2] - basis.O(i)[2];
         const double r = dist(grid.quad_points(g), basis.O(i)) + epsilon_shift;
-        potential_collocation(i, g) =
-            sto_potential(n, l, m, x, y, z, r, zeta);
+        potential_collocation(i, g) = sto_potential(n, l, m, x, y, z, r, zeta);
       });
   space.fence();
   return potential_collocation;

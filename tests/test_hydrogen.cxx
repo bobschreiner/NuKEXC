@@ -407,13 +407,8 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
 
   // 1. Prepare Batched Views on Device
   DeviceView2DLeft H("Hamiltonian", n_basis, n_basis);
-  DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, n_basis);
-  DeviceView1D mo_energies("mo_energies", n_basis);
 
   auto H_h = Kokkos::create_mirror_view(H);
-  auto mo_coeffs_h = Kokkos::create_mirror_view(mo_coeffs);
-  auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
-
   Kokkos::parallel_for(
       Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {n_basis, n_basis}),
       KOKKOS_LAMBDA(const int &i, const int &j) {
@@ -421,14 +416,22 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
       });
 
   Nukexc::Diagonalizer diagonalizer(n_basis);
-  diagonalizer.compute_transformation(S);
+  auto X = diagonalizer.compute_transformation(S);
+  const int K = X.extent(1);
+
+  DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, K);
+  DeviceView1D mo_energies("mo_energies", K);
+
+  auto mo_coeffs_h = Kokkos::create_mirror_view(mo_coeffs);
+  auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
+
   diagonalizer.solve(H, mo_coeffs, mo_energies);
 
   Kokkos::deep_copy(mo_coeffs_h, mo_coeffs);
   Kokkos::deep_copy(mo_energies_h, mo_energies);
 
-  for (int i = 0; i < n_basis; ++i) {
-    for (int j = 0; j < n_basis; ++j) {
+  for (int i = 0; i < K; ++i) {
+    for (int j = 0; j < K; ++j) {
       double orthogonality_sum = 0.0;
       for (int a = 0; a < n_basis; ++a) {
         for (int b = 0; b < n_basis; ++b) {
@@ -444,7 +447,7 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
   }
 
   // 6. Verify Energy Ordering (Ascending)
-  for (int i = 0; i < n_basis - 1; ++i) {
+  for (int i = 0; i < K - 1; ++i) {
     CHECK(mo_energies_h(i) <= mo_energies_h(i + 1));
   }
 
@@ -489,24 +492,26 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
   hamiltonian = compute_core_hamiltonian(basis, grid);
 
   // 1. Prepare Batched Views on Device
-  DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, n_basis);
-  DeviceView1D mo_energies("mo_energies", n_basis);
-
-  auto mo_coeffs_h = Kokkos::create_mirror_view(mo_coeffs);
-  auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
-
   auto S_h = Kokkos::create_mirror_view(hamiltonian.overlap);
   Kokkos::deep_copy(S_h, hamiltonian.overlap);
 
   Nukexc::Diagonalizer diagonalizer(n_basis);
-  diagonalizer.compute_transformation(hamiltonian.overlap);
+  auto X = diagonalizer.compute_transformation(hamiltonian.overlap, 1e-8);
+  const int K = X.extent(1);
+
+  DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, K);
+  DeviceView1D mo_energies("mo_energies", K);
+
+  auto mo_coeffs_h = Kokkos::create_mirror_view(mo_coeffs);
+  auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
+
   diagonalizer.solve(hamiltonian.hamiltonian, mo_coeffs, mo_energies);
 
   Kokkos::deep_copy(mo_coeffs_h, mo_coeffs);
   Kokkos::deep_copy(mo_energies_h, mo_energies);
 
-  for (int i = 0; i < n_basis; ++i) {
-    for (int j = 0; j < n_basis; ++j) {
+  for (int i = 0; i < K; ++i) {
+    for (int j = 0; j < K; ++j) {
       double orthogonality_sum = 0.0;
       for (int a = 0; a < n_basis; ++a) {
         for (int b = 0; b < n_basis; ++b) {
@@ -522,23 +527,21 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
   }
 
   // 6. Verify Energy Ordering (Ascending)
-  for (int i = 0; i < n_basis - 1; ++i) {
+  for (int i = 0; i < K - 1; ++i) {
     CHECK(mo_energies_h(i) <= mo_energies_h(i + 1));
   }
-
-  // 7. Verify the Ground State Energy (sigma_g)
-  // For H2+ at R=1.0 bohr, the exact electronic energy is roughly -1.45 au
-  // Depending on your basis set quality, we check if it's in the ballpark.
-  double e_ground = mo_energies_h(0);
-  REQUIRE(e_ground < 0.0); // Must be bound
-
   // Optional: print out the spectrum for debugging
-#if 0
+#if NDEBUG
   std::cout << "H2+ Spectrum (R=" << R << ")" << std::endl;
   for (int i = 0; i < n_basis; ++i)
     std::cout << mo_energies_h(i) << std::endl;
   std::cout << std::endl;
 #endif
+  // 7. Verify the Ground State Energy (sigma_g)
+  // For H2+ at R=1.0 bohr, the exact electronic energy is roughly -1.45 au
+  // Depending on your basis set quality, we check if it's in the ballpark.
+  double e_ground = mo_energies_h(0);
+  REQUIRE(e_ground < 0.0); // Must be bound
 }
 
 TEST_CASE("compute_coulomb -- hydrogen 1s self-repulsion", "[coulomb]") {
@@ -660,7 +663,7 @@ TEST_CASE("compute_gga -- hydrogen 1s gga", "[gga]") {
   const double ref_potential = -0.320733669386709;
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
-  auto grid = make_flat_grid<bk_type, ll_type>(mol, 1000, 40);
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
 
   // Primary basis: single 1s STO
   STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});

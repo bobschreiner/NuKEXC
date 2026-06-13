@@ -27,6 +27,7 @@
 #include <KokkosBlas3_gemm_impl.hpp>
 
 #include <KokkosLapack_svd.hpp>
+#include <impl/Kokkos_CheckUsage.hpp>
 
 namespace Nukexc {
 
@@ -143,6 +144,54 @@ double int_pow(const double r, const int k) {
   }
   return result;
 }
+
+KOKKOS_INLINE_FUNCTION
+double upper_gamma(const int n, const double x) {
+  if (n <= 0)
+    return 0.0;
+
+  // This iterative Horner-like approach preserves precision perfectly.
+  double sum = 1.0;
+  double term = 1.0;
+  for (int k = 1; k < n; ++k) {
+    term *= x / k;
+    sum += term;
+  }
+
+  double fact = factorial(n - 1);
+  return fact * Kokkos::exp(-x) * sum;
+}
+
+KOKKOS_INLINE_FUNCTION
+double lower_gamma(const int n, const double x) {
+  if (n <= 0)
+    return 0.0;
+
+  // For small/moderate x, use the stable ascending series:
+  // gamma(n, x) = x^n * e^-x * \sum_{k=0}^\infty \frac{x^k}{n(n+1)...(n+k)}
+  // This avoids the catastrophic "1.0 - result" cancellation entirely.
+  if (x < n) {
+    double sum = 1.0 / n;
+    double term = 1.0 / n;
+
+    // Loop to a safe convergence limit or a fixed precision bound
+    for (int k = 1; k < 1000; ++k) {
+      term *= x / (n + k);
+      sum += term;
+      if (term < 1e-16 * sum)
+        break; // Converged to machine precision
+    }
+
+    double log_prefactor = n * Kokkos::log(x) - x;
+    return Kokkos::exp(log_prefactor) * sum;
+
+  } else {
+    double Gamma_n = factorial(n - 1);
+    return Gamma_n - upper_gamma(n, x);
+  }
+}
+
+/*
 KOKKOS_INLINE_FUNCTION
 double lower_gamma(const int n, const double x) {
   double result = 0.0;
@@ -165,19 +214,45 @@ double upper_gamma(const int n, const double x) {
   result *= factorial(n - 1);
   return result;
 }
+*/
 
-DeviceView2DLeft compute_half_invserse(const DeviceView2DLeft &overlap_matrix,
-                                       const double lin_dep_threshold = 1e-7) {
+DeviceView2DLeft compute_half_inverse(const DeviceView2DLeft &overlap_matrix,
+                                      const double lin_dep_threshold = 1e-5) {
 
   const int N = overlap_matrix.extent(0);
   DeviceView2DLeft Us("U", N, N);
   DeviceView2DLeft VTs("VTs", N, N);
   DeviceView1D sigma("sigma", N);
   DeviceView2DLeft A("matrix A", N, N);
-  Kokkos::deep_copy(A, overlap_matrix);
+  DeviceView1D D_N("Digaonal Preconditioner matrix", N);
+
+  Kokkos::parallel_for(
+      "Compute preconditioner matrix", N, KOKKOS_LAMBDA(const int i) {
+        D_N(i) = Kokkos::sqrt(overlap_matrix(i, i));
+      });
+
+  Kokkos::parallel_for(
+      "Apply preconditioner matrix",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N, N}),
+      KOKKOS_LAMBDA(const int i, const int j) {
+        A(i, j) = overlap_matrix(i, j) / (D_N(i) * D_N(j));
+      });
 
   // SVD of S to handle potential singularity
   KokkosLapack::svd("S", "S", A, sigma, Us, VTs);
+
+  Kokkos::parallel_for(
+      "SwitchSigns", N, KOKKOS_LAMBDA(const int j) {
+        double dot = 0.0;
+        for (int k = 0; k < N; ++k) {
+          dot += Us(k, j) * VTs(j, k);
+        }
+        if (dot < 0) {
+
+          sigma(j) = -sigma(j);
+          Kokkos::printf("Negative sigma %d : %f \n", j, sigma(j));
+        }
+      });
 
   auto sigma_h =
       Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, sigma);
@@ -204,6 +279,7 @@ DeviceView2DLeft compute_half_invserse(const DeviceView2DLeft &overlap_matrix,
       KOKKOS_LAMBDA(const int i, const int k) {
         const int src = kept_d(k);
         X(i, k) = Us(i, src) / Kokkos::sqrt(sigma(src));
+        X(i, k) /= D_N(i);
       });
 
   return X;

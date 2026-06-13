@@ -44,9 +44,9 @@
 #include <integratorxx/quadratures/radial/treutlerahlrichs.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
+#include <nukexc/core_hamiltonian.hpp>
 #include <nukexc/diagonalizer.hpp>
 #include <nukexc/grid.hpp> // make_flat_grid
-#include <nukexc/core_hamiltonian.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/nukexc_config.hpp>
 #include <nukexc/partitioning.hpp>
@@ -173,12 +173,14 @@ TEST_CASE("H2+ Core Hamiltonian radial convergence", "[convergence][radial]") {
     CoreHamiltonianResult coreH = compute_core_hamiltonian(basis, grid);
 
     // Initialize the mo_coeff and mo_energies
-    DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), basis.nbf());
-    DeviceView1D mo_energies("mo energies", basis.nbf());
-
     // Diagonalise the Hamiltonian
     Diagonalizer digaonalizer(basis.nbf());
-    digaonalizer.compute_transformation(coreH.overlap);
+    auto X = digaonalizer.compute_transformation(coreH.overlap);
+    const int K = X.extent(1);
+
+    DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), K);
+    DeviceView1D mo_energies("mo energies", K);
+
     digaonalizer.solve(coreH.hamiltonian, mo_coeff, mo_energies);
 
     auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
@@ -198,12 +200,15 @@ TEST_CASE("H2+ Core Hamiltonian radial convergence", "[convergence][radial]") {
     CoreHamiltonianResult coreH = compute_core_hamiltonian(basis, grid);
 
     // Initialize the mo_coeff and mo_energies
-    DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), basis.nbf());
-    DeviceView1D mo_energies("mo energies", basis.nbf());
 
     // Diagonalise the Hamiltonian
     Diagonalizer digaonalizer(basis.nbf());
-    digaonalizer.compute_transformation(coreH.overlap);
+    auto X = digaonalizer.compute_transformation(coreH.overlap);
+    const int K = X.extent(1);
+
+    DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), K);
+    DeviceView1D mo_energies("mo energies", K);
+
     digaonalizer.solve(coreH.hamiltonian, mo_coeff, mo_energies);
 
     auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
@@ -262,12 +267,16 @@ TEST_CASE("H2+ Core Hamiltonian angular convergence",
     CoreHamiltonianResult coreH = compute_core_hamiltonian(basis, grid);
 
     // Initialize the mo_coeff and mo_energies
-    DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), basis.nbf());
-    DeviceView1D mo_energies("mo energies", basis.nbf());
 
     // Diagonalise the Hamiltonian
     Diagonalizer digaonalizer(basis.nbf());
-    digaonalizer.compute_transformation(coreH.overlap);
+    auto X = digaonalizer.compute_transformation(coreH.overlap);
+    const int K = X.extent(1);
+
+    DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), K);
+    DeviceView1D mo_energies("mo energies", K);
+
+
     digaonalizer.solve(coreH.hamiltonian, mo_coeff, mo_energies);
 
     auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
@@ -289,13 +298,15 @@ TEST_CASE("H2+ Core Hamiltonian angular convergence",
     // Compute the core Hamiltonian
     CoreHamiltonianResult coreH = compute_core_hamiltonian(basis, grid);
 
-    // Initialize the mo_coeff and mo_energies
-    DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), basis.nbf());
-    DeviceView1D mo_energies("mo energies", basis.nbf());
 
     // Diagonalise the Hamiltonian
     Diagonalizer digaonalizer(basis.nbf());
-    digaonalizer.compute_transformation(coreH.overlap);
+    auto X = digaonalizer.compute_transformation(coreH.overlap);
+    const int K = X.extent(1);
+
+    DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), K);
+    DeviceView1D mo_energies("mo energies", K);
+
     digaonalizer.solve(coreH.hamiltonian, mo_coeff, mo_energies);
 
     auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);

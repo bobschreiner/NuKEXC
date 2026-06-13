@@ -31,10 +31,9 @@
 #include <KokkosBlas3_gemm.hpp>
 #include <KokkosBlas3_gemm_impl.hpp>
 
-#include <KokkosLapack_svd.hpp>
-
 #include <Kokkos_Macros.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
+#include <impl/Kokkos_CheckUsage.hpp>
 
 namespace Nukexc {
 
@@ -42,8 +41,8 @@ DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
                                  const STOBasisSet basis_aux,
                                  const FlatGrid grid,
                                  const DeviceView2DLeft mo_orbitals,
-                                 const DeviceView1D mo_coeff) {
-
+                                 const DeviceView1D mo_coeff,
+                                 const double lin_dep_threshold = 1e-5) {
 
   ExecSpace space;
   const int N_bf = basis.nbf();
@@ -59,6 +58,7 @@ DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
   DeviceView1DLeft potential_on_grid("Expansion coeff scaled", N_quad);
   DeviceView2DLeft result("Coulomb matrix", N_bf, N_bf);
   DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
+  DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
 
   fill_collocation(space, basis, grid.quad_points, basis_collocation);
   fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
@@ -88,8 +88,15 @@ DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
   KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
                    potential_collocation, 0.0, aux_overlap);
 
+  Kokkos::parallel_for(
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
+      KOKKOS_LAMBDA(int i, int j) {
+        aux_overlap_sym(i, j) = 0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
+      });
+
+  DeviceView2DLeft X = compute_half_inverse(aux_overlap_sym, lin_dep_threshold);
   // Invert (A|B) using svd
-  DeviceView2DLeft X = compute_half_invserse(aux_overlap, 1e-8);
+  // DeviceView2DLeft X = compute_half_inverse(aux_overlap, lin_dep_threshold);
   const int K = X.extent(1);
   DeviceView1DLeft scaling_factor("Scaling factor", K);
 

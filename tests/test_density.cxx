@@ -199,11 +199,12 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
   hamiltonian = compute_core_hamiltonian(basis, grid);
 
   // 1. Prepare Batched Views on Device
-  DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, n_basis);
-  DeviceView1D mo_energies("mo_energies", n_basis);
-
   Nukexc::Diagonalizer diagonalizer(n_basis);
-  diagonalizer.compute_transformation(hamiltonian.overlap);
+  auto X = diagonalizer.compute_transformation(hamiltonian.overlap);
+  const int K = X.extent(1);
+  DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, K);
+  DeviceView1D mo_energies("mo_energies", K);
+
   diagonalizer.solve(hamiltonian.hamiltonian, mo_coeffs, mo_energies);
 
   // =========================================================================
