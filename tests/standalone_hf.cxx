@@ -44,7 +44,7 @@ using ll_type = IntegratorXX::LebedevLaikov<double>;
 
 struct Config {
   std::string xyz_file = "input/water.xyz";
-  std::string basis_file = "input/zorabasis_cholesky/TZP.cholesky";
+  std::string basis_file = "input/zorabasis_cholesky/TZ2P.cholesky";
   int nrad = 100;
   int nang = 30;
   double lin_dep_threshold = 1e-6;
@@ -208,8 +208,38 @@ int main(int argc, char *argv[]) {
     STOBasisSet basis = load_adf_basis(mol, cfg.basis_file, screening_tol);
     STOBasisSet basis_aux =
         load_adf_basis(mol, cfg.basis_file, screening_tol, /*fit=*/true);
-    // ...
-    const int nbf = basis.nbf();
+
+    // ---- Compute collocations --------------------------------------------
+
+    const int N_bf = basis.nbf();
+    const int N_bf_aux = basis_aux.nbf();
+    const int N_quad = grid.quad_points.extent(0);
+
+    DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
+    DeviceView2DLeft basis_aux_collocation("Auxillary Basis collocation",
+                                           N_bf_aux, N_quad);
+    DeviceView2DLeft potential_collocation_scaled("Potential collocation",
+                                                  N_bf_aux, N_quad);
+
+    ExecSpace space;
+    fill_collocation(space, basis, grid.quad_points, basis_collocation);
+    fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
+    sto_potential_collocation(space, basis_aux, grid,
+                              potential_collocation_scaled);
+
+    Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
+    using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+
+    Kokkos::parallel_for(
+        "Scale potential", policy,
+        KOKKOS_LAMBDA(const member_type &team_member) {
+          const int g = team_member.league_rank();
+          const double w_g = grid.weights(g);
+          Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, N_bf_aux),
+                               [=](const int alpha) {
+                                 potential_collocation_scaled(alpha, g) *= w_g;
+                               });
+        });
 
     // ---- Core Hamiltonian (overlap + H_core in Kokkos views) -------------
     auto hcore = compute_core_hamiltonian(basis, grid);
@@ -219,7 +249,7 @@ int main(int argc, char *argv[]) {
     // ---- Orthogonalisation matrix X via NuKEXC diagonalizer ---------------
     // Diagonalizer already computes X = S^{-1/2} internally;
     // we reuse it each SCF cycle to solve F C = S C ε  in the AO basis.
-    Diagonalizer diag(nbf);
+    Diagonalizer diag(N_bf);
     DeviceView2DLeft X =
         diag.compute_transformation(hcore.overlap, cfg.lin_dep_threshold);
 
@@ -253,7 +283,8 @@ int main(int argc, char *argv[]) {
     // Captures by value everything that doesn't change between iterations.
     // OOO calls this every SCF iteration with the current DensityMatrix.
     auto fock_builder =
-        [basis, basis_aux, grid, h_core, X_arma, nbf, E_nuc, S_arma,
+        [space, basis_collocation, basis_aux_collocation,
+         potential_collocation_scaled, h_core, X_arma, N_bf, E_nuc, S_arma,
          cfg](const OpenOrbitalOptimizer::DensityMatrix<double, double> &dm)
         -> std::pair<double, OpenOrbitalOptimizer::FockMatrix<double>> {
       const auto &orbitals = dm.first;     // vector<arma::mat>, one per block
@@ -292,8 +323,9 @@ int main(int argc, char *argv[]) {
       DeviceView1D k_occ_tot = arma_to_kokkos1d(occ_combined, "occ_combined");
 
       // J built from total density — same as RHF
-      DeviceView2DLeft J = compute_coulomb(basis, basis_aux, grid, k_C_tot,
-                                           k_occ_tot, cfg.lin_dep_threshold);
+      DeviceView2DLeft J = compute_coulomb(
+          space, k_C_tot, k_occ_tot, basis_collocation, basis_aux_collocation,
+          potential_collocation_scaled, cfg.lin_dep_threshold);
 
       // K built separately per spin — pass 0/1 occupations (no occ prefactor)
       DeviceView2DLeft k_C_alpha = arma_to_kokkos(C_alpha, "C_alpha");
@@ -301,13 +333,16 @@ int main(int argc, char *argv[]) {
       DeviceView1D k_occ_alpha = arma_to_kokkos1d(occ_alpha, "occ_alpha");
       DeviceView1D k_occ_beta = arma_to_kokkos1d(occ_beta, "occ_beta");
 
-      DeviceView2DLeft K_alpha =
-          compute_exact_exchange(basis, basis_aux, grid, k_C_alpha, k_occ_alpha,
-                                 cfg.lin_dep_threshold);
-      DeviceView2DLeft K_beta =
-          compute_exact_exchange(basis, basis_aux, grid, k_C_beta, k_occ_beta);
-      // Convert to Kokkos for NuKEXC compute_coulomb / compute_exact_exchange
+      DeviceView2DLeft K_alpha = compute_exact_exchange(
+          space, k_C_alpha, k_occ_alpha, basis_collocation,
+          basis_aux_collocation, potential_collocation_scaled,
+          cfg.lin_dep_threshold);
 
+      DeviceView2DLeft K_beta = compute_exact_exchange(
+          space, k_C_beta, k_occ_beta, basis_collocation, basis_aux_collocation,
+          potential_collocation_scaled, cfg.lin_dep_threshold);
+
+      // Convert to Kokkos for NuKEXC compute_coulomb / compute_exact_exchange
       auto J_arma = kokkos_to_arma(J);
       auto K_alpha_arma = kokkos_to_arma(K_alpha);
       auto K_beta_arma = kokkos_to_arma(K_beta);
@@ -340,10 +375,10 @@ int main(int argc, char *argv[]) {
     };
 
     // ---- GWH initial guess (replaces h_core_orth as the starting Fock) ----
-    arma::mat F_gwh(nbf, nbf, arma::fill::zeros);
+    arma::mat F_gwh(N_bf, N_bf, arma::fill::zeros);
     const double K_gwh = 1.75;
-    for (int i = 0; i < nbf; ++i) {
-      for (int j = 0; j < nbf; ++j) {
+    for (int i = 0; i < N_bf; ++i) {
+      for (int j = 0; j < N_bf; ++j) {
         if (i == j) {
           F_gwh(i, j) = h_core(i, i);
         } else {

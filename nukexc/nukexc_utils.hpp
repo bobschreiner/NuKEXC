@@ -1,4 +1,5 @@
 /*
+ *
  *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
  *    Copyright (C) 2026 Bob Schreiner
  *
@@ -240,6 +241,7 @@ DeviceView2DLeft compute_half_inverse(const DeviceView2DLeft &overlap_matrix,
   // SVD of S to handle potential singularity
   KokkosLapack::svd("S", "S", A, sigma, Us, VTs);
 
+  // TODO:: Find a way to deal with negative sigma
   Kokkos::parallel_for(
       "SwitchSigns", N, KOKKOS_LAMBDA(const int j) {
         double dot = 0.0;
@@ -247,7 +249,6 @@ DeviceView2DLeft compute_half_inverse(const DeviceView2DLeft &overlap_matrix,
           dot += Us(k, j) * VTs(j, k);
         }
         if (dot < 0) {
-
           sigma(j) = -sigma(j);
           Kokkos::printf("Negative sigma %d : %f \n", j, sigma(j));
         }

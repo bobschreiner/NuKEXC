@@ -46,17 +46,6 @@ double I_tilde(const int n, const int l, const double r, const double zeta) {
              (Kokkos::pow(zeta, a) * Kokkos::pow(r, 2 * l + 1)) +
          upper_gamma(b, zr) / Kokkos::pow(zeta, b);
 }
-/*
-KOKKOS_INLINE_FUNCTION
-double I_tilde(const int n, const int l, const double r, const double zeta) {
-  int a = n + l + 2;
-  int b = n - l + 1;
-  double zr = zeta * r;
-  return lower_gamma(a, zr) /
-             (Kokkos::pow(zeta, a) * Kokkos::pow(r, 2 * l + 1)) +
-         upper_gamma(b, zr) / Kokkos::pow(zeta, b);
-}
-*/
 
 KOKKOS_INLINE_FUNCTION
 double C_prefactor(const int n, const int l, const double zeta) {
@@ -74,26 +63,19 @@ double sto_potential(const int n, const int l, const int m, const double x,
   double C = C_prefactor(n, l, zeta);
   double I = I_tilde(n, l, r, zeta);
 
-  double python_val =
-      (r + 1.0) * exp(-r * zeta) +
-      (-2.0 * (0.5 * r * r + r * zeta + 1.0) * exp(-r * zeta) + 2.0) / (r);
-
   return C * val * I;
 }
 
-DeviceView2DLeft sto_potential_collocation(const ExecSpace space,
-                                           const STOBasisSet basis,
-                                           const FlatGrid grid,
-                                           const DeviceView2DLeft basis_vals) {
+void sto_potential_collocation(const ExecSpace space, const STOBasisSet basis,
+                               const FlatGrid grid,
+                               DeviceView2DLeft potential_collocation) {
 
   const int N_bf = basis.nbf();
   const int N_quad = grid.quad_points.extent(0);
 
-  DeviceView2DLeft potential_collocation("Potential collocation", N_bf, N_quad);
-
   Kokkos::parallel_for(
       "Compute potentials",
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf, N_quad}),
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>(space, {0, 0}, {N_bf, N_quad}),
       KOKKOS_LAMBDA(const int i, const int g) {
         const int n = basis.n(i);
         const int l = basis.l(i);
@@ -105,7 +87,5 @@ DeviceView2DLeft sto_potential_collocation(const ExecSpace space,
         const double r = dist(grid.quad_points(g), basis.O(i)) + epsilon_shift;
         potential_collocation(i, g) = sto_potential(n, l, m, x, y, z, r, zeta);
       });
-  space.fence();
-  return potential_collocation;
 }
 } // namespace Nukexc

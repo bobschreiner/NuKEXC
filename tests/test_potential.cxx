@@ -262,7 +262,7 @@ TEST_CASE("Potential vs precomputed Potential", "[potential]") {
   auto potential_h = Kokkos::create_mirror_view(potential);
 
   int idx = 0;
-  for (int n = 1; n < 3; ++n) {
+  for (int n = 1; n < 4; ++n) {
     for (int l = 0; l < n; ++l) {
       for (int m = -l; m < l + 1; ++m) {
 
@@ -286,10 +286,10 @@ TEST_CASE("Potential vs precomputed Potential", "[potential]") {
         for (int i = 0; i < npts; ++i) {
           if (potential_h(i) < 1e-5) {
             REQUIRE_THAT(potential_h(i),
-                         Catch::Matchers::WithinAbs(potential_pre_h(i), 1e-3));
+                         Catch::Matchers::WithinAbs(potential_pre_h(i), 1e-5));
           } else {
             REQUIRE_THAT(potential_h(i),
-                         Catch::Matchers::WithinRel(potential_pre_h(i), 1e-3));
+                         Catch::Matchers::WithinRel(potential_pre_h(i), 1e-5));
           }
         }
         idx += 1;

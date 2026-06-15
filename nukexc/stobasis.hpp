@@ -284,8 +284,9 @@ load_thakkar_basis(const Molecule &mol,
 
   std::vector<STOFunc> temp_basis;
 
+  auto Z_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, mol.Z);
   for (size_t i = 0; i < mol.natoms; ++i) {
-    std::string element_symbol = detail::symbols[mol.Z(i)];
+    std::string element_symbol = detail::symbols[Z_h(i)];
     element_symbol[0] = std::tolower(element_symbol[0]);
 
     std::string filename = data_dir + "/" + element_symbol;
@@ -470,48 +471,6 @@ void fill_collocation(
 }
 
 template <typename PointsView, typename ValuesView>
-void fill_collocation_transpose(
-    ExecSpace &space, const STOBasisSet &basis, PointsView collocation_points,
-    ValuesView collocation_values) // pre-allocated, written in place
-{
-  int N = basis.nbf();
-  int G = collocation_points.extent(0);
-  Kokkos::parallel_for(
-      "Fill collocation",
-      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>(space, {0, 0}, {N, G}),
-      KOKKOS_LAMBDA(int i, int g) {
-        // same math as before, written directly into col(i,j)
-        const int n_val = basis.n(i);
-        const int l_val = basis.l(i);
-        const int m_val = basis.m(i);
-        const double norm = basis.norm(i);
-        const double zeta = basis.zeta(i);
-
-        // radial part of the shell
-        // radial_part = R_nl(r) = r^(n-1) * C_nl * exp(-⍺ * r))
-        double dx = collocation_points(g)[0] - basis.O(i)[0];
-        double dy = collocation_points(g)[1] - basis.O(i)[1];
-        double dz = collocation_points(g)[2] - basis.O(i)[2];
-
-        double radial_part;
-        {
-          double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
-                     epsilon_shift; // Avoid pow(0,0)
-
-          radial_part =
-              norm * Kokkos::pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
-        }
-        // Angular part of the shell
-        // https://en.wikipedia.org/wiki/Spherical_harmonics
-        double angular_part;
-        real_solid_harmonic_cart_precomputed(l_val, m_val, dx, dy, dz,
-                                             angular_part);
-
-        collocation_values(g, i) = radial_part * angular_part;
-      });
-}
-
-template <typename PointsView, typename ValuesView>
 void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
                            PointsView &collocation_points,
                            ValuesView &collocation_gx,
@@ -564,59 +523,6 @@ void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
       });
 }
 
-template <typename PointsView, typename ValuesView>
-void fill_grad_collocation_transpose(ExecSpace &space,
-                                     const STOBasisSet &basis_set,
-                                     PointsView &collocation_points,
-                                     ValuesView &collocation_gx,
-                                     ValuesView &collocation_gy,
-                                     ValuesView &collocation_gz) {
-
-  size_t col_points = collocation_points.extent(0);
-  size_t nbasis_functions = basis_set.nbf();
-
-  Kokkos::MDRangePolicy<Kokkos::Rank<2>> md_policy(
-      space, {0, 0}, {nbasis_functions, col_points});
-
-  Kokkos::parallel_for(
-      "Fill collocation grad", md_policy,
-      KOKKOS_LAMBDA(const int &i, const int &g) {
-        const int n_val = basis_set.n(i);
-        const int l_val = basis_set.l(i);
-        const int m_val = basis_set.m(i);
-        const double norm = basis_set.norm(i);
-        const double zeta = basis_set.zeta(i);
-
-        double dx = collocation_points(g)[0] - basis_set.O(i)[0];
-        double dy = collocation_points(g)[1] - basis_set.O(i)[1];
-        double dz = collocation_points(g)[2] - basis_set.O(i)[2];
-        double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
-                   epsilon_shift; // Avoid pow(0,0)
-
-        // Angular part
-        double S_val;
-        S_val = real_solid_harmonic_cart(l_val, m_val, dx, dy, dz);
-
-        double dS_dx;
-        double dS_dy;
-        double dS_dz;
-
-        grad_real_solid_harmonic_cart(l_val, m_val, dx, dy, dz, dS_dx, dS_dy,
-                                      dS_dz);
-
-        // Radial part
-        double pow_term = safe_pow(r, n_val - l_val - 1);
-        double exp_term = Kokkos::exp(-zeta * r);
-        double R_pre = norm * pow_term * exp_term;
-
-        double dR_dr = ((n_val - l_val - 1) / r - zeta) * R_pre;
-        double common_R = dR_dr / r;
-
-        collocation_gx(g, i) = R_pre * dS_dx + S_val * (dx * common_R);
-        collocation_gy(g, i) = R_pre * dS_dy + S_val * (dy * common_R);
-        collocation_gz(g, i) = R_pre * dS_dz + S_val * (dz * common_R);
-      });
-}
 struct VG {
   double val; // Value
   double dx;  // d/dx

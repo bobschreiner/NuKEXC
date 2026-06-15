@@ -36,21 +36,19 @@
 
 namespace Nukexc {
 
-DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
-                                 const STOBasisSet basis_aux,
-                                 const FlatGrid grid,
-                                 const DeviceView2DLeft mo_orbitals,
-                                 const DeviceView1D mo_coeff,
-                                 const double lin_dep_threshold = 1e-5) {
+DeviceView2DLeft
+compute_coulomb(const ExecSpace space, const DeviceView2DLeft mo_orbitals,
+                const DeviceView1D mo_coeff,
+                const DeviceView2DLeft basis_collocation,
+                const DeviceView2DLeft basis_aux_collocation,
+                const DeviceView2DLeft potential_collocation_scaled,
+                const double lin_dep_threshold = 1e-5) {
 
-  ExecSpace space;
-  const int N_bf = basis.nbf();
-  const int N_bf_aux = basis_aux.nbf();
-  const int N_quad = grid.quad_points.extent(0);
+  Kokkos::Profiling::pushRegion("Compute Coulomb Integral");
+  const int N_bf = basis_collocation.extent(0);
+  const int N_bf_aux = basis_aux_collocation.extent(0);
+  const int N_quad = basis_collocation.extent(1);
 
-  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
-  DeviceView2DLeft basis_aux_collocation("Auxillary basis collocation",
-                                         N_bf_aux, N_quad);
   DeviceView2DLeft basis_collocation_scaled("Basis collocation Scaled", N_bf,
                                             N_quad);
   DeviceView1DLeft expansion_coeff("Expansion coeff", N_bf_aux);
@@ -59,43 +57,33 @@ DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
   DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
   DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
 
-  fill_collocation(space, basis, grid.quad_points, basis_collocation);
-  fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
-
   DeviceView1DLeft density =
       compute_density(basis_collocation, mo_orbitals, mo_coeff);
-  DeviceView2DLeft potential_collocation =
-      sto_potential_collocation(space, basis_aux, grid, basis_aux_collocation);
 
   Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
 
-  Kokkos::parallel_for(
-      "Scale potential", policy, KOKKOS_LAMBDA(const member_type &team_member) {
-        const int g = team_member.league_rank();
-        const double w_g = grid.weights(g);
-        Kokkos::parallel_for(
-            Kokkos::TeamThreadRange(team_member, N_bf_aux),
-            [=](const int i) { potential_collocation(i, g) *= w_g; });
-      });
-
   // Compute expansion coefficients
-  KokkosBlas::gemv(space, "N", 1.0, potential_collocation, density, 0.0,
+  KokkosBlas::gemv(space, "N", 1.0, potential_collocation_scaled, density, 0.0,
                    expansion_coeff);
 
   // Compute (A|B)
   KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
-                   potential_collocation, 0.0, aux_overlap);
+                   potential_collocation_scaled, 0.0, aux_overlap);
 
+  // Symmetrize (A|B) by computing (A|B) =  1/2 * ((A|B) + (B|A))
   Kokkos::parallel_for(
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>(space, {0, 0},
+                                             {N_bf_aux, N_bf_aux}),
       KOKKOS_LAMBDA(int i, int j) {
         aux_overlap_sym(i, j) = 0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
       });
 
-  DeviceView2DLeft X = compute_half_inverse(aux_overlap_sym, lin_dep_threshold);
-  // Invert (A|B) using svd
-  // DeviceView2DLeft X = compute_half_inverse(aux_overlap, lin_dep_threshold);
+  // Compute the half inverse of (A|B)
+  // X = (A|B)^{-1/2}
+  DeviceView2DLeft X =
+      compute_half_inverse(aux_overlap_sym, lin_dep_threshold);
+
   const int K = X.extent(1);
   DeviceView1DLeft scaling_factor("Scaling factor", K);
 
@@ -104,8 +92,8 @@ DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
   KokkosBlas::gemv(space, "N", 1.0, X, scaling_factor, 0.0, expansion_coeff);
 
   // Compute potential on grid
-  KokkosBlas::gemv(space, "T", 1.0, potential_collocation, expansion_coeff, 0.0,
-                   potential_on_grid);
+  KokkosBlas::gemv(space, "T", 1.0, potential_collocation_scaled,
+                   expansion_coeff, 0.0, potential_on_grid);
   // Compute (mu nu | A)
   Kokkos::parallel_for(
       "Scale basis by potential", policy,
@@ -120,6 +108,7 @@ DeviceView2DLeft compute_coulomb(const STOBasisSet basis,
   KokkosBlas::gemm(space, "N", "T", 1.0, basis_collocation,
                    basis_collocation_scaled, 0.0, result);
 
+  Kokkos::Profiling::popRegion();
   return result;
 }
 

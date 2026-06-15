@@ -37,22 +37,19 @@
 
 namespace Nukexc {
 
-DeviceView2DLeft compute_exact_exchange(const STOBasisSet basis,
-                                        const STOBasisSet basis_aux,
-                                        const FlatGrid grid,
-                                        const DeviceView2DLeft mo_orbitals,
-                                        const DeviceView1D mo_coeff,
-                                        const double lin_dep_threshold = 1e-5) {
+DeviceView2DLeft compute_exact_exchange(
+    const ExecSpace space, const DeviceView2DLeft mo_orbitals,
+    const DeviceView1D mo_coeff, const DeviceView2DLeft basis_collocation,
+    const DeviceView2DLeft basis_aux_collocation,
+    const DeviceView2DLeft potential_collocation_scaled,
+    const double lin_dep_threshold = 1e-5) {
 
-  ExecSpace space;
-  const int N_bf = basis.nbf();
-  const int N_bf_aux = basis_aux.nbf();
-  const int N_quad = grid.quad_points.extent(0);
+  Kokkos::Profiling::pushRegion("Compute Exact Exchange Integral");
+  const int N_bf = basis_collocation.extent(0);
+  const int N_bf_aux = basis_aux_collocation.extent(0);
+  const int N_quad = basis_collocation.extent(1);
   const int N_occ = mo_orbitals.extent(1);
 
-  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
-  DeviceView2DLeft basis_aux_collocation("Auxillary basis collocation",
-                                         N_bf_aux, N_quad);
   DeviceView2DLeft basis_collocation_scaled("Basis collocation Scaled", N_bf,
                                             N_quad);
   DeviceView1DLeft expansion_coeff("Expansion coeff", N_quad);
@@ -63,28 +60,13 @@ DeviceView2DLeft compute_exact_exchange(const STOBasisSet basis,
                                          N_bf);
 
   auto mo_coeff_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, mo_coeff);
-  fill_collocation(space, basis, grid.quad_points, basis_collocation);
-  fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
-
-  DeviceView2DLeft potential_collocation =
-      sto_potential_collocation(space, basis_aux, grid, basis_aux_collocation);
 
   Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
 
-  Kokkos::parallel_for(
-      "Scale potential ", policy,
-      KOKKOS_LAMBDA(const member_type &team_member) {
-        const int g = team_member.league_rank();
-        const double w_g = grid.weights(g);
-        Kokkos::parallel_for(
-            Kokkos::TeamThreadRange(team_member, N_bf_aux),
-            [=](const int alpha) { potential_collocation(alpha, g) *= w_g; });
-      });
-
   // Compute (A|B)
   KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
-                   potential_collocation, 0.0, aux_overlap);
+                   potential_collocation_scaled, 0.0, aux_overlap);
 
   Kokkos::parallel_for(
       Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
@@ -121,16 +103,15 @@ DeviceView2DLeft compute_exact_exchange(const STOBasisSet basis,
               });
         });
 
-    KokkosBlas::gemm(space, "N", "T", 1.0, potential_collocation,
+    KokkosBlas::gemm(space, "N", "T", 1.0, potential_collocation_scaled,
                      basis_collocation_scaled, 0.0, three_center_integral);
-
     KokkosBlas::gemm(space, "T", "N", 1.0, three_center_integral, X, 0.0,
                      three_center_integral_scaled);
-
     KokkosBlas::gemm(space, "N", "T", mo_coeff_h(i),
                      three_center_integral_scaled, three_center_integral_scaled,
                      1.0, result);
   }
+  Kokkos::Profiling::popRegion();
   return result;
 }
 

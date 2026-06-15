@@ -18,6 +18,7 @@
  */
 
 #include "nukexc/nukexc_config.hpp"
+#include "nukexc/stopotential.hpp"
 #include <Kokkos_Core.hpp>
 #include <catch2/catch_all.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -573,8 +574,38 @@ TEST_CASE("compute_coulomb -- hydrogen 1s self-repulsion", "[coulomb]") {
   Kokkos::deep_copy(mo_orbitals, orbitals_h);
   Kokkos::deep_copy(mo_coeff, coeff_h);
 
+  const int N_bf = basis.nbf();
+  const int N_bf_aux = basis_aux.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
+  DeviceView2DLeft basis_aux_collocation("Auxillary Basis collocation",
+                                         N_bf_aux, N_quad);
+  DeviceView2DLeft potential_collocation_scaled("Potential collocation",
+                                                N_bf_aux, N_quad);
+  ExecSpace space;
+
+  fill_collocation(space, basis, grid.quad_points, basis_collocation);
+  fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
+  sto_potential_collocation(space, basis_aux, grid,
+                            potential_collocation_scaled);
+
+  Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
+  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+
+  Kokkos::parallel_for(
+      "Scale potential", policy, KOKKOS_LAMBDA(const member_type &team_member) {
+        const int g = team_member.league_rank();
+        const double w_g = grid.weights(g);
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, N_bf_aux),
+                             [=](const int alpha) {
+                               potential_collocation_scaled(alpha, g) *= w_g;
+                             });
+      });
+
   DeviceView2DLeft J =
-      compute_coulomb(basis, basis_aux, grid, mo_orbitals, mo_coeff);
+      compute_coulomb(space, mo_orbitals, mo_coeff, basis_collocation,
+                      basis_aux_collocation, potential_collocation_scaled);
 
   auto J_h = Kokkos::create_mirror_view(J);
   Kokkos::deep_copy(J_h, J);
@@ -612,8 +643,38 @@ TEST_CASE("compute_exchange -- hydrogen 1s self-exchange", "[exchange]") {
   Kokkos::deep_copy(mo_orbitals, orbitals_h);
   Kokkos::deep_copy(mo_coeff, coeff_h);
 
-  DeviceView2DLeft K =
-      compute_exact_exchange(basis, basis_aux, grid, mo_orbitals, mo_coeff);
+  const int N_bf = basis.nbf();
+  const int N_bf_aux = basis_aux.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
+  DeviceView2DLeft basis_aux_collocation("Auxillary Basis collocation",
+                                         N_bf_aux, N_quad);
+  DeviceView2DLeft potential_collocation_scaled("Potential collocation",
+                                                N_bf_aux, N_quad);
+
+  ExecSpace space;
+  fill_collocation(space, basis, grid.quad_points, basis_collocation);
+  fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
+  sto_potential_collocation(space, basis_aux, grid,
+                            potential_collocation_scaled);
+
+  Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
+  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+
+  Kokkos::parallel_for(
+      "Scale potential", policy, KOKKOS_LAMBDA(const member_type &team_member) {
+        const int g = team_member.league_rank();
+        const double w_g = grid.weights(g);
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, N_bf_aux),
+                             [=](const int alpha) {
+                               potential_collocation_scaled(alpha, g) *= w_g;
+                             });
+      });
+
+  DeviceView2DLeft K = compute_exact_exchange(
+      space, mo_orbitals, mo_coeff, basis_collocation, basis_aux_collocation,
+      potential_collocation_scaled);
 
   auto K_h = Kokkos::create_mirror_view(K);
   Kokkos::deep_copy(K_h, K);

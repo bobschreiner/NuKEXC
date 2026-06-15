@@ -55,7 +55,7 @@ struct Molecule {
     // Initialize datastructures
     natoms = Z_v.size();
     atom_centers = Kokkos::View<Point *, ExecSpace>("Atom centers", natoms);
-    Z = Kokkos::View<unsigned *, ExecSpace>("Atomic numbers ", natoms);
+    Z = Kokkos::View<unsigned *, ExecSpace>("Atomic numbers", natoms);
     element_list = std::set<unsigned>(Z_v.begin(), Z_v.end());
     Z_total = 0;
 
@@ -108,20 +108,4 @@ inline void read_xyz(const std::string &filename, Molecule &mol) {
   mol = mol_tmp;
 }
 
-/**
- * @ brief checks if two molecules are the same
- */
-inline bool operator==(const Molecule &m1, const Molecule &m2) {
-  if (m1.natoms != m2.natoms)
-    return false;
-  for (unsigned int i = 0; i < m1.natoms; ++i) {
-    if (m1.Z(i) != m2.Z(i))
-      return false;
-    for (unsigned int j = 0; j < 3; ++j) {
-      if (m1.atom_centers(i)[j] != m2.atom_centers(i)[j])
-        return false;
-    }
-  }
-  return true;
-};
 } // namespace Nukexc
