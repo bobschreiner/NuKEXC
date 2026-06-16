@@ -19,6 +19,7 @@
 
 #include <Kokkos_Core.hpp>
 
+#include <iomanip>
 #include <nukexc/core_hamiltonian.hpp>
 #include <nukexc/coulomb.hpp>
 #include <nukexc/diagonalizer.hpp>
@@ -224,22 +225,8 @@ int main(int argc, char *argv[]) {
     ExecSpace space;
     fill_collocation(space, basis, grid.quad_points, basis_collocation);
     fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
-    sto_potential_collocation(space, basis_aux, grid,
-                              potential_collocation_scaled);
-
-    Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
-    using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
-
-    Kokkos::parallel_for(
-        "Scale potential", policy,
-        KOKKOS_LAMBDA(const member_type &team_member) {
-          const int g = team_member.league_rank();
-          const double w_g = grid.weights(g);
-          Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, N_bf_aux),
-                               [=](const int alpha) {
-                                 potential_collocation_scaled(alpha, g) *= w_g;
-                               });
-        });
+    sto_potential_collocation_scaled(space, basis_aux, grid,
+                                     potential_collocation_scaled);
 
     // ---- Core Hamiltonian (overlap + H_core in Kokkos views) -------------
     auto hcore = compute_core_hamiltonian(basis, grid);
@@ -356,10 +343,18 @@ int main(int argc, char *argv[]) {
           0.5 * arma::trace(D_beta * K_beta_arma); // one per spin
                                                    //
       double Etot = E_nuc + E_core + E_coulomb + E_exchange;
-      std::cout << "E_core = " << E_core << "\n";
-      std::cout << "E_coulomb = " << E_coulomb << "\n";
-      std::cout << "E_exchange = " << E_exchange << "\n";
-      std::cout << "E_nuc_repulsion = " << E_nuc << "\n";
+
+      std::cout << "Total energy        : " << std::setprecision(10) << Etot
+                << "\n";
+      std::cout << "--------------------------------------------- \n";
+      std::cout << "Nuclear Repulsion   : " << std::setprecision(10) << E_nuc
+                << "\n";
+      std::cout << "Electronic   Energy : " << std::setprecision(10)
+                << E_core + E_coulomb + E_exchange << "\n";
+      std::cout << "One Electron Energy : " << std::setprecision(10) << E_core
+                << "\n";
+      std::cout << "Two Electron Energy : " << std::setprecision(10)
+                << E_coulomb + E_exchange << "\n\n";
 
       arma::mat F_alpha = h_core + J_arma - K_alpha_arma;
       arma::mat F_beta = h_core + J_arma - K_beta_arma;

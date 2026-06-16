@@ -88,4 +88,28 @@ void sto_potential_collocation(const ExecSpace space, const STOBasisSet basis,
         potential_collocation(i, g) = sto_potential(n, l, m, x, y, z, r, zeta);
       });
 }
+
+void sto_potential_collocation_scaled(const ExecSpace space,
+                                      const STOBasisSet basis,
+                                      const FlatGrid grid,
+                                      DeviceView2DLeft potential_collocation) {
+
+  const int N_bf = basis.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  Kokkos::parallel_for(
+      "Compute potentials",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>(space, {0, 0}, {N_bf, N_quad}),
+      KOKKOS_LAMBDA(const int i, const int g) {
+        const int n = basis.n(i);
+        const int l = basis.l(i);
+        const int m = basis.m(i);
+        const double zeta = basis.zeta(i);
+        const double x = grid.quad_points(g)[0] - basis.O(i)[0];
+        const double y = grid.quad_points(g)[1] - basis.O(i)[1];
+        const double z = grid.quad_points(g)[2] - basis.O(i)[2];
+        const double r = dist(grid.quad_points(g), basis.O(i)) + epsilon_shift;
+        potential_collocation(i, g) = sto_potential(n, l, m, x, y, z, r, zeta) * grid.weights(g);
+      });
+}
 } // namespace Nukexc
