@@ -292,7 +292,7 @@ int main(int argc, char *argv[]) {
       arma::mat D_tot = D_alpha + D_beta;
 
       // Diagnostics
-#if NDEBUG
+#ifndef NDEBUG
       std::cout << "Tr[D_alpha * S] = " << arma::trace(D_alpha * S_arma)
                 << "\n"; // expect 5
       std::cout << "Tr[D_beta  * S] = " << arma::trace(D_beta * S_arma)
