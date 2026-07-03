@@ -166,15 +166,14 @@ if (atomic_number < TA_XI.size()) {
 
   // Remove all weights below the weight threshold
   Kokkos::View<int *> w_counter("Counter", 1);
-  Kokkos::parallel_reduce(
+  Kokkos::parallel_for(
       "Count weights",
       Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>({0, 0}, {natoms, npts}),
-      KOKKOS_LAMBDA(const int iatoms, const int ipts, int &counter_update) {
+      KOKKOS_LAMBDA(const int iatoms, const int ipts) {
         if (wt_2d(iatoms, ipts) > weight_threshold) {
-          counter_update += 1;
+          Kokkos::atomic_add(&w_counter(0), 1);
         };
-      },
-      w_counter(0));
+      });
 
   auto w_counter_h =
       Kokkos::create_mirror_view_and_copy(HostSpace{}, w_counter);
