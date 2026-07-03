@@ -93,8 +93,9 @@ struct FlatGrid {
 };
 
 template <typename radial_type, typename angular_type>
-FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 50,
-                        size_t nang_order = 30) {
+FlatGrid make_flat_grid(const Molecule &mol, const size_t nrad = 50,
+                        const size_t nang_order = 30,
+                        const double weight_threshold = 1e-30) {
 
   using namespace IntegratorXX;
   using angular_traits = quadrature_traits<angular_type>;
@@ -129,11 +130,11 @@ FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 50,
 
     if (typeid(IntegratorXX::TreutlerAhlrichs<double, double>).name() ==
         typeid(radial_type).name()) {
-	    /*
-      if (atomic_number < TA_XI.size()) {
-        r_atomic = TA_XI[atomic_number];
-      }
-      */
+      /*
+if (atomic_number < TA_XI.size()) {
+  r_atomic = TA_XI[atomic_number];
+}
+*/
 
     } else if ((typeid(IntegratorXX::Becke<double, double>).name() ==
                 typeid(radial_type).name())) {
@@ -163,8 +164,27 @@ FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 50,
 
   partition_becke_team(ac_dev, qp_2d, wt_2d);
 
-  Kokkos::View<Point *> qp_1d("quad points 1D", natoms * npts);
-  Kokkos::View<double *> wt_1d("weights 1D", natoms * npts);
+  // Remove all weights below the weight threshold
+  Kokkos::View<int *> w_counter("Counter", 1);
+  Kokkos::parallel_reduce(
+      "Count weights",
+      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>({0, 0}, {natoms, npts}),
+      KOKKOS_LAMBDA(const int iatoms, const int ipts, int &counter_update) {
+        if (wt_2d(iatoms, ipts) > weight_threshold) {
+          counter_update += 1;
+        };
+      },
+      w_counter(0));
+
+  auto w_counter_h =
+      Kokkos::create_mirror_view_and_copy(HostSpace{}, w_counter);
+
+  // Initialize the Flatterend views with the correct sizes
+  Kokkos::View<Point *> qp_1d("quad points 1D", w_counter_h(0));
+  Kokkos::View<double *> wt_1d("weights 1D", w_counter_h(0));
+
+  // Reset the counter
+  Kokkos::deep_copy(w_counter, 0);
 
   Kokkos::parallel_for(
       "FlattenViews",
@@ -172,10 +192,19 @@ FlatGrid make_flat_grid(const Molecule &mol, size_t nrad = 50,
           {0, 0, 0}, {(int)natoms, (int)nrad, (int)nang}),
       KOKKOS_LAMBDA(const int iatoms, const int iradial, const int iangular) {
         const int src = iradial * nang + iangular;
-        const int dest = (iatoms * nrad + iradial) * nang + iangular;
-        wt_1d(dest) = wt_2d(iatoms, src);
-        qp_1d(dest) = qp_2d(iatoms, src);
+
+        if (wt_2d(iatoms, src) > weight_threshold) {
+          int dest = Kokkos::atomic_fetch_add(&w_counter(0), 1);
+          wt_1d(dest) = wt_2d(iatoms, src);
+          qp_1d(dest) = qp_2d(iatoms, src);
+        }
       });
+
+  Kokkos::printf("Reduced weight count from %d to %d (%f %%) for a weight "
+                 "threshold of %e\n",
+                 npts * natoms, w_counter_h(0),
+                 100 * (1.0 - w_counter_h(0) / double(npts * natoms)),
+                 weight_threshold);
 
   return {qp_1d, wt_1d, ac_dev, Z_dev, (unsigned)nrad, (unsigned)nang};
 }

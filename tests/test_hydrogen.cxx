@@ -710,7 +710,16 @@ TEST_CASE("compute_lda -- hydrogen 1s lda", "[lda]") {
   Kokkos::deep_copy(mo_orbitals, orbitals_h);
   Kokkos::deep_copy(mo_coeff, coeff_h);
 
-  auto lda_result = compute_lda(basis, grid, mo_orbitals, mo_coeff, func);
+  const int N_bf = basis.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
+
+  ExecSpace space;
+  fill_collocation(space, basis, grid.quad_points, basis_collocation);
+
+  auto lda_result =
+      compute_lda(basis_collocation, grid.weights, mo_orbitals, mo_coeff, func);
 
   // Clean up Libxc internal pointers
   xc_func_end(&func);
@@ -745,7 +754,22 @@ TEST_CASE("compute_gga -- hydrogen 1s gga", "[gga]") {
   Kokkos::deep_copy(mo_orbitals, orbitals_h);
   Kokkos::deep_copy(mo_coeff, coeff_h);
 
-  auto gga_result = compute_gga(basis, grid, mo_orbitals, mo_coeff, func);
+  const int N_bf = basis.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
+  DeviceView2DLeft collocation_gx("Collocation gx", N_bf, N_quad);
+  DeviceView2DLeft collocation_gy("Collocation gy", N_bf, N_quad);
+  DeviceView2DLeft collocation_gz("Collocation gz", N_bf, N_quad);
+
+  ExecSpace space;
+  fill_collocation(space, basis, grid.quad_points, basis_collocation);
+  fill_grad_collocation(space, basis, grid.quad_points, collocation_gx,
+                        collocation_gy, collocation_gz);
+
+  auto gga_result =
+      compute_gga(basis_collocation, collocation_gx, collocation_gy,
+                  collocation_gz, grid.weights, mo_orbitals, mo_coeff, func);
 
   // Clean up Libxc internal pointers
   xc_func_end(&func);

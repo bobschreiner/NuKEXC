@@ -2,6 +2,9 @@
  *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
  *    Copyright (C) 2026 Bob Schreiner
  *
+ *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    Copyright (C) 2026 Bob Schreiner
+ *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
  *    the Free Software Foundation, either version 3 of the License, or
@@ -33,8 +36,11 @@
 #include <nukexc/xc_integrals.hpp>
 
 #include <openorbitaloptimizer/scfsolver.hpp>
+#include <xc.h>
+#include <xc_funcs.h>
 
 #include <cmath>
+#include <cstdint>
 #include <tuple>
 #include <vector>
 
@@ -42,6 +48,67 @@ using namespace Nukexc;
 using bk_type = IntegratorXX::Becke<double, double>;
 using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
+
+// ---------------------------------------------------------------------------
+// Compile-time string hashing so we can "switch" on a runtime std::string.
+// C++ can't switch on std::string directly, but case labels only need to be
+// constant expressions -- so we hash the *literal* case labels at compile
+// time via this constexpr function, and hash the *runtime* input string with
+// the exact same function at runtime, then switch on the resulting uint32_t.
+// ---------------------------------------------------------------------------
+constexpr std::uint32_t fnv1a(const char *s, std::uint32_t h = 2166136261u) {
+  return (*s == '\0') ? h
+                      : fnv1a(s + 1, (h ^ static_cast<std::uint32_t>(
+                                              static_cast<unsigned char>(*s))) *
+                                         16777619u);
+}
+inline std::uint32_t fnv1a_rt(const std::string &s) { return fnv1a(s.c_str()); }
+
+// ---------------------------------------------------------------------------
+// Functional family + libxc id, resolved from a runtime name via switch.
+// ---------------------------------------------------------------------------
+enum class XCFamily { LDA, GGA };
+
+struct FunctionalInfo {
+  int xc_id;
+  XCFamily family;
+  std::string canonical_name;
+};
+
+FunctionalInfo lookup_functional(const std::string &name) {
+  switch (fnv1a_rt(name)) {
+  // ---- LDA exchange -----------------------------------------------------
+  case fnv1a("lda_x"):
+    return {XC_LDA_X, XCFamily::LDA, "lda_x"};
+
+  // ---- LDA correlation ---------------------------------------------------
+  case fnv1a("lda_c_pw"):
+    return {XC_LDA_C_PW, XCFamily::LDA, "lda_c_pw"};
+  case fnv1a("lda_c_vwn"):
+    return {XC_LDA_C_VWN, XCFamily::LDA, "lda_c_vwn"};
+
+  // ---- GGA exchange -------------------------------------------------------
+  case fnv1a("gga_x_pbe"):
+    return {XC_GGA_X_PBE, XCFamily::GGA, "gga_x_pbe"};
+  case fnv1a("gga_x_b88"):
+    return {XC_GGA_X_B88, XCFamily::GGA, "gga_x_b88"};
+  case fnv1a("gga_x_pw91"):
+    return {XC_GGA_X_PW91, XCFamily::GGA, "gga_x_pw91"};
+
+  // ---- GGA correlation ------------------------------------------------
+  case fnv1a("gga_c_pbe"):
+    return {XC_GGA_C_PBE, XCFamily::GGA, "gga_c_pbe"};
+  case fnv1a("gga_c_lyp"):
+    return {XC_GGA_C_LYP, XCFamily::GGA, "gga_c_lyp"};
+  case fnv1a("gga_c_pw91"):
+    return {XC_GGA_C_PW91, XCFamily::GGA, "gga_c_pw91"};
+
+  default:
+    throw std::runtime_error(
+        "Unknown functional name: '" + name +
+        "' (see --help or lookup_functional() for supported names)");
+  }
+}
 
 struct Config {
   std::string xyz_file = "input/water.xyz";
@@ -52,6 +119,8 @@ struct Config {
   double conv_thr = 1e-8;
   int charge = 0;
   int multiplicity = 1;
+  std::string xfunc = "lda_x";
+  std::string cfunc = "lda_c_pw";
 };
 
 Config parse_args(int argc, char *argv[]) {
@@ -93,11 +162,23 @@ Config parse_args(int argc, char *argv[]) {
           << "  --nang=<int>          Angular grid points      (default: "
           << cfg.nang << ")\n"
           << "  --lin-dep=<float>     Linear dep. threshold    (default: "
+          << cfg.lin_dep_threshold << ")\n"
           << "  --conv-thr=<float>    SCF convergence threshold (default: "
-
           << cfg.conv_thr << ")\n"
-          << cfg.lin_dep_threshold << ")\n";
-
+          << "  --charge=<int>        Molecular charge          (default: "
+          << cfg.charge << ")\n"
+          << "  --multiplicity=<int>  Spin multiplicity         (default: "
+          << cfg.multiplicity << ")\n"
+          << "  --xfunc=<name>        Exchange functional       (default: "
+          << cfg.xfunc << ")\n"
+          << "  --cfunc=<name>        Correlation functional    (default: "
+          << cfg.cfunc << ")\n"
+          << "\n"
+          << "  Supported functional names:\n"
+          << "    LDA exchange:     lda_x\n"
+          << "    LDA correlation:  lda_c_pw, lda_c_vwn\n"
+          << "    GGA exchange:     gga_x_pbe, gga_x_b88, gga_x_pw91\n"
+          << "    GGA correlation:  gga_c_pbe, gga_c_lyp, gga_c_pw91\n";
       std::exit(0);
     } else if (!parse_string("--xyz=", cfg.xyz_file) &&
                !parse_string("--basis=", cfg.basis_file) &&
@@ -106,7 +187,9 @@ Config parse_args(int argc, char *argv[]) {
                !parse_double("--lin-dep=", cfg.lin_dep_threshold) &&
                !parse_double("--conv-thr=", cfg.conv_thr) &&
                !parse_int("--charge=", cfg.charge) &&
-               !parse_int("--multiplicity=", cfg.multiplicity)) {
+               !parse_int("--multiplicity=", cfg.multiplicity) &&
+               !parse_string("--xfunc=", cfg.xfunc) &&
+               !parse_string("--cfunc=", cfg.cfunc)) {
       throw std::runtime_error("Unknown argument: " + arg + " (try --help)");
     }
   }
@@ -122,8 +205,8 @@ auto repeat(const std::string &s, int n) {
   return r;
 }
 void print_config(const Config &cfg) {
-  int width =
-      std::max({cfg.xyz_file.size(), cfg.basis_file.size(), size_t(20)});
+  int width = std::max({cfg.xyz_file.size(), cfg.basis_file.size(),
+                        cfg.xfunc.size() + cfg.cfunc.size() + 3, size_t(20)});
   std::string h = repeat("─", width + 2);
 
   std::cout << "\n";
@@ -146,6 +229,10 @@ void print_config(const Config &cfg) {
             << " │\n";
   std::cout << "│ Multiplicity         │ " << std::setw(width)
             << cfg.multiplicity << " │\n";
+  std::cout << "│ Exchange functional  │ " << std::setw(width) << std::left
+            << cfg.xfunc << " │\n";
+  std::cout << "│ Correlation function │ " << std::setw(width) << std::left
+            << cfg.cfunc << " │\n";
   std::cout << "└──────────────────────┴" << h << "┘\n\n";
   std::cout << std::flush;
 }
@@ -156,7 +243,6 @@ void print_config(const Config &cfg) {
 arma::mat kokkos_to_arma(const DeviceView2DLeft &v) {
   auto h = Kokkos::create_mirror_view(v);
   Kokkos::deep_copy(h, v);
-  // h(i,j): row i = basis function, col j = MO  →  arma column-major matches
   arma::mat out(h.extent(0), h.extent(1));
   for (std::size_t i = 0; i < h.extent(0); ++i)
     for (std::size_t j = 0; j < h.extent(1); ++j)
@@ -189,6 +275,32 @@ DeviceView1D arma_to_kokkos1d(const arma::vec &v, const std::string &label) {
   return kv;
 }
 
+// ---------------------------------------------------------------------------
+// Dispatch a single functional (X or C) to the correct polarized evaluator
+// based on its family. Both compute_lsda and compute_gga_lsda must return
+// XC_result_polarized { energy, potential_alpha, potential_beta }.
+// ---------------------------------------------------------------------------
+XC_result_polarized evaluate_functional(
+    const FunctionalInfo &info, const xc_func_type &func,
+    const DeviceView2DLeft &basis_collocation,
+    const DeviceView2DLeft &basis_collocation_gx,
+    const DeviceView2DLeft &basis_collocation_gy,
+    const DeviceView2DLeft &basis_collocation_gz, const DeviceView1D &weights,
+    const DeviceView2DLeft &k_C_alpha, const DeviceView1D &k_occ_alpha,
+    const DeviceView2DLeft &k_C_beta, const DeviceView1D &k_occ_beta) {
+  switch (info.family) {
+  case XCFamily::LDA:
+    return compute_lsda(basis_collocation, weights, k_C_alpha, k_occ_alpha,
+                        k_C_beta, k_occ_beta, func);
+  case XCFamily::GGA:
+    return compute_gga_lsda(basis_collocation, basis_collocation_gx,
+                            basis_collocation_gy, basis_collocation_gz, weights,
+                            k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta, func);
+  default:
+    throw std::runtime_error("Unhandled XCFamily in evaluate_functional");
+  }
+}
+
 int main(int argc, char *argv[]) {
   Config cfg;
   try {
@@ -211,7 +323,29 @@ int main(int argc, char *argv[]) {
     STOBasisSet basis_aux =
         load_adf_basis(mol, cfg.basis_file, screening_tol, /*fit=*/true);
 
-    // ---- Compute collocations --------------------------------------------
+    // ---- Resolve functionals from runtime strings via switch dispatch ----
+    FunctionalInfo x_info = lookup_functional(cfg.xfunc);
+    FunctionalInfo c_info = lookup_functional(cfg.cfunc);
+    const bool need_gga =
+        (x_info.family == XCFamily::GGA) || (c_info.family == XCFamily::GGA);
+
+    xc_func_type func_x;
+    if (xc_func_init(&func_x, x_info.xc_id, XC_POLARIZED) != 0) {
+      throw std::runtime_error(
+          "Failed to initialize Libxc exchange functional '" +
+          x_info.canonical_name + "'");
+    }
+
+    xc_func_type func_c;
+    if (xc_func_init(&func_c, c_info.xc_id, XC_POLARIZED) != 0) {
+      xc_func_end(&func_x);
+      throw std::runtime_error(
+          "Failed to initialize Libxc correlation functional '" +
+          c_info.canonical_name + "'");
+    }
+
+    // ---- Compute collocations
+    // --------------------------------------------
 
     const int N_bf = basis.nbf();
     const int N_bf_aux = basis_aux.nbf();
@@ -229,21 +363,33 @@ int main(int argc, char *argv[]) {
     sto_potential_collocation_scaled(space, basis_aux, grid,
                                      potential_collocation_scaled);
 
-    // ---- Core Hamiltonian (overlap + H_core in Kokkos views) -------------
-    auto hcore = compute_core_hamiltonian(basis, grid);
-    // hcore.hamiltonian : DeviceView2DLeft (nbf x nbf)
-    // hcore.overlap     : DeviceView2DLeft (nbf x nbf)
+    // ---- GGA basis-function gradient collocations (only if needed) -------
 
-    // ---- Orthogonalisation matrix X via NuKEXC diagonalizer ---------------
-    // Diagonalizer already computes X = S^{-1/2} internally;
-    // we reuse it each SCF cycle to solve F C = S C ε  in the AO basis.
+    DeviceView2DLeft basis_collocation_gx("Basis collocation dX", N_bf,
+                                          need_gga ? N_quad : 0);
+    DeviceView2DLeft basis_collocation_gy("Basis collocation dY", N_bf,
+                                          need_gga ? N_quad : 0);
+    DeviceView2DLeft basis_collocation_gz("Basis collocation dZ", N_bf,
+                                          need_gga ? N_quad : 0);
+    if (need_gga) {
+      fill_grad_collocation(space, basis, grid.quad_points,
+                            basis_collocation_gx, basis_collocation_gy,
+                            basis_collocation_gz);
+    }
+
+    // ---- Core Hamiltonian (overlap + H_core in Kokkos views)
+    // -------------
+    auto hcore = compute_core_hamiltonian(basis, grid);
+
+    // ---- Orthogonalisation matrix X via NuKEXC diagonalizer
+    // ---------------
     Diagonalizer diag(N_bf);
     DeviceView2DLeft X =
         diag.compute_transformation(hcore.overlap, cfg.lin_dep_threshold);
 
     arma::mat h_core = kokkos_to_arma(hcore.hamiltonian);
     arma::mat X_arma = kokkos_to_arma(X);
-    arma::mat S_arma = kokkos_to_arma(hcore.overlap); // need S on host
+    arma::mat S_arma = kokkos_to_arma(hcore.overlap);
     arma::mat h_core_orth = X_arma.t() * h_core * X_arma;
 
     // Derive electron counts from geometry + charge + multiplicity
@@ -257,93 +403,81 @@ int main(int argc, char *argv[]) {
     double n_beta = (n_elec - (cfg.multiplicity - 1)) / 2.0;
 
     // ---- OOO setup
-    // -------------------------------------------------------- For a
-    // molecule we have NO angular-momentum symmetry blocks: one particle
-    // type, one block containing all nbf basis functions.
-    arma::uvec blocks_per_type = {1, 1};    // 2 spin blocks (α and β)
-    arma::vec max_occupations = {1.0, 1.0}; // max 1 electron per spin channel
+    // --------------------------------------------------------
+    arma::uvec blocks_per_type = {1, 1};
+    arma::vec max_occupations = {1.0, 1.0};
     arma::vec number_of_particles = {n_alpha, n_beta};
     std::vector<std::string> block_descriptions = {"alpha", "beta"};
 
-    // Compute the nuclear repulsion energy once and pass it to the fock_builder
     double E_nuc = compute_nuclear_repulsion(mol);
-    // ---- Fock builder -----------------------------------------------------
-    // Captures by value everything that doesn't change between iterations.
-    // OOO calls this every SCF iteration with the current DensityMatrix.
-    auto fock_builder =
-        [space, basis_collocation, basis_aux_collocation,
-         potential_collocation_scaled, h_core, X_arma, N_bf, E_nuc, S_arma,
-         cfg](const OpenOrbitalOptimizer::DensityMatrix<double, double> &dm)
-        -> std::pair<double, OpenOrbitalOptimizer::FockMatrix<double>> {
-      const auto &orbitals = dm.first;     // vector<arma::mat>, one per block
-      const auto &occupations = dm.second; // vector<arma::vec>, one per block
 
-      // orbitals[0] : (nbf x nbf) MO coefficient matrix (columns = MOs)
-      // occupations[0] : (nbf) occupation numbers
-      // α and β orbitals and occupations from OOO
+    // ---- Fock builder
+    // -----------------------------------------------------
+    auto fock_builder =
+        [space, grid, basis_collocation, basis_collocation_gx,
+         basis_collocation_gy, basis_collocation_gz, basis_aux_collocation,
+         potential_collocation_scaled, h_core, X_arma, N_bf, E_nuc, S_arma, cfg,
+         func_c, func_x, x_info,
+         c_info](const OpenOrbitalOptimizer::DensityMatrix<double, double> &dm)
+        -> std::pair<double, OpenOrbitalOptimizer::FockMatrix<double>> {
+      const auto &orbitals = dm.first;
+      const auto &occupations = dm.second;
+
       const arma::mat C_alpha = X_arma * orbitals[0];
       const arma::mat C_beta = X_arma * orbitals[1];
-      const arma::vec occ_alpha = occupations[0]; // 0 or 1
-      const arma::vec occ_beta = occupations[1];  // 0 or 1
+      const arma::vec occ_alpha = occupations[0];
+      const arma::vec occ_beta = occupations[1];
 
-      // Build total density for Coulomb
       arma::mat D_alpha = C_alpha * arma::diagmat(occ_alpha) * C_alpha.t();
       arma::mat D_beta = C_beta * arma::diagmat(occ_beta) * C_beta.t();
       arma::mat D_tot = D_alpha + D_beta;
 
-      // Diagnostics
-#if NDEBUG
+#ifndef NDEBUG
       std::cout << "Tr[D_alpha * S] = " << arma::trace(D_alpha * S_arma)
-                << "\n"; // expect 5
-      std::cout << "Tr[D_beta  * S] = " << arma::trace(D_beta * S_arma)
-                << "\n"; // expect 5
-      std::cout << "Tr[D_tot   * S] = " << arma::trace(D_tot * S_arma)
-                << "\n"; // expect 10
-
+                << "\n";
+      std::cout << "Tr[D_beta  * S] = " << arma::trace(D_beta * S_arma) << "\n";
+      std::cout << "Tr[D_tot   * S] = " << arma::trace(D_tot * S_arma) << "\n";
 #endif
-      // Need to pass D_tot into compute_coulomb somehow
-      // Easiest: pass combined orbitals [C_alpha | C_beta] with combined
-      // occupations
+
       arma::mat C_combined = arma::join_horiz(C_alpha, C_beta);
       arma::vec occ_combined = arma::join_vert(occ_alpha, occ_beta);
 
       DeviceView2DLeft k_C_tot = arma_to_kokkos(C_combined, "C_combined");
       DeviceView1D k_occ_tot = arma_to_kokkos1d(occ_combined, "occ_combined");
 
-      // J built from total density — same as RHF
       DeviceView2DLeft J = compute_coulomb(
           space, k_C_tot, k_occ_tot, basis_collocation, basis_aux_collocation,
           potential_collocation_scaled, cfg.lin_dep_threshold);
 
-      // K built separately per spin — pass 0/1 occupations (no occ prefactor)
       DeviceView2DLeft k_C_alpha = arma_to_kokkos(C_alpha, "C_alpha");
       DeviceView2DLeft k_C_beta = arma_to_kokkos(C_beta, "C_beta");
       DeviceView1D k_occ_alpha = arma_to_kokkos1d(occ_alpha, "occ_alpha");
       DeviceView1D k_occ_beta = arma_to_kokkos1d(occ_beta, "occ_beta");
 
-      DeviceView2DLeft K_alpha = compute_exact_exchange(
-          space, k_C_alpha, k_occ_alpha, basis_collocation,
-          basis_aux_collocation, potential_collocation_scaled,
-          cfg.lin_dep_threshold);
+      // ---- Dispatch X and C independently based on their own family -----
+      XC_result_polarized E_x = evaluate_functional(
+          x_info, func_x, basis_collocation, basis_collocation_gx,
+          basis_collocation_gy, basis_collocation_gz, grid.weights, k_C_alpha,
+          k_occ_alpha, k_C_beta, k_occ_beta);
 
-      DeviceView2DLeft K_beta = compute_exact_exchange(
-          space, k_C_beta, k_occ_beta, basis_collocation, basis_aux_collocation,
-          potential_collocation_scaled, cfg.lin_dep_threshold);
+      XC_result_polarized E_c = evaluate_functional(
+          c_info, func_c, basis_collocation, basis_collocation_gx,
+          basis_collocation_gy, basis_collocation_gz, grid.weights, k_C_alpha,
+          k_occ_alpha, k_C_beta, k_occ_beta);
 
-      // Convert to Kokkos for NuKEXC compute_coulomb / compute_exact_exchange
       auto J_arma = kokkos_to_arma(J);
-      auto K_alpha_arma = kokkos_to_arma(K_alpha);
-      auto K_beta_arma = kokkos_to_arma(K_beta);
+      auto Vx_alpha = kokkos_to_arma(E_x.potential_alpha);
+      auto Vx_beta = kokkos_to_arma(E_x.potential_beta);
+      auto Vc_alpha = kokkos_to_arma(E_c.potential_alpha);
+      auto Vc_beta = kokkos_to_arma(E_c.potential_beta);
 
-      // No factors of 2 anywhere — D_α and D_β have occupation 0/1
-      double E_core = arma::trace(D_tot * h_core); // Tr[(Dα+Dβ)*H]
-      double E_coulomb =
-          0.5 * arma::trace(D_tot * J_arma); // 0.5 * Tr[D_tot * J]
-      double E_exchange =
-          -0.5 * arma::trace(D_alpha * K_alpha_arma) -
-          0.5 * arma::trace(D_beta * K_beta_arma); // one per spin
-                                                   //
-      double Etot = E_nuc + E_core + E_coulomb + E_exchange;
+      double E_exchange = E_x.energy;
+      double E_correlation = E_c.energy;
+
+      double E_core = arma::trace(D_tot * h_core);
+      double E_coulomb = 0.5 * arma::trace(D_tot * J_arma);
+
+      double Etot = E_nuc + E_core + E_coulomb + E_exchange + E_correlation;
 
       std::cout << "Total energy        : " << std::setprecision(10) << Etot
                 << "\n";
@@ -357,8 +491,8 @@ int main(int argc, char *argv[]) {
       std::cout << "Two Electron Energy : " << std::setprecision(10)
                 << E_coulomb + E_exchange << "\n\n";
 
-      arma::mat F_alpha = h_core + J_arma - K_alpha_arma;
-      arma::mat F_beta = h_core + J_arma - K_beta_arma;
+      arma::mat F_alpha = h_core + J_arma + Vx_alpha + Vc_alpha;
+      arma::mat F_beta = h_core + J_arma + Vx_beta + Vc_beta;
 
       arma::mat F_alpha_orth = X_arma.t() * F_alpha * X_arma;
       arma::mat F_beta_orth = X_arma.t() * F_beta * X_arma;
@@ -367,10 +501,11 @@ int main(int argc, char *argv[]) {
       fock_arma.push_back(F_alpha_orth);
       fock_arma.push_back(F_beta_orth);
 
-      return std::make_pair(Etot, fock_arma); // two Fock matrices for OOO
+      return std::make_pair(Etot, fock_arma);
     };
 
-    // ---- GWH initial guess (replaces h_core_orth as the starting Fock) ----
+    // ---- GWH initial guess
+    // ----
     arma::mat F_gwh(N_bf, N_bf, arma::fill::zeros);
     const double K_gwh = 1.75;
     for (int i = 0; i < N_bf; ++i) {
@@ -384,7 +519,9 @@ int main(int argc, char *argv[]) {
       }
     }
     arma::mat F_gwh_orth = X_arma.t() * F_gwh * X_arma;
-    // ---- Construct and run SCF solver -------------------------------------
+
+    // ---- Construct and run SCF solver
+    // -------------------------------------
     OpenOrbitalOptimizer::SCFSolver<double, double> solver(
         blocks_per_type, max_occupations, number_of_particles, fock_builder,
         block_descriptions);
@@ -393,7 +530,9 @@ int main(int argc, char *argv[]) {
     solver.initialize_with_fock({F_gwh_orth, F_gwh_orth});
     solver.run();
 
-    // ---- Check SCF converged to a sensible energy -------------------------
+    xc_func_end(&func_x);
+    xc_func_end(&func_c);
+
     double E_scf = solver.get_fock_build().first;
     std::cout << "SCF total energy: " << E_scf << " Eh\n";
   }

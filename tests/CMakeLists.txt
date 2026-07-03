@@ -26,6 +26,7 @@ add_executable(benchmark_coreH standards.cxx benchmark_coreH.cxx )
 add_executable(benchmark_cutoff standards.cxx benchmark_cutoff.cxx )
 
 add_executable(standalone_hf standards.cxx standalone_hf.cxx)
+add_executable(standalone_dft standards.cxx standalone_dft.cxx)
 
 add_custom_target(copy_test_inputs 
     COMMAND  ${CMAKE_COMMAND} -E copy_directory
@@ -48,14 +49,18 @@ set(ALL_TEST_TARGETS
     test_density
     test_libxc
     test_helium
+
     convergence_integration
     convergence_h2plus
     convergence_coreH
+
     benchmark_partition
     benchmark_scf
     benchmark_coreH
     benchmark_cutoff
+
     standalone_hf 
+    standalone_dft
 )
 
 # Apply linking to all of them at once

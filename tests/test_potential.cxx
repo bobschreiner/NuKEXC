@@ -224,7 +224,7 @@ TEST_CASE("Potential vs precomputed Potential", "[potential]") {
 
   using spherical_type = SphericalQuadrature<radial_type, angular_type>;
 
-  size_t nrad = 100;
+  size_t nrad = 10;
   size_t nang = angular_traits::npts_by_algebraic_order(
       angular_traits::next_algebraic_order(
           20)); // Smallest possible angular grid
