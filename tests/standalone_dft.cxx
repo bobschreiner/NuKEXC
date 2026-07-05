@@ -357,11 +357,27 @@ int main(int argc, char *argv[]) {
     DeviceView2DLeft potential_collocation_scaled("Potential collocation",
                                                   N_bf_aux, N_quad);
 
+    DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
+    DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
+
     ExecSpace space;
     fill_collocation(space, basis, grid.quad_points, basis_collocation);
     fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
     sto_potential_collocation_scaled(space, basis_aux, grid,
                                      potential_collocation_scaled);
+
+    // Compute (A|B)
+    KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
+                     potential_collocation_scaled, 0.0, aux_overlap);
+
+    Kokkos::parallel_for(
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
+        KOKKOS_LAMBDA(int i, int j) {
+          aux_overlap_sym(i, j) = 0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
+        });
+
+    DeviceView2DLeft half_inverse_X =
+        compute_half_inverse(aux_overlap_sym, cfg.lin_dep_threshold);
 
     // ---- GGA basis-function gradient collocations (only if needed) -------
 
@@ -416,8 +432,8 @@ int main(int argc, char *argv[]) {
     auto fock_builder =
         [space, grid, basis_collocation, basis_collocation_gx,
          basis_collocation_gy, basis_collocation_gz, basis_aux_collocation,
-         potential_collocation_scaled, h_core, X_arma, N_bf, E_nuc, S_arma, cfg,
-         func_c, func_x, x_info,
+         potential_collocation_scaled, h_core, X_arma, half_inverse_X, N_bf,
+         E_nuc, S_arma, cfg, func_c, func_x, x_info,
          c_info](const OpenOrbitalOptimizer::DensityMatrix<double, double> &dm)
         -> std::pair<double, OpenOrbitalOptimizer::FockMatrix<double>> {
       const auto &orbitals = dm.first;
@@ -447,7 +463,7 @@ int main(int argc, char *argv[]) {
 
       DeviceView2DLeft J = compute_coulomb(
           space, k_C_tot, k_occ_tot, basis_collocation, basis_aux_collocation,
-          potential_collocation_scaled, cfg.lin_dep_threshold);
+          potential_collocation_scaled, half_inverse_X);
 
       DeviceView2DLeft k_C_alpha = arma_to_kokkos(C_alpha, "C_alpha");
       DeviceView2DLeft k_C_beta = arma_to_kokkos(C_beta, "C_beta");

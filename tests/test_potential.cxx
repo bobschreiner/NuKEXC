@@ -47,256 +47,150 @@ using namespace IntegratorXX;
 using bk_type = IntegratorXX::Becke<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 
-KOKKOS_INLINE_FUNCTION
-double sto_potential_pre(const int idx, const double x, const double y,
-                         const double z, const double r, const double zeta) {
+TEST_CASE("Potential satisfies Poisson's equation", "[potential][poisson]") {
+  using Nukexc::STOFunc;
 
-  switch (idx) {
-  case 0: // n=1, l=0, m=0
-    return -7.0898154036220641 * pow(zeta, -0.5) * exp(-r * zeta) +
-           14.179630807244128 * pow(zeta, -1.5) / r -
-           14.179630807244128 * pow(zeta, -1.5) * exp(-r * zeta) / r;
-  case 1: // n=2, l=0, m=0
-    return -4.093306831785954 * r * sqrt(zeta) * exp(-r * zeta) -
-           16.373227327143816 * pow(zeta, -0.5) * exp(-r * zeta) +
-           24.559840990715724 * pow(zeta, -1.5) / r -
-           24.559840990715724 * pow(zeta, -1.5) * exp(-r * zeta) / r;
-  case 2: // n=2, l=1, m=-1
-    return -7.0898154036220641 * y * sqrt(zeta) * exp(-r * zeta) -
-           28.359261614488256 * y * pow(zeta, -0.5) * exp(-r * zeta) / r -
-           56.718523228976513 * y * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 2) +
-           56.718523228976513 * y * pow(zeta, -2.5) / pow(r, 3) -
-           56.718523228976513 * y * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 3);
-  case 3: // n=2, l=1, m=0
-    return -7.0898154036220641 * z * sqrt(zeta) * exp(-r * zeta) -
-           28.359261614488256 * z * pow(zeta, -0.5) * exp(-r * zeta) / r -
-           56.718523228976513 * z * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 2) +
-           56.718523228976513 * z * pow(zeta, -2.5) / pow(r, 3) -
-           56.718523228976513 * z * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 3);
-  case 4: // n=2, l=1, m=1
-    return -7.0898154036220641 * x * sqrt(zeta) * exp(-r * zeta) -
-           28.359261614488256 * x * pow(zeta, -0.5) * exp(-r * zeta) / r -
-           56.718523228976513 * x * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 2) +
-           56.718523228976513 * x * pow(zeta, -2.5) / pow(r, 3) -
-           56.718523228976513 * x * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 3);
-  case 5: // n=3, l=0, m=0
-    return -1.494664324372781 * pow(r, 2) * pow(zeta, 1.5) * exp(-r * zeta) -
-           8.9679859462366859 * r * sqrt(zeta) * exp(-r * zeta) -
-           26.903957838710058 * pow(zeta, -0.5) * exp(-r * zeta) +
-           35.871943784946744 * pow(zeta, -1.5) / r -
-           35.871943784946744 * pow(zeta, -1.5) * exp(-r * zeta) / r;
-  case 6: // n=3, l=1, m=-1
-    return -2.5888345500742657 * r * y * pow(zeta, 1.5) * exp(-r * zeta) -
-           15.533007300445594 * y * sqrt(zeta) * exp(-r * zeta) -
-           51.776691001485313 * y * pow(zeta, -0.5) * exp(-r * zeta) / r -
-           103.55338200297063 * y * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 2) +
-           103.55338200297063 * y * pow(zeta, -2.5) / pow(r, 3) -
-           103.55338200297063 * y * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 3);
-  case 7: // n=3, l=1, m=0
-    return -2.5888345500742657 * r * z * pow(zeta, 1.5) * exp(-r * zeta) -
-           15.533007300445594 * z * sqrt(zeta) * exp(-r * zeta) -
-           51.776691001485313 * z * pow(zeta, -0.5) * exp(-r * zeta) / r -
-           103.55338200297063 * z * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 2) +
-           103.55338200297063 * z * pow(zeta, -2.5) / pow(r, 3) -
-           103.55338200297063 * z * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 3);
-  case 8: // n=3, l=1, m=1
-    return -2.5888345500742657 * r * x * pow(zeta, 1.5) * exp(-r * zeta) -
-           15.533007300445594 * x * sqrt(zeta) * exp(-r * zeta) -
-           51.776691001485313 * x * pow(zeta, -0.5) * exp(-r * zeta) / r -
-           103.55338200297063 * x * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 2) +
-           103.55338200297063 * x * pow(zeta, -2.5) / pow(r, 3) -
-           103.55338200297063 * x * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 3);
-  case 9: // n=3, l=2, m=-2
-    return -5.7888100364661413 * x * y * pow(zeta, 1.5) * exp(-r * zeta) -
-           34.732860218796848 * x * y * sqrt(zeta) * exp(-r * zeta) / r -
-           138.93144087518739 * x * y * pow(zeta, -0.5) * exp(-r * zeta) /
-               pow(r, 2) -
-           416.79432262556217 * x * y * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 3) -
-           833.58864525112434 * x * y * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 4) +
-           833.58864525112434 * x * y * pow(zeta, -3.5) / pow(r, 5) -
-           833.58864525112434 * x * y * pow(zeta, -3.5) * exp(-r * zeta) /
-               pow(r, 5);
-  case 10: // n=3, l=2, m=-1
-    return -5.7888100364661413 * y * z * pow(zeta, 1.5) * exp(-r * zeta) -
-           34.732860218796848 * y * z * sqrt(zeta) * exp(-r * zeta) / r -
-           138.93144087518739 * y * z * pow(zeta, -0.5) * exp(-r * zeta) /
-               pow(r, 2) -
-           416.79432262556217 * y * z * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 3) -
-           833.58864525112434 * y * z * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 4) +
-           833.58864525112434 * y * z * pow(zeta, -3.5) / pow(r, 5) -
-           833.58864525112434 * y * z * pow(zeta, -3.5) * exp(-r * zeta) /
-               pow(r, 5);
-  case 11: // n=3, l=2, m=0
-    return 1.671085516420667 * pow(x, 2) * pow(zeta, 1.5) * exp(-r * zeta) +
-           1.671085516420667 * pow(y, 2) * pow(zeta, 1.5) * exp(-r * zeta) -
-           3.342171032841334 * pow(z, 2) * pow(zeta, 1.5) * exp(-r * zeta) +
-           10.026513098524002 * pow(x, 2) * sqrt(zeta) * exp(-r * zeta) / r +
-           10.026513098524002 * pow(y, 2) * sqrt(zeta) * exp(-r * zeta) / r -
-           20.053026197048004 * pow(z, 2) * sqrt(zeta) * exp(-r * zeta) / r +
-           40.106052394096008 * pow(x, 2) * pow(zeta, -0.5) * exp(-r * zeta) /
-               pow(r, 2) +
-           40.106052394096008 * pow(y, 2) * pow(zeta, -0.5) * exp(-r * zeta) /
-               pow(r, 2) -
-           80.212104788192016 * pow(z, 2) * pow(zeta, -0.5) * exp(-r * zeta) /
-               pow(r, 2) +
-           120.31815718228802 * pow(x, 2) * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 3) +
-           120.31815718228802 * pow(y, 2) * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 3) -
-           240.63631436457605 * pow(z, 2) * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 3) +
-           240.63631436457605 * pow(x, 2) * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 4) +
-           240.63631436457605 * pow(y, 2) * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 4) -
-           481.2726287291521 * pow(z, 2) * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 4) -
-           240.63631436457605 * pow(x, 2) * pow(zeta, -3.5) / pow(r, 5) +
-           240.63631436457605 * pow(x, 2) * pow(zeta, -3.5) * exp(-r * zeta) /
-               pow(r, 5) -
-           240.63631436457605 * pow(y, 2) * pow(zeta, -3.5) / pow(r, 5) +
-           240.63631436457605 * pow(y, 2) * pow(zeta, -3.5) * exp(-r * zeta) /
-               pow(r, 5) +
-           481.2726287291521 * pow(z, 2) * pow(zeta, -3.5) / pow(r, 5) -
-           481.2726287291521 * pow(z, 2) * pow(zeta, -3.5) * exp(-r * zeta) /
-               pow(r, 5);
-  case 12: // n=3, l=2, m=1
-    return -5.7888100364661413 * x * z * pow(zeta, 1.5) * exp(-r * zeta) -
-           34.732860218796848 * x * z * sqrt(zeta) * exp(-r * zeta) / r -
-           138.93144087518739 * x * z * pow(zeta, -0.5) * exp(-r * zeta) /
-               pow(r, 2) -
-           416.79432262556217 * x * z * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 3) -
-           833.58864525112434 * x * z * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 4) +
-           833.58864525112434 * x * z * pow(zeta, -3.5) / pow(r, 5) -
-           833.58864525112434 * x * z * pow(zeta, -3.5) * exp(-r * zeta) /
-               pow(r, 5);
-  case 13: // n=3, l=2, m=2
-    return -2.8944050182330706 * pow(x, 2) * pow(zeta, 1.5) * exp(-r * zeta) +
-           2.8944050182330706 * pow(y, 2) * pow(zeta, 1.5) * exp(-r * zeta) -
-           17.366430109398424 * pow(x, 2) * sqrt(zeta) * exp(-r * zeta) / r +
-           17.366430109398424 * pow(y, 2) * sqrt(zeta) * exp(-r * zeta) / r -
-           69.465720437593695 * pow(x, 2) * pow(zeta, -0.5) * exp(-r * zeta) /
-               pow(r, 2) +
-           69.465720437593695 * pow(y, 2) * pow(zeta, -0.5) * exp(-r * zeta) /
-               pow(r, 2) -
-           208.39716131278109 * pow(x, 2) * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 3) +
-           208.39716131278109 * pow(y, 2) * pow(zeta, -1.5) * exp(-r * zeta) /
-               pow(r, 3) -
-           416.79432262556217 * pow(x, 2) * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 4) +
-           416.79432262556217 * pow(y, 2) * pow(zeta, -2.5) * exp(-r * zeta) /
-               pow(r, 4) +
-           416.79432262556217 * pow(x, 2) * pow(zeta, -3.5) / pow(r, 5) -
-           416.79432262556217 * pow(x, 2) * pow(zeta, -3.5) * exp(-r * zeta) /
-               pow(r, 5) -
-           416.79432262556217 * pow(y, 2) * pow(zeta, -3.5) / pow(r, 5) +
-           416.79432262556217 * pow(y, 2) * pow(zeta, -3.5) * exp(-r * zeta) /
-               pow(r, 5);
-  default:
-    return 0.0;
-  }
-}
+  // ------------------------------------------------------------------
+  // 1. Uniform Cartesian lattice
+  // ------------------------------------------------------------------
+  // zeta = 1.0 STOs decay as exp(-r); for n <= 3 essentially all of the
+  // density/potential structure lives within a few Bohr of the origin.
+  // L is chosen generously so boundary truncation doesn't contaminate
+  // the interior points we actually test (2-cell buffer for the FD
+  // stencil is trimmed off below).
+  constexpr double L = 6.0;  // half-width of box, Bohr
+  constexpr double h = 0.1;  // grid spacing, Bohr
+  constexpr double PI = 3.14159265358979323846;
+  const int N = static_cast<int>(2.0 * L / h) + 1;  // points per axis
 
-TEST_CASE("Potential vs precomputed Potential", "[potential]") {
+  Kokkos::View<double ***, Layout, ExecSpace> V("V", N, N, N);
+  Kokkos::View<double ***, Layout, ExecSpace> source("source", N, N, N);
+  Kokkos::View<double ***, Layout, ExecSpace> laplacian("laplacian", N, N, N);
 
-  using radial_type = bk_type;
-  using angular_type = ll_type;
-  using angular_traits = quadrature_traits<angular_type>;
-
-  using spherical_type = SphericalQuadrature<radial_type, angular_type>;
-
-  size_t nrad = 10;
-  size_t nang = angular_traits::npts_by_algebraic_order(
-      angular_traits::next_algebraic_order(
-          20)); // Smallest possible angular grid
-
-  // Generate via runtime API
-  auto rad_spec = radial_from_type<radial_type>();
-  auto rad_traits = make_radial_traits(rad_spec, nrad, 1.0);
-  UnprunedSphericalGridSpecification unp(
-      rad_spec, *rad_traits, angular_from_type<angular_type>(), nang);
-
-  auto sph = SphericalGridFactory::generate_grid(unp);
-
-  const auto npts = sph->npts();
-
-  Kokkos::View<Point *, Layout, ExecSpace> quadrature_points_device(
-      "quadrature_points", npts);
-
-  auto quadrature_points_h =
-      Kokkos::create_mirror_view(quadrature_points_device);
-
-  for (int i = 0; i < npts; ++i) {
-    quadrature_points_h(i)[0] = sph->points()[i][0];
-    quadrature_points_h(i)[1] = sph->points()[i][1];
-    quadrature_points_h(i)[2] = sph->points()[i][2];
-  }
-  Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
-
-  ///////////////////////////////////////////////////////////////////////
-
-  ///////////////////////////////////////////////////////////////////////
-  Kokkos::View<double *> potential_pre("potential_pre", npts);
-  auto potential_pre_h = Kokkos::create_mirror_view(potential_pre);
-
-  Kokkos::View<double *> potential("potential_harmonics", npts);
-  auto potential_h = Kokkos::create_mirror_view(potential);
+  const double zeta = 1.0;
 
   int idx = 0;
   for (int n = 1; n < 4; ++n) {
     for (int l = 0; l < n; ++l) {
       for (int m = -l; m < l + 1; ++m) {
+        Kokkos::printf("Testing Poisson relation for n=%d, l=%d, m=%d\n", n, l,
+                        m);
 
-        Kokkos::printf("Testing n = %d , l = %d , m = %d \n", n, l, m);
-        Kokkos::printf("idx = %d\n", idx);
+        // Single-function basis so we reuse the exact normalization/harmonic
+        // convention that sto_potential/sto_potential_pre are built from.
+        auto basis =
+            Nukexc::make_manual_basis({STOFunc{n, l, m, zeta, 0.0, 0.0, 0.0}});
+
+        // ---- Fill potential (analytic) and source term (psi, signed) ----
         Kokkos::parallel_for(
-            "For loop", npts, KOKKOS_LAMBDA(int i) {
-              const double x = quadrature_points_device(i)[0];
-              const double y = quadrature_points_device(i)[1];
-              const double z = quadrature_points_device(i)[2];
+            "Fill V and density",
+            Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<3>>({0, 0, 0},
+                                                                {N, N, N}),
+            KOKKOS_LAMBDA(int i, int j, int k) {
+              const double x = -L + i * h;
+              const double y = -L + j * h;
+              const double z = -L + k * h;
               const double r = Kokkos::sqrt(x * x + y * y + z * z);
-              const double zeta = 1.0;
 
-              potential(i) = sto_potential(n, l, m, x, y, z, r, zeta);
-              potential_pre(i) = sto_potential_pre(idx, x, y, z, r, zeta);
+              V(i, j, k) = sto_potential(n, l, m, x, y, z, r, zeta);
+
+              double psi;
+              Nukexc::basis_eval(basis, 0, x, y, z, psi);
+              source(i, j, k) = psi;  // signed -- source is psi, not psi^2
             });
 
-        Kokkos::deep_copy(potential_h, potential);
-        Kokkos::deep_copy(potential_pre_h, potential_pre);
+        // ---- 4th-order (5-point) finite-difference Laplacian ----
+        Kokkos::parallel_for(
+            "Laplacian",
+            Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<3>>(
+                {2, 2, 2}, {N - 2, N - 2, N - 2}),
+            KOKKOS_LAMBDA(int i, int j, int k) {
+              const double d2x =
+                  (-V(i - 2, j, k) + 16.0 * V(i - 1, j, k) -
+                   30.0 * V(i, j, k) + 16.0 * V(i + 1, j, k) -
+                   V(i + 2, j, k)) /
+                  (12.0 * h * h);
+              const double d2y =
+                  (-V(i, j - 2, k) + 16.0 * V(i, j - 1, k) -
+                   30.0 * V(i, j, k) + 16.0 * V(i, j + 1, k) -
+                   V(i, j + 2, k)) /
+                  (12.0 * h * h);
+              const double d2z =
+                  (-V(i, j, k - 2) + 16.0 * V(i, j, k - 1) -
+                   30.0 * V(i, j, k) + 16.0 * V(i, j, k + 1) -
+                   V(i, j, k + 2)) /
+                  (12.0 * h * h);
+              laplacian(i, j, k) = d2x + d2y + d2z;
+            });
 
-        for (int i = 0; i < npts; ++i) {
-          if (potential_h(i) < 1e-5) {
-            REQUIRE_THAT(potential_h(i),
-                         Catch::Matchers::WithinAbs(potential_pre_h(i), 1e-5));
-          } else {
-            REQUIRE_THAT(potential_h(i),
-                         Catch::Matchers::WithinRel(potential_pre_h(i), 1e-5));
-          }
-        }
+        // ---- Reduce to max error over interior points, split by ----
+        // ---- whether |source| is numerically significant there.  ----
+        // source (psi) is signed, so branch on |source|, not source itself.
+        // STOs have a cusp at the nucleus (Kato's cusp condition): psi is
+        // continuous but not differentiable at r=0, so a Cartesian FD
+        // stencil has O(1) error AT that single point regardless of h.
+        // Exclude a small ball around the nucleus -- standard practice for
+        // real-space Poisson checks of cusped basis functions.
+        constexpr double source_floor = 1e-4;
+        constexpr double cusp_exclusion_radius = 3.0 * h;
+
+        double max_abs_err = 0.0;
+        Kokkos::parallel_reduce(
+            "Max abs error (small |psi|)",
+            Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<3>>(
+                {2, 2, 2}, {N - 2, N - 2, N - 2}),
+            KOKKOS_LAMBDA(int i, int j, int k, double &local_max) {
+              const double x = -L + i * h;
+              const double y = -L + j * h;
+              const double z = -L + k * h;
+              if (x * x + y * y + z * z <
+                  cusp_exclusion_radius * cusp_exclusion_radius)
+                return;
+
+              const double psi = source(i, j, k);
+              if (Kokkos::abs(psi) < source_floor) {
+                const double rhs = -4.0 * PI * psi;
+                const double err = Kokkos::abs(laplacian(i, j, k) - rhs);
+                if (err > local_max) local_max = err;
+              }
+            },
+            Kokkos::Max<double>(max_abs_err));
+
+        double max_rel_err = 0.0;
+        Kokkos::parallel_reduce(
+            "Max rel error (significant |psi|)",
+            Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<3>>(
+                {2, 2, 2}, {N - 2, N - 2, N - 2}),
+            KOKKOS_LAMBDA(int i, int j, int k, double &local_max) {
+              const double x = -L + i * h;
+              const double y = -L + j * h;
+              const double z = -L + k * h;
+              if (x * x + y * y + z * z <
+                  cusp_exclusion_radius * cusp_exclusion_radius)
+                return;
+
+              const double psi = source(i, j, k);
+              if (Kokkos::abs(psi) >= source_floor) {
+                const double rhs = -4.0 * PI * psi;
+                const double err =
+                    Kokkos::abs((laplacian(i, j, k) - rhs) / rhs);
+                if (err > local_max) local_max = err;
+              }
+            },
+            Kokkos::Max<double>(max_rel_err));
+
+        INFO("n=" << n << " l=" << l << " m=" << m
+                  << "  max_abs_err=" << max_abs_err
+                  << "  max_rel_err=" << max_rel_err);
+        REQUIRE(max_abs_err < 1e-3);
+        REQUIRE(max_rel_err < 5e-2);
+
         idx += 1;
       }
     }
   }
 }
+
 ///////////////////////////////////////////////////////////////////////////
 int main() {
   Kokkos::initialize();

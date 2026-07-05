@@ -583,29 +583,31 @@ TEST_CASE("compute_coulomb -- hydrogen 1s self-repulsion", "[coulomb]") {
                                          N_bf_aux, N_quad);
   DeviceView2DLeft potential_collocation_scaled("Potential collocation",
                                                 N_bf_aux, N_quad);
+  DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
+  DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
+
   ExecSpace space;
 
   fill_collocation(space, basis, grid.quad_points, basis_collocation);
   fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
-  sto_potential_collocation(space, basis_aux, grid,
-                            potential_collocation_scaled);
+  sto_potential_collocation_scaled(space, basis_aux, grid,
+                                   potential_collocation_scaled);
 
-  Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
-  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+  // Compute (A|B)
+  KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
+                   potential_collocation_scaled, 0.0, aux_overlap);
 
   Kokkos::parallel_for(
-      "Scale potential", policy, KOKKOS_LAMBDA(const member_type &team_member) {
-        const int g = team_member.league_rank();
-        const double w_g = grid.weights(g);
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, N_bf_aux),
-                             [=](const int alpha) {
-                               potential_collocation_scaled(alpha, g) *= w_g;
-                             });
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
+      KOKKOS_LAMBDA(int i, int j) {
+        aux_overlap_sym(i, j) = 0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
       });
 
-  DeviceView2DLeft J =
-      compute_coulomb(space, mo_orbitals, mo_coeff, basis_collocation,
-                      basis_aux_collocation, potential_collocation_scaled);
+  DeviceView2DLeft half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
+
+  DeviceView2DLeft J = compute_coulomb(
+      space, mo_orbitals, mo_coeff, basis_collocation, basis_aux_collocation,
+      potential_collocation_scaled, half_inverse_X);
 
   auto J_h = Kokkos::create_mirror_view(J);
   Kokkos::deep_copy(J_h, J);
@@ -653,28 +655,31 @@ TEST_CASE("compute_exchange -- hydrogen 1s self-exchange", "[exchange]") {
   DeviceView2DLeft potential_collocation_scaled("Potential collocation",
                                                 N_bf_aux, N_quad);
 
+  DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
+  DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
+
   ExecSpace space;
+
   fill_collocation(space, basis, grid.quad_points, basis_collocation);
   fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
-  sto_potential_collocation(space, basis_aux, grid,
-                            potential_collocation_scaled);
+  sto_potential_collocation_scaled(space, basis_aux, grid,
+                                   potential_collocation_scaled);
 
-  Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
-  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+  // Compute (A|B)
+  KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
+                   potential_collocation_scaled, 0.0, aux_overlap);
 
   Kokkos::parallel_for(
-      "Scale potential", policy, KOKKOS_LAMBDA(const member_type &team_member) {
-        const int g = team_member.league_rank();
-        const double w_g = grid.weights(g);
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, N_bf_aux),
-                             [=](const int alpha) {
-                               potential_collocation_scaled(alpha, g) *= w_g;
-                             });
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
+      KOKKOS_LAMBDA(int i, int j) {
+        aux_overlap_sym(i, j) = 0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
       });
+
+  DeviceView2DLeft half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
 
   DeviceView2DLeft K = compute_exact_exchange(
       space, mo_orbitals, mo_coeff, basis_collocation, basis_aux_collocation,
-      potential_collocation_scaled);
+      potential_collocation_scaled, half_inverse_X);
 
   auto K_h = Kokkos::create_mirror_view(K);
   Kokkos::deep_copy(K_h, K);

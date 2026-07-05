@@ -42,45 +42,28 @@ DeviceView2DLeft compute_exact_exchange(
     const DeviceView1D mo_coeff, const DeviceView2DLeft basis_collocation,
     const DeviceView2DLeft basis_aux_collocation,
     const DeviceView2DLeft potential_collocation_scaled,
-    const double lin_dep_threshold = 1e-5) {
+    const DeviceView2DLeft half_inverse_X) {
 
   Kokkos::Profiling::pushRegion("Compute Exact Exchange Integral");
   const int N_bf = basis_collocation.extent(0);
   const int N_bf_aux = basis_aux_collocation.extent(0);
   const int N_quad = basis_collocation.extent(1);
   const int N_occ = mo_orbitals.extent(1);
+  const int K = half_inverse_X.extent(1);
 
   DeviceView2DLeft basis_collocation_scaled("Basis collocation Scaled", N_bf,
                                             N_quad);
   DeviceView1DLeft expansion_coeff("Expansion coeff", N_quad);
-  DeviceView2DLeft result("Exchange matrix", N_bf, N_bf);
-  DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
-  DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
   DeviceView2DLeft three_center_integral("Three_center_integral", N_bf_aux,
                                          N_bf);
+  DeviceView2DLeft three_center_integral_scaled("Three_center_integral_scaled",
+                                                N_bf, K);
+  DeviceView2DLeft result("Exchange matrix", N_bf, N_bf);
 
   auto mo_coeff_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, mo_coeff);
 
   Kokkos::TeamPolicy<ExecSpace> policy(space, N_quad, Kokkos::AUTO());
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
-
-  // Compute (A|B)
-  KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
-                   potential_collocation_scaled, 0.0, aux_overlap);
-
-  Kokkos::parallel_for(
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
-      KOKKOS_LAMBDA(int i, int j) {
-        aux_overlap_sym(i, j) = 0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
-      });
-
-  DeviceView2DLeft X = compute_half_inverse(aux_overlap_sym, lin_dep_threshold);
-  // Invert (A|B)
-  // DeviceView2DLeft X = compute_half_inverse(aux_overlap, lin_dep_threshold);
-  const int K = X.extent(1);
-  DeviceView2DLeft three_center_integral_scaled("Three_center_integral_scaled",
-                                                N_bf, K);
-
   // Loop over the occupied orbitals and compute contributions for each occupied
   // orbital
   for (unsigned int i = 0; i < N_occ; ++i) {
@@ -105,12 +88,15 @@ DeviceView2DLeft compute_exact_exchange(
 
     KokkosBlas::gemm(space, "N", "T", 1.0, potential_collocation_scaled,
                      basis_collocation_scaled, 0.0, three_center_integral);
-    KokkosBlas::gemm(space, "T", "N", 1.0, three_center_integral, X, 0.0,
-                     three_center_integral_scaled);
+
+    KokkosBlas::gemm(space, "T", "N", 1.0, three_center_integral,
+                     half_inverse_X, 0.0, three_center_integral_scaled);
+
     KokkosBlas::gemm(space, "N", "T", mo_coeff_h(i),
                      three_center_integral_scaled, three_center_integral_scaled,
                      1.0, result);
   }
+  Kokkos::fence();
   Kokkos::Profiling::popRegion();
   return result;
 }

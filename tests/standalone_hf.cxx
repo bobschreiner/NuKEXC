@@ -223,11 +223,27 @@ int main(int argc, char *argv[]) {
     DeviceView2DLeft potential_collocation_scaled("Potential collocation",
                                                   N_bf_aux, N_quad);
 
+    DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
+    DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
+
     ExecSpace space;
     fill_collocation(space, basis, grid.quad_points, basis_collocation);
     fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
     sto_potential_collocation_scaled(space, basis_aux, grid,
                                      potential_collocation_scaled);
+
+    // Compute (A|B)
+    KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
+                     potential_collocation_scaled, 0.0, aux_overlap);
+
+    Kokkos::parallel_for(
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
+        KOKKOS_LAMBDA(int i, int j) {
+          aux_overlap_sym(i, j) = 0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
+        });
+
+    DeviceView2DLeft half_inverse_X =
+        compute_half_inverse(aux_overlap_sym, cfg.lin_dep_threshold);
 
     // ---- Core Hamiltonian (overlap + H_core in Kokkos views) -------------
     auto hcore = compute_core_hamiltonian(basis, grid);
@@ -273,6 +289,7 @@ int main(int argc, char *argv[]) {
     auto fock_builder =
         [space, basis_collocation, basis_aux_collocation,
          potential_collocation_scaled, h_core, X_arma, N_bf, E_nuc, S_arma,
+         half_inverse_X,
          cfg](const OpenOrbitalOptimizer::DensityMatrix<double, double> &dm)
         -> std::pair<double, OpenOrbitalOptimizer::FockMatrix<double>> {
       const auto &orbitals = dm.first;     // vector<arma::mat>, one per block
@@ -313,7 +330,7 @@ int main(int argc, char *argv[]) {
       // J built from total density — same as RHF
       DeviceView2DLeft J = compute_coulomb(
           space, k_C_tot, k_occ_tot, basis_collocation, basis_aux_collocation,
-          potential_collocation_scaled, cfg.lin_dep_threshold);
+          potential_collocation_scaled, half_inverse_X);
 
       // K built separately per spin — pass 0/1 occupations (no occ prefactor)
       DeviceView2DLeft k_C_alpha = arma_to_kokkos(C_alpha, "C_alpha");
@@ -323,12 +340,11 @@ int main(int argc, char *argv[]) {
 
       DeviceView2DLeft K_alpha = compute_exact_exchange(
           space, k_C_alpha, k_occ_alpha, basis_collocation,
-          basis_aux_collocation, potential_collocation_scaled,
-          cfg.lin_dep_threshold);
+          basis_aux_collocation, potential_collocation_scaled, half_inverse_X);
 
       DeviceView2DLeft K_beta = compute_exact_exchange(
           space, k_C_beta, k_occ_beta, basis_collocation, basis_aux_collocation,
-          potential_collocation_scaled, cfg.lin_dep_threshold);
+          potential_collocation_scaled, half_inverse_X);
 
       // Convert to Kokkos for NuKEXC compute_coulomb / compute_exact_exchange
       auto J_arma = kokkos_to_arma(J);
