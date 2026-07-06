@@ -254,10 +254,12 @@ XC_result compute_gga(const DeviceView2DLeft collocation_values,
                       const DeviceView1D mo_coeff, const xc_func_type func) {
 
   ExecSpace space;
+
   // Make sure that the porovided xc functional is a GGA
-  if (func.info->family != XC_FAMILY_GGA) {
+  if (func.info->family != XC_FAMILY_GGA &&
+      func.info->family != XC_FAMILY_HYB_GGA) {
     throw std::runtime_error(
-        "Provided funtional is not a part of the GGA family");
+        "Provided funtional is not a part of the GGA or Hybrid GGA family");
   }
 
   // Get some constants
@@ -374,9 +376,13 @@ compute_gga_lsda(const DeviceView2DLeft collocation_values,
 
   ExecSpace space;
 
-  if (func.info->family != XC_FAMILY_GGA)
+  // Make sure that the porovided xc functional is a GGA
+  if (func.info->family != XC_FAMILY_GGA &&
+      func.info->family != XC_FAMILY_HYB_GGA) {
     throw std::runtime_error(
-        "Provided functional is not part of the GGA family");
+        "Provided funtional is not a part of the GGA or Hybrid GGA family");
+  }
+
   if (func.nspin != XC_POLARIZED)
     throw std::runtime_error(
         "compute_gga_lsda requires a functional initialized with XC_POLARIZED; "

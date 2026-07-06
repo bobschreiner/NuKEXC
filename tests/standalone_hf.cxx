@@ -412,6 +412,44 @@ int main(int argc, char *argv[]) {
     // ---- Check SCF converged to a sensible energy -------------------------
     double E_scf = solver.get_fock_build().first;
     std::cout << "SCF total energy: " << E_scf << " Eh\n";
+
+    // ---- HOMO-LUMO gap ---------------------------------------------------
+
+    auto final_fock =
+        solver.get_fock_matrix(); // {F_alpha, F_beta}, orthonormal basis
+    auto diagonalized =
+        solver.compute_orbitals(final_fock); // {orbitals, orbital_energies}
+    const auto &orbital_energies =
+        diagonalized.second; // vector<arma::vec>, one per block
+    const auto &occupations =
+        solver.get_orbital_occupations(); // vector<arma::vec>, matching order
+
+    auto find_homo_lumo = [](const arma::vec &energies, const arma::vec &occ,
+                             double occ_thresh = 0.5) {
+      double homo = -std::numeric_limits<double>::infinity();
+      double lumo = std::numeric_limits<double>::infinity();
+      for (arma::uword i = 0; i < energies.n_elem; ++i) {
+        if (occ(i) > occ_thresh)
+          homo = std::max(homo, energies(i));
+        else
+          lumo = std::min(lumo, energies(i));
+      }
+      return std::make_pair(homo, lumo);
+    };
+
+    auto [homo_a, lumo_a] = find_homo_lumo(orbital_energies[0], occupations[0]);
+    auto [homo_b, lumo_b] = find_homo_lumo(orbital_energies[1], occupations[1]);
+
+    double homo = std::max(homo_a, homo_b);
+    double lumo = std::min(lumo_a, lumo_b);
+    constexpr double Eh_to_eV = 27.211386245988;
+
+    std::cout << "\nHOMO energy : " << std::setprecision(10) << homo << " Eh  ("
+              << homo * Eh_to_eV << " eV)\n";
+    std::cout << "LUMO energy : " << std::setprecision(10) << lumo << " Eh  ("
+              << lumo * Eh_to_eV << " eV)\n";
+    std::cout << "HOMO-LUMO gap: " << (lumo - homo) << " Eh  ("
+              << (lumo - homo) * Eh_to_eV << " eV)\n";
   }
   Kokkos::finalize();
   return 0;

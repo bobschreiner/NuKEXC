@@ -94,6 +94,9 @@ FunctionalInfo lookup_functional(const std::string &name) {
     return {XC_GGA_X_B88, XCFamily::GGA, "gga_x_b88"};
   case fnv1a("gga_x_pw91"):
     return {XC_GGA_X_PW91, XCFamily::GGA, "gga_x_pw91"};
+  case fnv1a("gga_xc_b3lyp3"):
+    // 394 is the standard Libxc ID for B3LYP with VWN3
+    return {394, XCFamily::GGA, "gga_xc_b3lyp3"};
 
   // ---- GGA correlation ------------------------------------------------
   case fnv1a("gga_c_pbe"):
@@ -211,7 +214,7 @@ void print_config(const Config &cfg) {
 
   std::cout << "\n";
   std::cout << "┌───────────────────────" << h << "┐\n";
-  std::cout << "│    HF Configuration" << repeat(" ", width + 5) << "│\n";
+  std::cout << "│    DFT Configuration" << repeat(" ", width + 5) << "│\n";
   std::cout << "├───────────────────────" << h << "┤\n";
   std::cout << "│ Molecule file        │ " << std::setw(width) << std::left
             << cfg.xyz_file << " │\n";
@@ -325,9 +328,6 @@ int main(int argc, char *argv[]) {
 
     // ---- Resolve functionals from runtime strings via switch dispatch ----
     FunctionalInfo x_info = lookup_functional(cfg.xfunc);
-    FunctionalInfo c_info = lookup_functional(cfg.cfunc);
-    const bool need_gga =
-        (x_info.family == XCFamily::GGA) || (c_info.family == XCFamily::GGA);
 
     xc_func_type func_x;
     if (xc_func_init(&func_x, x_info.xc_id, XC_POLARIZED) != 0) {
@@ -336,13 +336,40 @@ int main(int argc, char *argv[]) {
           x_info.canonical_name + "'");
     }
 
+    // ---- Determine if the functional handles BOTH Exchange and Correlation
+    // ---- Libxc defines: XC_EXCHANGE=0, XC_CORRELATION=1,
+    // XC_EXCHANGE_CORRELATION=2
+    bool is_combined_xc = (func_x.info->kind == XC_EXCHANGE_CORRELATION);
+
     xc_func_type func_c;
-    if (xc_func_init(&func_c, c_info.xc_id, XC_POLARIZED) != 0) {
-      xc_func_end(&func_x);
-      throw std::runtime_error(
-          "Failed to initialize Libxc correlation functional '" +
-          c_info.canonical_name + "'");
+
+    FunctionalInfo c_info = lookup_functional(cfg.cfunc);
+    bool has_separate_c = false;
+
+    if (is_combined_xc) {
+      // For combined functionals (like B3LYP or M06), cfunc should either be
+      // ignored or match the exact same combined functional name to prevent
+      // double-counting.
+      has_separate_c = false;
+    } else {
+      // Fallback: This is a pure exchange component, we MUST initialize a
+      // correlation functional
+      if (xc_func_init(&func_c, c_info.xc_id, XC_POLARIZED) != 0) {
+        xc_func_end(&func_x);
+        throw std::runtime_error(
+            "Failed to initialize Libxc correlation functional '" +
+            c_info.canonical_name + "'");
+      }
+      has_separate_c = true;
     }
+
+    // ---- Check for GGA requirements ----
+    bool need_gga =
+        (x_info.family == XCFamily::GGA || c_info.family == XCFamily::GGA ||
+         func_x.info->family == XC_FAMILY_HYB_GGA);
+
+    // ---- Extract exact exchange fraction for Hybrids ----
+    double a_exx = xc_hyb_exx_coef(&func_x);
 
     // ---- Compute collocations
     // --------------------------------------------
@@ -433,8 +460,8 @@ int main(int argc, char *argv[]) {
         [space, grid, basis_collocation, basis_collocation_gx,
          basis_collocation_gy, basis_collocation_gz, basis_aux_collocation,
          potential_collocation_scaled, h_core, X_arma, half_inverse_X, N_bf,
-         E_nuc, S_arma, cfg, func_c, func_x, x_info,
-         c_info](const OpenOrbitalOptimizer::DensityMatrix<double, double> &dm)
+         E_nuc, S_arma, cfg, func_c, func_x, x_info, c_info, has_separate_c,
+         a_exx](const OpenOrbitalOptimizer::DensityMatrix<double, double> &dm)
         -> std::pair<double, OpenOrbitalOptimizer::FockMatrix<double>> {
       const auto &orbitals = dm.first;
       const auto &occupations = dm.second;
@@ -465,35 +492,73 @@ int main(int argc, char *argv[]) {
           space, k_C_tot, k_occ_tot, basis_collocation, basis_aux_collocation,
           potential_collocation_scaled, half_inverse_X);
 
+      auto J_arma = kokkos_to_arma(J);
+
       DeviceView2DLeft k_C_alpha = arma_to_kokkos(C_alpha, "C_alpha");
       DeviceView2DLeft k_C_beta = arma_to_kokkos(C_beta, "C_beta");
       DeviceView1D k_occ_alpha = arma_to_kokkos1d(occ_alpha, "occ_alpha");
       DeviceView1D k_occ_beta = arma_to_kokkos1d(occ_beta, "occ_beta");
 
-      // ---- Dispatch X and C independently based on their own family -----
+      // Always evaluate the exchange or combined XC functional
       XC_result_polarized E_x = evaluate_functional(
           x_info, func_x, basis_collocation, basis_collocation_gx,
           basis_collocation_gy, basis_collocation_gz, grid.weights, k_C_alpha,
           k_occ_alpha, k_C_beta, k_occ_beta);
 
-      XC_result_polarized E_c = evaluate_functional(
-          c_info, func_c, basis_collocation, basis_collocation_gx,
-          basis_collocation_gy, basis_collocation_gz, grid.weights, k_C_alpha,
-          k_occ_alpha, k_C_beta, k_occ_beta);
+      double E_exchange =
+          E_x.energy; // This holds total E_xc if is_combined_xc == true
+      double E_correlation = 0.0;
 
-      auto J_arma = kokkos_to_arma(J);
       auto Vx_alpha = kokkos_to_arma(E_x.potential_alpha);
       auto Vx_beta = kokkos_to_arma(E_x.potential_beta);
-      auto Vc_alpha = kokkos_to_arma(E_c.potential_alpha);
-      auto Vc_beta = kokkos_to_arma(E_c.potential_beta);
+      arma::mat Vc_alpha =
+          arma::zeros<arma::mat>(Vx_alpha.n_rows, Vx_alpha.n_cols);
+      arma::mat Vc_beta =
+          arma::zeros<arma::mat>(Vx_beta.n_rows, Vx_beta.n_cols);
 
-      double E_exchange = E_x.energy;
-      double E_correlation = E_c.energy;
+      // Only evaluate a second functional if it was explicitly split out
+      if (has_separate_c) {
+        XC_result_polarized E_c = evaluate_functional(
+            c_info, func_c, basis_collocation, basis_collocation_gx,
+            basis_collocation_gy, basis_collocation_gz, grid.weights, k_C_alpha,
+            k_occ_alpha, k_C_beta, k_occ_beta);
+
+        E_correlation = E_c.energy;
+        Vc_alpha = kokkos_to_arma(E_c.potential_alpha);
+        Vc_beta = kokkos_to_arma(E_c.potential_beta);
+      }
+
+      arma::mat K_alpha_arma =
+          arma::zeros<arma::mat>(Vx_alpha.n_rows, Vx_alpha.n_cols);
+      arma::mat K_beta_arma =
+          arma::zeros<arma::mat>(Vx_beta.n_rows, Vx_beta.n_cols);
+
+      // Compute Exact Exchange in case of hybrid functionals
+      double E_exact_exchange = 0.0;
+      if (a_exx > 0) {
+
+        DeviceView2DLeft K_alpha = compute_exact_exchange(
+            space, k_C_alpha, k_occ_alpha, basis_collocation,
+            basis_aux_collocation, potential_collocation_scaled,
+            half_inverse_X);
+
+        DeviceView2DLeft K_beta = compute_exact_exchange(
+            space, k_C_beta, k_occ_beta, basis_collocation,
+            basis_aux_collocation, potential_collocation_scaled,
+            half_inverse_X);
+        K_alpha_arma = kokkos_to_arma(K_alpha);
+        K_beta_arma = kokkos_to_arma(K_beta);
+
+        E_exact_exchange = -0.5 * a_exx *
+                           (arma::trace(D_alpha * K_alpha_arma) +
+                            arma::trace(D_beta * K_beta_arma));
+      }
 
       double E_core = arma::trace(D_tot * h_core);
       double E_coulomb = 0.5 * arma::trace(D_tot * J_arma);
 
-      double Etot = E_nuc + E_core + E_coulomb + E_exchange + E_correlation;
+      double Etot = E_nuc + E_core + E_coulomb + E_exchange + E_correlation +
+                    E_exact_exchange;
 
       std::cout << "Total energy        : " << std::setprecision(10) << Etot
                 << "\n";
@@ -507,8 +572,10 @@ int main(int argc, char *argv[]) {
       std::cout << "Two Electron Energy : " << std::setprecision(10)
                 << E_coulomb + E_exchange << "\n\n";
 
-      arma::mat F_alpha = h_core + J_arma + Vx_alpha + Vc_alpha;
-      arma::mat F_beta = h_core + J_arma + Vx_beta + Vc_beta;
+      arma::mat F_alpha =
+          h_core + J_arma - a_exx * K_alpha_arma + Vx_alpha + Vc_alpha;
+      arma::mat F_beta =
+          h_core + J_arma - a_exx * K_beta_arma + Vx_beta + Vc_beta;
 
       arma::mat F_alpha_orth = X_arma.t() * F_alpha * X_arma;
       arma::mat F_beta_orth = X_arma.t() * F_beta * X_arma;
@@ -547,10 +614,49 @@ int main(int argc, char *argv[]) {
     solver.run();
 
     xc_func_end(&func_x);
-    xc_func_end(&func_c);
+    if (has_separate_c)
+      xc_func_end(&func_c);
 
     double E_scf = solver.get_fock_build().first;
     std::cout << "SCF total energy: " << E_scf << " Eh\n";
+
+    // ---- HOMO-LUMO gap ---------------------------------------------------
+
+    auto final_fock =
+        solver.get_fock_matrix(); // {F_alpha, F_beta}, orthonormal basis
+    auto diagonalized =
+        solver.compute_orbitals(final_fock); // {orbitals, orbital_energies}
+    const auto &orbital_energies =
+        diagonalized.second; // vector<arma::vec>, one per block
+    const auto &occupations =
+        solver.get_orbital_occupations(); // vector<arma::vec>, matching order
+
+    auto find_homo_lumo = [](const arma::vec &energies, const arma::vec &occ,
+                             double occ_thresh = 0.5) {
+      double homo = -std::numeric_limits<double>::infinity();
+      double lumo = std::numeric_limits<double>::infinity();
+      for (arma::uword i = 0; i < energies.n_elem; ++i) {
+        if (occ(i) > occ_thresh)
+          homo = std::max(homo, energies(i));
+        else
+          lumo = std::min(lumo, energies(i));
+      }
+      return std::make_pair(homo, lumo);
+    };
+
+    auto [homo_a, lumo_a] = find_homo_lumo(orbital_energies[0], occupations[0]);
+    auto [homo_b, lumo_b] = find_homo_lumo(orbital_energies[1], occupations[1]);
+
+    double homo = std::max(homo_a, homo_b);
+    double lumo = std::min(lumo_a, lumo_b);
+    constexpr double Eh_to_eV = 27.211386245988;
+
+    std::cout << "\nHOMO energy : " << std::setprecision(10) << homo << " Eh  ("
+              << homo * Eh_to_eV << " eV)\n";
+    std::cout << "LUMO energy : " << std::setprecision(10) << lumo << " Eh  ("
+              << lumo * Eh_to_eV << " eV)\n";
+    std::cout << "HOMO-LUMO gap: " << (lumo - homo) << " Eh  ("
+              << (lumo - homo) * Eh_to_eV << " eV)\n";
   }
   Kokkos::finalize();
   return 0;

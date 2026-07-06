@@ -74,7 +74,7 @@ DeviceView2DLeft compute_exact_exchange(
   for (unsigned int i = 0; i < N_occ; ++i) {
 
     Kokkos::parallel_for(
-        "Scale collocation ", policy,
+        "Scale collocation exact exhange", policy,
         KOKKOS_LAMBDA(const member_type &team_member) {
           const int g = team_member.league_rank();
           const double expansion_coeff_g = expansion_coeff(i, g);
