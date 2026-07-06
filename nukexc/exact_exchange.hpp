@@ -53,7 +53,8 @@ DeviceView2DLeft compute_exact_exchange(
 
   DeviceView2DLeft basis_collocation_scaled("Basis collocation Scaled", N_bf,
                                             N_quad);
-  DeviceView1DLeft expansion_coeff("Expansion coeff", N_quad);
+  DeviceView2DLeft expansion_coeff("Expansion coeff", N_occ, N_quad);
+
   DeviceView2DLeft three_center_integral("Three_center_integral", N_bf_aux,
                                          N_bf);
   DeviceView2DLeft three_center_integral_scaled("Three_center_integral_scaled",
@@ -66,18 +67,17 @@ DeviceView2DLeft compute_exact_exchange(
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
   // Loop over the occupied orbitals and compute contributions for each occupied
   // orbital
+
+  KokkosBlas::gemm(space, "T", "N", 1.0, mo_orbitals, basis_collocation, 0.0,
+                   expansion_coeff);
+
   for (unsigned int i = 0; i < N_occ; ++i) {
-
-    auto mo_orbitals_subview = Kokkos::subview(mo_orbitals, Kokkos::ALL, i);
-
-    KokkosBlas::gemv(space, "T", 1.0, basis_collocation, mo_orbitals_subview,
-                     0.0, expansion_coeff);
 
     Kokkos::parallel_for(
         "Scale collocation ", policy,
         KOKKOS_LAMBDA(const member_type &team_member) {
           const int g = team_member.league_rank();
-          const double expansion_coeff_g = expansion_coeff(g);
+          const double expansion_coeff_g = expansion_coeff(i, g);
 
           Kokkos::parallel_for(
               Kokkos::TeamThreadRange(team_member, N_bf), [=](const int mu) {
