@@ -1,0 +1,25 @@
+# NuKEXC library dependencies - CPU backend (Kokkos::Serial/OpenMP + LAPACK)
+spack:
+  include:
+  - ../common/packages.yaml
+
+  repos:
+  - ../repo
+
+  concretizer:
+    unify: true
+
+  compilers: []   # rely on `spack compiler find`; pin below if you need a
+                  # specific toolchain, e.g. append %gcc@12.3.0 to every spec
+
+  specs:
+  - kokkos@4 +openmp ~cuda ~rocm ~sycl cxxstd=20 %gcc
+  - kokkos-kernels@4 +openmp +blas +lapack
+    ^kokkos +openmp ~cuda ~rocm ~sycl
+    ^openblas threads=openmp
+  - arborx@1 +openmp ~cuda ~rocm ~sycl
+    ^kokkos +openmp ~cuda ~rocm ~sycl
+  - libxc@6 +cxx
+  - integratorxx@master
+
+  view: true

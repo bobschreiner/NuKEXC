@@ -450,6 +450,7 @@ compute_gga_lsda(const DeviceView2DLeft collocation_values,
   auto vuu_hv = Kokkos::create_mirror_view(vsigma_uu);
   auto vud_hv = Kokkos::create_mirror_view(vsigma_ud);
   auto vdd_hv = Kokkos::create_mirror_view(vsigma_dd);
+
   for (int g = 0; g < N_quad; ++g) {
     exc_hv(g) = exc_h(g);
     vu_hv(g) = vrho_pol_h(2 * g);
@@ -458,6 +459,7 @@ compute_gga_lsda(const DeviceView2DLeft collocation_values,
     vud_hv(g) = vsigma_pol_h(3 * g + 1);
     vdd_hv(g) = vsigma_pol_h(3 * g + 2);
   }
+
   Kokkos::deep_copy(exc, exc_hv);
   Kokkos::deep_copy(vrho_up, vu_hv);
   Kokkos::deep_copy(vrho_down, vd_hv);

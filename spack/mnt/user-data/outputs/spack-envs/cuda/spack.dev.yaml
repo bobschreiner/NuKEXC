@@ -1,0 +1,30 @@
+# Same as spack.yaml, plus test-only packages. cuda_arch must match spack.yaml.
+spack:
+  include:
+  - ../common/packages.yaml
+
+  repos:
+  - ../repo
+
+  concretizer:
+    unify: true
+
+  specs:
+  - kokkos@4 +cuda +cuda_lambda +wrapper ~rocm ~sycl cxxstd=20
+    cuda_arch=80
+    %gcc
+    ^cuda@12
+  - kokkos-kernels@4 +cublas +cusolver +cusparse
+    ^kokkos +cuda +wrapper cuda_arch=80 ~rocm ~sycl
+    ^cuda@12
+  - arborx@1 +cuda ~rocm ~sycl
+    ^kokkos +cuda +wrapper cuda_arch=80 ~rocm ~sycl
+    ^cuda@12
+  - libxc@6 +cxx
+  - integratorxx@master
+  # --- test-only, from here down ---
+  - catch2@3
+  - armadillo ^openblas threads=openmp
+  - open-orbital-optimizer
+
+  view: true

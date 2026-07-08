@@ -1,0 +1,30 @@
+# Same as spack.yaml, plus test-only packages. amdgpu_target must match spack.yaml.
+spack:
+  include:
+  - ../common/packages.yaml
+
+  repos:
+  - ../repo
+
+  concretizer:
+    unify: true
+
+  specs:
+  - kokkos@4 +rocm ~cuda ~sycl cxxstd=20
+    amdgpu_target=gfx90a
+    %rocmcc
+    ^hip@6
+  - kokkos-kernels@4 +rocblas +rocsolver +rocsparse
+    ^kokkos +rocm amdgpu_target=gfx90a ~cuda ~sycl
+    ^hip@6
+  - arborx@1 +rocm ~cuda ~sycl
+    ^kokkos +rocm amdgpu_target=gfx90a ~cuda ~sycl
+    ^hip@6
+  - libxc@6 +cxx %rocmcc
+  - integratorxx@master %rocmcc
+  # --- test-only, from here down ---
+  - catch2@3 %rocmcc
+  - armadillo %rocmcc
+  - open-orbital-optimizer %rocmcc
+
+  view: true

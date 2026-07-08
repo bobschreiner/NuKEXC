@@ -1,0 +1,25 @@
+spack:
+  include:
+  - ../common/packages.yaml
+
+  repos:
+  - ../repo
+
+  concretizer:
+    unify: true
+
+  specs:
+  - kokkos@4 +sycl ~cuda ~rocm cxxstd=20 %oneapi
+  - kokkos-kernels@4 +mkl
+    ^kokkos +sycl ~cuda ~rocm %oneapi
+    ^intel-oneapi-mkl
+  - arborx@1 +sycl ~cuda ~rocm
+    ^kokkos +sycl ~cuda ~rocm %oneapi
+  - libxc@6 +cxx %oneapi
+  - integratorxx@master %oneapi
+  # --- test-only, from here down ---
+  - catch2@3 %oneapi
+  - armadillo %oneapi
+  - open-orbital-optimizer %oneapi
+
+  view: true

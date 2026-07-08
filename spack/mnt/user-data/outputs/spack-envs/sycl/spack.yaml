@@ -1,0 +1,27 @@
+# NuKEXC library dependencies - Intel GPU backend (Kokkos::SYCL + MKL/LAPACK)
+#
+# Requires Intel oneAPI (icpx) registered as an external compiler - see
+# ../common/packages.yaml. Kokkos-Kernels does not have a "cusolver-style"
+# native SYCL solver TPL, so it falls back to oneMKL for LAPACK-equivalent
+# functionality on Intel GPUs.
+spack:
+  include:
+  - ../common/packages.yaml
+
+  repos:
+  - ../repo
+
+  concretizer:
+    unify: true
+
+  specs:
+  - kokkos@4 +sycl ~cuda ~rocm cxxstd=20 %oneapi
+  - kokkos-kernels@4 +mkl
+    ^kokkos +sycl ~cuda ~rocm %oneapi
+    ^intel-oneapi-mkl
+  - arborx@1 +sycl ~cuda ~rocm
+    ^kokkos +sycl ~cuda ~rocm %oneapi
+  - libxc@6 +cxx %oneapi
+  - integratorxx@master %oneapi
+
+  view: true
