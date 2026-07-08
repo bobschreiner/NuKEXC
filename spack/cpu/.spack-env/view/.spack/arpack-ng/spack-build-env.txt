@@ -1,1 +1,0 @@
-/Users/bobschreiner/spack/opt/spack/darwin-m2/arpack-ng-3.9.1-ewnb4347e2psxgzhr72vm6dztaxxo4vd/.spack/spack-build-env.txt

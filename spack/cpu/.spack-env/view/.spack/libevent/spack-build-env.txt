@@ -1,1 +1,0 @@
-/Users/bobschreiner/spack/opt/spack/darwin-m2/libevent-2.1.12-f4qc76jfephcmyakk2teopszitqpkoix/.spack/spack-build-env.txt

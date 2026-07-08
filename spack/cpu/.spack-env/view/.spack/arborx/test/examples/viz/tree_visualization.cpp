@@ -1,1 +1,0 @@
-/Users/bobschreiner/spack/opt/spack/darwin-m2/arborx-2.1-7kbpc6spa3foe2kc2tqm456jtw3vaowc/.spack/test/examples/viz/tree_visualization.cpp

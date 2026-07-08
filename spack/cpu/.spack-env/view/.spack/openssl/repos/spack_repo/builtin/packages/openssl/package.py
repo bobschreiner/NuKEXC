@@ -1,1 +1,0 @@
-/Users/bobschreiner/spack/opt/spack/darwin-m2/openssl-3.6.1-tyizu6petk4wpu7mk4465fvmbrsvvo3l/.spack/repos/spack_repo/builtin/packages/openssl/package.py

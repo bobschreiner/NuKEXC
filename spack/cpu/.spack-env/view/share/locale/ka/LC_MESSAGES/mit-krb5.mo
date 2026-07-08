@@ -1,1 +1,0 @@
-/Users/bobschreiner/spack/opt/spack/darwin-m2/krb5-1.22.2-y3vi736aszaa4xjecasdgxw7ikrm3nfe/share/locale/ka/LC_MESSAGES/mit-krb5.mo

@@ -1,1 +1,0 @@
-/Users/bobschreiner/spack/opt/spack/darwin-m2/kokkos-kernels-4.7.04-yhv4qaspmr67qn6rnmlsyuj54kdcla3d/include/KokkosBatched_Getrf_Serial_Impl.hpp

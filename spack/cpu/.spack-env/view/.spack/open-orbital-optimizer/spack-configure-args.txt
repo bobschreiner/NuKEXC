@@ -1,1 +1,0 @@
-/Users/bobschreiner/spack/opt/spack/darwin-m2/open-orbital-optimizer-0.3.0-4aye7244gs3uan55pfgluooglrb4yskl/.spack/spack-configure-args.txt

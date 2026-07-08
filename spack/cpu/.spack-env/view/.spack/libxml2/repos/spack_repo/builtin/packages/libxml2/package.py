@@ -1,1 +1,0 @@
-/Users/bobschreiner/spack/opt/spack/darwin-m2/libxml2-2.15.3-orz7gsppateljhkypwtrxh5pguo2iqmk/.spack/repos/spack_repo/builtin/packages/libxml2/package.py

@@ -1,1 +1,0 @@
-/Users/bobschreiner/spack/opt/spack/darwin-m2/prrte-4.1.0-pxuvop6q73w7edozglylblkmuapymzzg/include/prte_version.h

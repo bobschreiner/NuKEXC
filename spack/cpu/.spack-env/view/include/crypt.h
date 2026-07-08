@@ -1,1 +1,0 @@
-/Users/bobschreiner/spack/opt/spack/darwin-m2/libxcrypt-4.5.2-nxtglyl6eydf7qpnz7qg65gyk46zaoxy/include/crypt.h
