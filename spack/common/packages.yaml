@@ -1,0 +1,49 @@
+packages:
+  all:
+    providers:
+      mpi: [cray-mpich, openmpi, mpich]
+
+  # --- Point spack at the cluster-provided CUDA toolkit instead of building
+  # one from source. Run `spack external find cuda` on a GPU node and paste
+  # the result here, or edit the prefix manually.
+  cuda:
+    externals:
+    - spec: cuda@12.4
+      prefix: /usr/local/cuda-12.4
+    buildable: false
+
+  # --- Same idea for ROCm.
+  hip:
+    externals:
+    - spec: hip@6.0
+      prefix: /opt/rocm-6.0.0
+    buildable: false
+  hsa-rocr-dev:
+    externals:
+    - spec: hsa-rocr-dev@6.0
+      prefix: /opt/rocm-6.0.0
+    buildable: false
+  llvm-amdgpu:
+    externals:
+    - spec: llvm-amdgpu@6.0
+      prefix: /opt/rocm-6.0.0
+    buildable: false
+
+  # --- Intel oneAPI compilers/MKL for the SYCL backend (icpx).
+  intel-oneapi-compilers:
+    externals:
+    - spec: intel-oneapi-compilers@2024.1
+      prefix: /opt/intel/oneapi
+    buildable: false
+  intel-oneapi-mkl:
+    externals:
+    - spec: intel-oneapi-mkl@2024.1
+      prefix: /opt/intel/oneapi
+    buildable: false
+
+  # --- Cray/vendor MPI, if applicable
+  # mpich:
+  #   externals:
+  #   - spec: mpich@8.1.28
+  #     prefix: /opt/cray/pe/mpich/8.1.28/ofi/gnu/9.1
+  #   buildable: false

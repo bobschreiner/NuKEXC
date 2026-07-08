@@ -1,0 +1,32 @@
+# NuKEXC library dependencies - NVIDIA GPU backend (Kokkos::Cuda + cuSOLVER)
+#
+# Set CUDA_ARCH to match your cluster's GPU:
+#   70 = V100, 80 = A100, 90 = H100/H200, 90a = GH200
+spack:
+  include:
+  - ../common/packages.yaml
+
+  repos:
+  - ../repo
+
+  concretizer:
+    unify: true
+
+  # EDIT ME: set to your GPU's cuda_arch (70/80/90/90a/...). It must be
+  # identical on every line below - spack.yaml has no variable
+  # interpolation, so this is a plain find-and-replace.
+  specs:
+  - kokkos@4 +cuda +cuda_lambda +wrapper ~rocm ~sycl cxxstd=20
+    cuda_arch=80
+    %gcc
+    ^cuda@12
+  - kokkos-kernels@4 +cublas +cusolver +cusparse
+    ^kokkos +cuda +wrapper cuda_arch=80 ~rocm ~sycl
+    ^cuda@12
+  - arborx@2.1 +cuda ~rocm ~sycl
+    ^kokkos +cuda +wrapper cuda_arch=80 ~rocm ~sycl
+    ^cuda@12
+  - libxc@7.0.0
+  - integratorxx@master
+
+  view: true

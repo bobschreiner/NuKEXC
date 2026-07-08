@@ -291,11 +291,20 @@ XC_result_polarized evaluate_functional(
     const DeviceView2DLeft &basis_collocation_gz, const DeviceView1D &weights,
     const DeviceView2DLeft &k_C_alpha, const DeviceView1D &k_occ_alpha,
     const DeviceView2DLeft &k_C_beta, const DeviceView1D &k_occ_beta) {
-  switch (info.family) {
-  case XCFamily::LDA:
+
+
+  switch (func.info->family) {
+  case (XC_FAMILY_LDA):
     return compute_lsda(basis_collocation, weights, k_C_alpha, k_occ_alpha,
                         k_C_beta, k_occ_beta, func);
-  case XCFamily::GGA:
+  case XC_FAMILY_HYB_LDA:
+    return compute_lsda(basis_collocation, weights, k_C_alpha, k_occ_alpha,
+                        k_C_beta, k_occ_beta, func);
+  case XC_FAMILY_GGA:
+    return compute_gga_lsda(basis_collocation, basis_collocation_gx,
+                            basis_collocation_gy, basis_collocation_gz, weights,
+                            k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta, func);
+  case XC_FAMILY_HYB_GGA:
     return compute_gga_lsda(basis_collocation, basis_collocation_gx,
                             basis_collocation_gy, basis_collocation_gz, weights,
                             k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta, func);
@@ -342,8 +351,8 @@ int main(int argc, char *argv[]) {
     bool is_combined_xc = (func_x.info->kind == XC_EXCHANGE_CORRELATION);
 
     xc_func_type func_c;
-
     FunctionalInfo c_info = lookup_functional(cfg.cfunc);
+
     bool has_separate_c = false;
 
     if (is_combined_xc) {
@@ -362,11 +371,6 @@ int main(int argc, char *argv[]) {
       }
       has_separate_c = true;
     }
-
-    // ---- Check for GGA requirements ----
-    bool need_gga =
-        (x_info.family == XCFamily::GGA || c_info.family == XCFamily::GGA ||
-         func_x.info->family == XC_FAMILY_HYB_GGA);
 
     // ---- Extract exact exchange fraction for Hybrids ----
     double a_exx = xc_hyb_exx_coef(&func_x);
@@ -408,17 +412,12 @@ int main(int argc, char *argv[]) {
 
     // ---- GGA basis-function gradient collocations (only if needed) -------
 
-    DeviceView2DLeft basis_collocation_gx("Basis collocation dX", N_bf,
-                                          need_gga ? N_quad : 0);
-    DeviceView2DLeft basis_collocation_gy("Basis collocation dY", N_bf,
-                                          need_gga ? N_quad : 0);
-    DeviceView2DLeft basis_collocation_gz("Basis collocation dZ", N_bf,
-                                          need_gga ? N_quad : 0);
-    if (need_gga) {
-      fill_grad_collocation(space, basis, grid.quad_points,
-                            basis_collocation_gx, basis_collocation_gy,
-                            basis_collocation_gz);
-    }
+    DeviceView2DLeft basis_collocation_gx("Basis collocation dX", N_bf, N_quad);
+    DeviceView2DLeft basis_collocation_gy("Basis collocation dY", N_bf, N_quad);
+    DeviceView2DLeft basis_collocation_gz("Basis collocation dZ", N_bf, N_quad);
+
+    fill_grad_collocation(space, basis, grid.quad_points, basis_collocation_gx,
+                          basis_collocation_gy, basis_collocation_gz);
 
     // ---- Core Hamiltonian (overlap + H_core in Kokkos views)
     // -------------
@@ -500,6 +499,7 @@ int main(int argc, char *argv[]) {
       DeviceView1D k_occ_beta = arma_to_kokkos1d(occ_beta, "occ_beta");
 
       // Always evaluate the exchange or combined XC functional
+
       XC_result_polarized E_x = evaluate_functional(
           x_info, func_x, basis_collocation, basis_collocation_gx,
           basis_collocation_gy, basis_collocation_gz, grid.weights, k_C_alpha,

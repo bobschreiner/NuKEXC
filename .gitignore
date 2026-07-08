@@ -14,7 +14,8 @@ CMakeUserPresets.json
 build*/
 src/kokkos_config.hpp
 
-
+spack.lock
+.spack*/
 
 # CLion
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

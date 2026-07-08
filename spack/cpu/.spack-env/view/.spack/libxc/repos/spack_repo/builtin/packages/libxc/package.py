@@ -1,0 +1,1 @@
+/Users/bobschreiner/spack/opt/spack/darwin-m2/libxc-7.0.0-u52wucxcnxcvaef2ohelhfpcy3fszu2n/.spack/repos/spack_repo/builtin/packages/libxc/package.py

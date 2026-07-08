@@ -1,0 +1,1 @@
+/Users/bobschreiner/spack/opt/spack/darwin-m2/pigz-2.8-dzk763i6pvqvoietcjdkvu4xzvojkdbe/.spack/repos/spack_repo/builtin/packages/pigz/package.py

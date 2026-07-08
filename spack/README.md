@@ -3,18 +3,19 @@
 ## Layout
 
 ```
-spack-envs/
-  common/packages.yaml   site config: externals (CUDA/ROCm/oneAPI toolkits, MPI, target arch)
-  repo/                  custom spack package repo (IntegratorXX, OpenOrbitalOptimizer
-                          are not in the spack builtin repo)
-  cpu/spack.yaml         library-only deps, Kokkos::Serial+OpenMP, LAPACK/OpenBLAS
-  cpu/spack.dev.yaml     same + test deps (Catch2, Armadillo, OpenOrbitalOptimizer)
-  cuda/spack.yaml        library-only, Kokkos::Cuda, cuBLAS/cuSOLVER
-  cuda/spack.dev.yaml    + test deps
-  rocm/spack.yaml        library-only, Kokkos::HIP, rocBLAS/rocSOLVER
-  rocm/spack.dev.yaml    + test deps
-  sycl/spack.yaml         library-only, Kokkos::SYCL, oneMKL
-  sycl/spack.dev.yaml     + test deps
+spack/
+      common/packages.yaml   site config: externals (CUDA/ROCm/oneAPI toolkits, MPI, target arch)
+      repo/                  custom spack package repo (IntegratorXX, OpenOrbitalOptimizer
+                              are not in the spack builtin repo)
+      cpu/spack.yaml         library-only deps, Kokkos::Serial+OpenMP, LAPACK/OpenBLAS
+      cpu/spack.dev.yaml     same + test deps (Catch2, Armadillo, OpenOrbitalOptimizer)
+      cuda/spack.yaml        library-only, Kokkos::Cuda, cuBLAS/cuSOLVER
+      cuda/spack.dev.yaml    + test deps
+      rocm/spack.yaml        library-only, Kokkos::HIP, rocBLAS/rocSOLVER
+      rocm/spack.dev.yaml    + test deps
+      sycl/spack.yaml         library-only, Kokkos::SYCL, oneMKL
+      sycl/spack.dev.yaml     + test deps
+
 ```
 
 One directory = one target backend = one compiler toolchain. That's the
@@ -87,6 +88,39 @@ Repeat with `cpu/`, `rocm/`, `sycl/` on the respective partitions/login
 nodes. If your cluster has all backends visible from one login node, you can
 have all four environments installed side by side; just `spack env
 activate` the one matching the partition you're about to build/run on.
+
+## Testing this locally on a laptop first
+
+You don't need HPC access or a GPU to validate that these environments are
+well-formed. Spack itself is just a Python-based dependency resolver, so
+concretization (does the dependency graph resolve at all, are variant names
+valid, do version constraints conflict) works anywhere:
+
+```bash
+git clone -c feature.manyFiles=true https://github.com/spack/spack.git ~/spack
+. ~/spack/share/spack/setup-env.sh   # add to your shell rc file
+spack compiler find
+spack external find                  # picks up cmake/python already installed
+```
+
+Then, per environment:
+
+```bash
+cd cpu   # or cuda/, rocm/, sycl/
+spack env create nukexc-cpu spack.yaml
+spack env activate nukexc-cpu
+spack repo add ../repo
+spack concretize -f
+```
+
+- `cpu/spack.yaml` will fully **build** on a laptop (`spack install`) - this
+  is the best end-to-end check, including the two custom recipes in `repo/`.
+- `cuda/`, `rocm/`, `sycl/` will **concretize** fine without the actual
+  hardware/toolchain, which is enough to catch bad variant names or version
+  conflicts, but `spack install` will fail without `nvcc`/`hipcc`/`icpx`.
+- `common/packages.yaml`'s externals (CUDA/ROCm/oneAPI prefixes) point at
+  cluster paths that won't exist locally - comment those blocks out (or
+  just don't `install` those environments) when testing on a laptop.
 
 ## Things to double-check before relying on this
 

@@ -1,0 +1,1 @@
+/Users/bobschreiner/spack/opt/spack/darwin-m2/zlib-ng-2.3.3-vhbc5paxp4cskjnzhlx3j56o3hnismoe/.spack/repos/spack_repo/builtin/packages/zlib_ng/package.py

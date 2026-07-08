@@ -1,0 +1,1 @@
+/Users/bobschreiner/spack/opt/spack/darwin-m2/superlu-7.0.1-furkfnldlwzi5c67ietcbnyarh76rvs7/.spack/test/EXAMPLE/dlinsolx.c

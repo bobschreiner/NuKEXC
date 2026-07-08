@@ -1,0 +1,1 @@
+/Users/bobschreiner/spack/opt/spack/darwin-m2/kokkos-kernels-4.7.04-yhv4qaspmr67qn6rnmlsyuj54kdcla3d/include/KokkosSparse_spgemm_impl_triangle_no_compression.hpp

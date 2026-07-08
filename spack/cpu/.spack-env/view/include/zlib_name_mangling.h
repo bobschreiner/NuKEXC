@@ -1,0 +1,1 @@
+/Users/bobschreiner/spack/opt/spack/darwin-m2/zlib-ng-2.3.3-vhbc5paxp4cskjnzhlx3j56o3hnismoe/include/zlib_name_mangling.h
