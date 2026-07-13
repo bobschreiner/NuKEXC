@@ -1184,7 +1184,6 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_sparse(
                            epsilon_shift;
                 v_scratch(local_g) -= double(Z(k)) / r;
               }
-              v_scratch(local_g) = v_scratch(local_g);
             });
 
         team_member.team_barrier();

@@ -195,7 +195,7 @@ void print_results(const std::vector<BenchmarkResult> &results, bool screened) {
 
 std::vector<std::pair<std::string, Molecule>> make_molecules() {
   std::vector<std::pair<std::string, Molecule>> mol_list;
-#ifdef KOKKOS_ENABLE_HIP
+#if defined(KOKKOS_ENABLE_HIP) || defined(KOKKOS_ENABLE_CUDA)
   mol_list.push_back({"taxol", make_taxol()});
 #else 
   mol_list.push_back({"water", make_water()});

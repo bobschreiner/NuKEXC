@@ -33,23 +33,6 @@
 using namespace Nukexc;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-// Brute-force reference: for each box, collect all basis indices whose
-// cutoff sphere intersects the box.  A sphere intersects a box iff the
-// distance from the sphere center to the nearest point in the box is less
-// than the cutoff radius.
-static double point_box_dist_sq(const Point &p, const Box &b) {
-  double d2 = 0.0;
-  for (int k = 0; k < 3; ++k) {
-    double lo = b.minCorner()._coords[k];
-    double hi = b.maxCorner()._coords[k];
-    double c = p._coords[k];
-    double e = std::max(lo - c, 0.0) + std::max(c - hi, 0.0);
-    d2 += e * e;
-  }
-  return d2;
-}
-
 void create_histogram(std::vector<double> percentages, int num_bins,
                       const std::string &output_stem = "histogram") {
   if (percentages.empty() || num_bins <= 0)
