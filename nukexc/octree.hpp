@@ -146,6 +146,15 @@ create_shell_bounding_boxes(const FlatGrid &grid) {
   ExecSpace{}.fence();
   return boxes;
 }
+
+struct NeighborInsertCallback {
+  template <typename Query, typename Value, typename Output>
+  KOKKOS_FUNCTION void operator()(Query const &, Value const &value,
+                                  Output const &out) const {
+    out(value.index);
+  }
+};
+
 void build_neighbor_list(const STOBasisSet basis,
                          const Kokkos::View<Box *, ExecSpace> &bounding_boxes,
                          const int max_points_per_box, const int total_points,
@@ -192,16 +201,8 @@ void build_neighbor_list(const STOBasisSet basis,
   Kokkos::View<int *, ExecSpace> neighbors("neighbors", 0);
 
   // Use a custom callback to extract the index from PairValueIndex
-  bvh.query(
-      ExecSpace{}, queries,
-      KOKKOS_LAMBDA(auto const &query, auto const &value, auto const &out) {
-        // 'value' is the PairValueIndex{Speh, Index}
-        // 'out' is the internal mechanism that fills your 'neighbors' view
-        out(value.index);
-      },
-      neighbors, offsets);
+  bvh.query(ExecSpace{}, queries, NeighborInsertCallback{}, neighbors, offsets);
 
-  ExecSpace{}.fence();
   using policy = Kokkos::TeamPolicy<ExecSpace>;
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
 
@@ -215,7 +216,6 @@ void build_neighbor_list(const STOBasisSet basis,
             Kokkos::subview(neighbors, Kokkos::make_pair(start, end));
         Kokkos::Experimental::sort_team(team_member, segment);
       });
-  ExecSpace{}.fence();
 
   neighbor_list.neighbors = neighbors;
   neighbor_list.offsets = offsets;
