@@ -21,6 +21,7 @@
 #include <ArborX.hpp>
 
 #include "grid.hpp"
+#include "nukexc/stobasis.hpp"
 #include "nukexc_config.hpp"
 
 #include <detail/ArborX_Predicates.hpp>
@@ -145,8 +146,7 @@ create_shell_bounding_boxes(const FlatGrid &grid) {
   ExecSpace{}.fence();
   return boxes;
 }
-template <typename BASIS>
-void build_neighbor_list(const BASIS basis,
+void build_neighbor_list(const STOBasisSet basis,
                          const Kokkos::View<Box *, ExecSpace> &bounding_boxes,
                          const int max_points_per_box, const int total_points,
                          NeighborList &neighbor_list) {
