@@ -495,7 +495,6 @@ TEST_CASE("Solid Harmonics vs precomputed solid harmonics",
   Kokkos::View<double *[3]> grad_solid_pre("Analytical grad solid_pre", npts);
   auto grad_solid_pre_h = Kokkos::create_mirror_view(grad_solid_pre);
 
-  double fd_step = 1e-7;
   /*
    * Compare analytical spherical harmonics in cartesian coordinates to finite
    * difference solutions

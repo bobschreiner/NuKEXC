@@ -301,7 +301,6 @@ CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
     int current_batch_size = std::min(CHUNK_SIZE, total_quad_points - start);
     bool even = (start / CHUNK_SIZE) % 2 == 0;
 
-    auto &col_cur = even ? col_a : col_b;
     auto &wt_ov_cur = even ? wt_overlap_a : wt_overlap_b;
     auto &wt_nuc_cur = even ? wt_nuclear_a : wt_nuclear_b;
     auto &Gx_cur = even ? Gx_a : Gx_b;
@@ -398,7 +397,6 @@ CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
   space_b.fence();
 
   // Form H = T + V_n
-  int total = N * N;
   auto T = result.kinetic;
   auto V = result.nuclear;
   auto H = result.hamiltonian;

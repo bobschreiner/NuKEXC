@@ -228,7 +228,6 @@ STOBasisSet load_adf_basis(const Molecule &mol,
       continue;
 
     std::string line;
-    int current_l = 0;
 
     // Skip all lines until we find the basis keyword
     std::string basis_keyword = fit ? "FIT" : "BASIS";

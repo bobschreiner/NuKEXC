@@ -81,7 +81,6 @@ TEST_CASE("H20", "[h20_weights]") {
 
   // Generate water
   Molecule mol = make_water();
-  unsigned int natoms = mol.natoms;
   STOBasisSet stobasis = load_adf_basis(mol);
   FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol);
 
