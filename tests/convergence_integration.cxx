@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <cmath>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <string_view>
@@ -35,8 +36,8 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
-#include <nukexc/grid.hpp>
 #include <nukexc/core_hamiltonian.hpp>
+#include <nukexc/grid.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/partitioning.hpp>
 #include <nukexc/stobasis.hpp>
@@ -55,6 +56,8 @@ using de_type = IntegratorXX::Delley<double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 using wo_type = IntegratorXX::Womersley<double>;
 
+using RecorderFn = std::function<void(size_t, size_t, size_t, size_t, double,
+                                      double, double, double, double)>;
 // ── Config
 // ────────────────────────────────────────────────────────────────────
 
@@ -151,11 +154,12 @@ CoreHamiltonianResult compute_reference(const Config cfg, size_t nrad,
   return core;
 }
 
-template <typename radial_type, typename angular_type, typename REC>
+template <typename radial_type, typename angular_type>
 void convergence_analysis(const Config &cfg,
                           const CoreHamiltonianResult &ref_core,
                           const size_t &nrad, const size_t &ang_order,
-                          REC recorder) {
+                          RecorderFn const &recorder) {
+
   using angular_traits = IntegratorXX::quadrature_traits<angular_type>;
 
   Molecule mol;
@@ -322,7 +326,7 @@ int main(int argc, char *argv[]) {
         compute_reference<radial_type, angular_type>(cfg, nrad_max,
                                                      nang_order_max);
 
-    std::cout << "\n--- Final Convergence for " << cfg.xyz_file <<"  ---\n ";
+    std::cout << "\n--- Final Convergence for " << cfg.xyz_file << "  ---\n ";
     std::cout << std::setw(10) << "rad_pts" << std::setw(10) << "ang_pts"
               << std::setw(15) << "pts_per_atom" << std::setw(15) << "pts_total"
               << std::setw(20) << "err_overlap_diag" << std::setw(20)

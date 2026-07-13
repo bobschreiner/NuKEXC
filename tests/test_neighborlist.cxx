@@ -50,18 +50,6 @@ static double point_box_dist_sq(const Point &p, const Box &b) {
   return d2;
 }
 
-static std::vector<std::vector<int>>
-brute_force_neighbors(const std::vector<Box> &boxes,
-                      const std::vector<Point> &origins,
-                      const std::vector<double> &radii) {
-  std::vector<std::vector<int>> result(boxes.size());
-  for (size_t b = 0; b < boxes.size(); ++b)
-    for (size_t i = 0; i < origins.size(); ++i)
-      if (point_box_dist_sq(origins[i], boxes[b]) < radii[i] * radii[i])
-        result[b].push_back(static_cast<int>(i));
-  return result;
-}
-
 void create_histogram(std::vector<double> percentages, int num_bins,
                       const std::string &output_stem = "histogram") {
   if (percentages.empty() || num_bins <= 0)
@@ -179,7 +167,7 @@ void create_histogram(std::vector<double> percentages, int num_bins,
       << "]\n"
       << "\\addplot[fill=blue!40, draw=blue!70] coordinates {\n";
 
-    for (int i = 0; i < num_bins; ++i) {
+  for (int i = 0; i < num_bins; ++i) {
     double lo = min_val + i * bin_width;
     double mid = lo + bin_width / 2.0;
     tex << "  (" << mid << ", " << bins[i] << ")\n";
