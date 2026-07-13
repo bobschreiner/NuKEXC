@@ -84,9 +84,6 @@ public:
     sort(mo_orbitals, mo_coeff, K);
   }
 
-private:
-  int _N;
-  DeviceView2DLeft _X;
   // Sort K orbitals (columns of mo_orbitals, entries of mo_coeff) by
   // ascending energy.  mo_orbitals has _N rows and K columns.
   void sort(DeviceView2DLeft &mo_orbitals, DeviceView1D &mo_coeff,
@@ -115,6 +112,10 @@ private:
           }
         });
   }
+
+private:
+  int _N;
+  DeviceView2DLeft _X;
 };
 
 } // namespace Nukexc
