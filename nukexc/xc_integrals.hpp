@@ -119,7 +119,6 @@ XC_result compute_lda(const DeviceView2DLeft collocation_values,
 
         Kokkos::parallel_for(
             Kokkos::TeamThreadRange(team_member, N_bf), [=](const int i) {
-              double local_sum = 0.0;
               Z_subview(i) = w_g * (0.5 * collocation_subview(i) * vrho_g);
             });
       });
