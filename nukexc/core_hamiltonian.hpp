@@ -756,7 +756,7 @@ CoreHamiltonianResult compute_core_hamiltonian_screened_tiled(
   using Bounds = Kokkos::LaunchBounds<128, 2>;
   int fixed_team_size = 1;
   int fixed_vector_length = 1;
-#if defined(KOKKOS_ENABLE_HIP)
+#if  defined(KOKKOS_ENABLE_HIP) || defined(KOKKOS_ENABLE_CUDA)
   fixed_team_size = 8;
   fixed_vector_length = 1;
 #endif
