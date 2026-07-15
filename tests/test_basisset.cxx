@@ -400,6 +400,8 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
         shared_view_points points_scratch(team_member.team_scratch(0),
                                           num_points);
 
+        shared_view_shells shell_view(team_member.thread_scratch(0), 2);
+
         Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
                              [=](const int local_g) {
                                const int global_g = start_points + local_g;
@@ -415,12 +417,10 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
             Kokkos::TeamThreadMDRange(team_member, num_neighbors,
                                       num_neighbors),
             [=](const int local_i, const int local_j) {
-              shared_view_shells shell_view(team_member.thread_scratch(0), 2);
-
               shell_view(0) =
                   load_shell(basis, nl.neighbors(start_neighbors + local_i));
               shell_view(1) =
-                  load_shell(basis, nl.neighbors(start_neighbors + local_i));
+                  load_shell(basis, nl.neighbors(start_neighbors + local_j));
 
               double sum = 0;
               Kokkos::parallel_reduce(
@@ -465,6 +465,8 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
         shared_view_points points_scratch(team_member.team_scratch(0),
                                           num_points);
 
+        shared_view_shells shell_view(team_member.thread_scratch(0), 2);
+
         Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
                              [=](const int local_g) {
                                const int global_g = start_points + local_g;
@@ -480,12 +482,11 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
             Kokkos::TeamThreadMDRange(team_member, num_neighbors,
                                       num_neighbors),
             [=](const int local_i, const int local_j) {
-              shared_view_shells shell_view(team_member.thread_scratch(0), 2);
 
               shell_view(0) =
                   load_shell(basis, nl.neighbors(start_neighbors + local_i));
               shell_view(1) =
-                  load_shell(basis, nl.neighbors(start_neighbors + local_i));
+                  load_shell(basis, nl.neighbors(start_neighbors + local_j));
 
               for (int local_g = 0; local_g < num_points; ++local_g) {
                 S(local_i, local_j) +=

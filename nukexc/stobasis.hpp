@@ -361,13 +361,6 @@ struct ShellParams {
 };
 
 KOKKOS_INLINE_FUNCTION
-ShellParams load_shell(const STOBasisSet &basis, int basis_idx) {
-  return {basis.l(basis_idx),    basis.m(basis_idx),    basis.n(basis_idx),
-          basis.zeta(basis_idx), basis.norm(basis_idx), basis.O(basis_idx)[0],
-          basis.O(basis_idx)[1], basis.O(basis_idx)[2]};
-}
-
-KOKKOS_INLINE_FUNCTION
 void basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
                 const double y, const double z, double &val) {
 
@@ -400,6 +393,13 @@ void basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
 }
 
 KOKKOS_INLINE_FUNCTION
+ShellParams load_shell(const STOBasisSet &basis, int basis_idx) {
+  return {basis.l(basis_idx),    basis.m(basis_idx),    basis.n(basis_idx),
+          basis.zeta(basis_idx), basis.norm(basis_idx), basis.O(basis_idx)[0],
+          basis.O(basis_idx)[1], basis.O(basis_idx)[2]};
+}
+
+KOKKOS_INLINE_FUNCTION
 double basis_eval_fast(const ShellParams &sh, double x, double y, double z) {
   x -= sh.ox;
   y -= sh.oy;
@@ -408,9 +408,7 @@ double basis_eval_fast(const ShellParams &sh, double x, double y, double z) {
   {
 
     const double r = Kokkos::sqrt(x * x + y * y + z * z) + epsilon_shift;
-
     const int k = sh.n - sh.l - 1;
-
     radial = (k == 0) ? sh.norm * Kokkos::exp(-sh.zeta * r)
                       : sh.norm * int_pow(r, k) * Kokkos::exp(-sh.zeta * r);
   }
