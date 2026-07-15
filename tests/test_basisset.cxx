@@ -415,8 +415,7 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
             Kokkos::TeamThreadMDRange(team_member, num_neighbors,
                                       num_neighbors),
             [=](const int local_i, const int local_j) {
-
-              shared_view_shells shell_view("Shared Shell" , 2);
+              shared_view_shells shell_view(team_member.thread_scratch(0), 2);
 
               shell_view(0) =
                   load_shell(basis, nl.neighbors(start_neighbors + local_i));
@@ -481,8 +480,8 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
             Kokkos::TeamThreadMDRange(team_member, num_neighbors,
                                       num_neighbors),
             [=](const int local_i, const int local_j) {
-              shared_view_shells shell_view("Shared shell" , 2);
- 
+              shared_view_shells shell_view(team_member.thread_scratch(0), 2);
+
               shell_view(0) =
                   load_shell(basis, nl.neighbors(start_neighbors + local_i));
               shell_view(1) =
