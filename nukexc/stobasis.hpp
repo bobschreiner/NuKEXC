@@ -389,7 +389,7 @@ void basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
                      epsilon_shift; // Avoid pow(0,0)
 
     radial_part =
-        norm * Kokkos::pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
+        norm * int_pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
   }
 
   // Angular part of the shell
@@ -446,7 +446,7 @@ void basis_eval_grad(const STOBasisSet basis, const int basis_idx,
   grad_real_solid_harmonic_cart(l_val, m_val, dx, dy, dz, dS_dx, dS_dy, dS_dz);
 
   // Radial part
-  double pow_term = Kokkos::pow(r, n_val - l_val - 1);
+  double pow_term = int_pow(r, n_val - l_val - 1);
   double exp_term = Kokkos::exp(-zeta * r);
   double R_pre = norm * pow_term * exp_term;
 
@@ -489,7 +489,7 @@ void fill_collocation(
                      epsilon_shift; // Avoid pow(0,0)
 
           radial_part =
-              norm * Kokkos::pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
+              norm * int_pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
         }
         // Angular part of the shell
         // https://en.wikipedia.org/wiki/Spherical_harmonics

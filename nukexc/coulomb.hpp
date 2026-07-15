@@ -198,7 +198,6 @@ DeviceView2DLeft compute_coulomb_sparse(
               int global_j;
 
               for (int local_g = 0; local_g < num_points; ++local_g) {
-                const int global_g = start_points + local_g;
 
                 const double x =
                     points_scratch(local_g)[0] - basis_aux.O(local_alpha)[0];

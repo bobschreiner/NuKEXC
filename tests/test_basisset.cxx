@@ -345,8 +345,8 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
   build_neighbor_list(basis, bounding_boxes, max_points_per_box, N_quad, nl);
 
   const int num_boxes = nl.offsets.extent(0) - 1;
-  const int num_neighbors = nl.neighbors.extent(0);
-
+  Kokkos::View<double **> S("overlap", N_bf,
+                            N_bf); // per box, or global-indexed
   ExecSpace space;
 
   Kokkos::TeamPolicy<ExecSpace> policy_boxes(space, num_boxes, Kokkos::AUTO());
@@ -420,15 +420,17 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
                     local_sum +=
                         basis_eval_fast(shell_i, points_scratch(local_g)[0],
                                         points_scratch(local_g)[1],
-                                        points_scratch(local_g)[2]) +
+                                        points_scratch(local_g)[2]) *
                         basis_eval_fast(shell_j, points_scratch(local_g)[0],
                                         points_scratch(local_g)[1],
                                         points_scratch(local_g)[2]);
                   },
                   sum);
+              S(local_i, local_j) = sum;
             });
       });
 
+  Kokkos::fence();
   double end_vector = time_vector.seconds();
 
   double start_serial = time_serial.seconds();
@@ -476,15 +478,19 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
 
               double sum = 0;
               for (int local_g = 0; local_g < num_points; ++local_g) {
-                sum = basis_eval_fast(shell_i, points_scratch(local_g)[0],
-                                      points_scratch(local_g)[1],
-                                      points_scratch(local_g)[2]) +
-                      basis_eval_fast(shell_j, points_scratch(local_g)[0],
-                                      points_scratch(local_g)[1],
-                                      points_scratch(local_g)[2]);
+                sum += basis_eval_fast(shell_i, points_scratch(local_g)[0],
+                                       points_scratch(local_g)[1],
+                                       points_scratch(local_g)[2]) *
+                       basis_eval_fast(shell_j, points_scratch(local_g)[0],
+                                       points_scratch(local_g)[1],
+                                       points_scratch(local_g)[2]);
               }
+
+              S(local_i, local_j) = sum;
             });
       });
+  Kokkos::fence();
+
   double end_serial = time_serial.seconds();
 
   double start_vector_slow = time_vector.seconds();
@@ -544,14 +550,17 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
                     local_sum += phi_i * phi_j;
                   },
                   sum);
+
+              S(local_i, local_j) = sum;
             });
       });
 
+  Kokkos::fence();
   double end_vector_slow = time_vector.seconds();
 
   double start_serial_slow = time_serial.seconds();
   Kokkos::parallel_for(
-      "Benchmark [Team->Thread->Serial] [basis_eval_fast]", policy_boxes,
+      "Benchmark [Team->Thread->Serial] [basis_eval]", policy_boxes,
       KOKKOS_LAMBDA(const member_type &team_member) {
         const int box_idx = team_member.league_rank();
         // Compute number of points per box
@@ -603,9 +612,11 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
                            points_scratch(local_g)[2], phi_j);
                 sum += phi_i * phi_j;
               }
+              S(local_i, local_j) = sum;
             });
       });
 
+  Kokkos::fence();
   double end_serial_slow = time_serial.seconds();
 
   Kokkos::printf(
