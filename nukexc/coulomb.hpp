@@ -143,6 +143,7 @@ DeviceView2DLeft compute_coulomb_sparse(
       shared_view_points;
 
   int scratch_size_team = shared_view_double::shmem_size(max_points_per_box) +
+                          shared_view_double::shmem_size(max_points_per_box) +
                           shared_view_points::shmem_size(max_points_per_box);
 
   policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_size_team));
@@ -169,6 +170,9 @@ DeviceView2DLeft compute_coulomb_sparse(
         shared_view_points points_scratch(team_member.team_scratch(0),
                                           num_points);
 
+        shared_view_double density_scratch_scaled(team_member.team_scratch(0),
+                                                  num_points);
+
         Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
                              [=](const int local_g) {
                                const int global_g = start_points + local_g;
@@ -181,56 +185,60 @@ DeviceView2DLeft compute_coulomb_sparse(
         team_member.team_barrier();
 
         Kokkos::parallel_for(
-            Kokkos::TeamThreadRange(team_member, N_bf_aux),
-            [=](const int local_alpha) {
-              const int n = basis_aux.n(local_alpha);
-              const int l = basis_aux.l(local_alpha);
-              const int m = basis_aux.m(local_alpha);
-              const double zeta = basis_aux.zeta(local_alpha);
-
-              double local_sum_alpha = 0;
-              double local_sum_ij;
-
+            Kokkos::TeamThreadRange(team_member, num_points),
+            [=](const int local_g) {
               double phi_i;
               double phi_j;
+              density_scratch_scaled(local_g) = 0;
+              for (int local_i = 0; local_i < num_neighbors; ++local_i) {
 
-              int global_i;
-              int global_j;
+                const int global_i = nl.neighbors(start_neighbors + local_i);
+                const ShellParams shell_i = load_shell(basis, global_i);
+                phi_i = basis_eval_fast(shell_i, points_scratch(local_g)[0],
+                                        points_scratch(local_g)[1],
+                                        points_scratch(local_g)[2]);
+
+                for (unsigned int local_j = 0; local_j <= local_i; ++local_j) {
+
+                  const int global_j = nl.neighbors(start_neighbors + local_j);
+
+                  const ShellParams shell_j = load_shell(basis, global_j);
+                  phi_j = basis_eval_fast(shell_j, points_scratch(local_g)[0],
+                                          points_scratch(local_g)[1],
+                                          points_scratch(local_g)[2]);
+
+                  density_scratch_scaled(local_g) +=
+                      phi_i * phi_j * density_matrix(global_i, global_j) *
+                      weights_scratch(local_g);
+                  if (local_i != local_j)
+                    density_scratch_scaled(local_g) +=
+                        phi_i * phi_j * density_matrix(global_j, global_i) *
+                        weights_scratch(local_g);
+                }
+              }
+            });
+
+        team_member.team_barrier();
+
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadRange(team_member, N_bf_aux),
+            [=](const int local_alpha) {
+              double local_sum_alpha = 0;
 
               for (int local_g = 0; local_g < num_points; ++local_g) {
 
-                const double x =
+                const double dx =
                     points_scratch(local_g)[0] - basis_aux.O(local_alpha)[0];
-                const double y =
+                const double dy =
                     points_scratch(local_g)[1] - basis_aux.O(local_alpha)[1];
-                const double z =
+                const double dz =
                     points_scratch(local_g)[2] - basis_aux.O(local_alpha)[2];
                 const double r =
                     dist(points_scratch(local_g), basis_aux.O(local_alpha));
 
-                double potential_scaled =
-                    sto_potential(n, l, m, x, y, z, r, zeta) *
-                    weights_scratch(local_g);
-
-                local_sum_ij = 0;
-                for (unsigned int local_i = 0; local_i < num_neighbors;
-                     ++local_i) {
-                  global_i = nl.neighbors(start_neighbors + local_i);
-                  basis_eval(basis, global_i, points_scratch(local_g)[0],
-                             points_scratch(local_g)[1],
-                             points_scratch(local_g)[2], phi_i);
-                  for (unsigned int local_j = 0; local_j < num_neighbors;
-                       ++local_j) {
-
-                    global_j = nl.neighbors(start_neighbors + local_j);
-                    basis_eval(basis, global_j, points_scratch(local_g)[0],
-                               points_scratch(local_g)[1],
-                               points_scratch(local_g)[2], phi_j);
-                    local_sum_ij +=
-                        phi_i * phi_j * density_matrix(global_i, global_j);
-                  }
-                }
-                local_sum_alpha += local_sum_ij * potential_scaled;
+                local_sum_alpha +=
+                    density_scratch_scaled(local_g) *
+                    sto_potential(basis_aux, local_alpha, dx, dy, dz, r);
               }
               Kokkos::atomic_add(&expansion_coeff(local_alpha),
                                  local_sum_alpha);
@@ -267,58 +275,67 @@ DeviceView2DLeft compute_coulomb_sparse(
         shared_view_points points_scratch(team_member.team_scratch(0),
                                           num_points);
 
-        Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
-                             [=](const int local_g) {
-                               const int global_g = start_points + local_g;
-                               weights_scratch(local_g) =
-                                   grid.weights(global_g);
-                               points_scratch(local_g) =
-                                   grid.quad_points(global_g);
-                             });
-        team_member.team_barrier();
+        shared_view_double potential_scratch_scaled(team_member.team_scratch(0),
+                                                    num_points);
+
         Kokkos::parallel_for(
-            Kokkos::TeamThreadMDRange(team_member, num_neighbors,
-                                      num_neighbors),
-            [=](const int local_i, const int local_j) {
+            Kokkos::TeamVectorRange(team_member, num_points),
+            [=](const int local_g) {
+              const int global_g = start_points + local_g;
+              weights_scratch(local_g) = grid.weights(global_g);
+              points_scratch(local_g) = grid.quad_points(global_g);
+              potential_scratch_scaled(local_g) = 0;
+
+              for (int local_alpha = 0; local_alpha < N_bf_aux; ++local_alpha) {
+                const double zeta = basis_aux.zeta(local_alpha);
+                const double x =
+                    points_scratch(local_g)[0] - basis_aux.O(local_alpha)[0];
+                const double y =
+                    points_scratch(local_g)[1] - basis_aux.O(local_alpha)[1];
+                const double z =
+                    points_scratch(local_g)[2] - basis_aux.O(local_alpha)[2];
+                const double r =
+                    dist(points_scratch(local_g), basis_aux.O(local_alpha));
+
+                double potential_alpha =
+                    sto_potential(basis_aux, local_alpha, x, y, z, r);
+
+                potential_scratch_scaled(local_g) +=
+                    potential_alpha * weights_scratch(local_g) *
+                    expansion_coeff(local_alpha);
+              }
+            });
+        team_member.team_barrier();
+
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadRange(team_member, num_neighbors),
+            [=](const int local_i) {
               const int global_i = nl.neighbors(start_neighbors + local_i);
-              const int global_j = nl.neighbors(start_neighbors + local_j);
-
               double phi_i;
-              double phi_j;
+              ShellParams shell_i = load_shell(basis, global_i);
 
-              double local_result;
-              for (int local_g = 0; local_g < num_points; ++local_g) {
-                basis_eval(basis, global_i, points_scratch(local_g)[0],
-                           points_scratch(local_g)[1],
-                           points_scratch(local_g)[2], phi_i);
-                basis_eval(basis, global_j, points_scratch(local_g)[0],
-                           points_scratch(local_g)[1],
-                           points_scratch(local_g)[2], phi_j);
+              for (int local_j = 0; local_j <= local_i; ++local_j) {
+                const int global_j = nl.neighbors(start_neighbors + local_j);
+                ShellParams shell_j = load_shell(basis, global_i);
+                double phi_j;
 
-                local_result = 0;
-                for (int local_alpha = 0; local_alpha < N_bf_aux;
-                     ++local_alpha) {
-                  const int n = basis_aux.n(local_alpha);
-                  const int l = basis_aux.l(local_alpha);
-                  const int m = basis_aux.m(local_alpha);
-                  const double zeta = basis_aux.zeta(local_alpha);
-                  const double x =
-                      points_scratch(local_g)[0] - basis_aux.O(local_alpha)[0];
-                  const double y =
-                      points_scratch(local_g)[1] - basis_aux.O(local_alpha)[1];
-                  const double z =
-                      points_scratch(local_g)[2] - basis_aux.O(local_alpha)[2];
-                  const double r =
-                      dist(points_scratch(local_g), basis_aux.O(local_alpha));
+                double local_result = 0;
 
-                  double potential_alpha =
-                      sto_potential(n, l, m, x, y, z, r, zeta);
+                for (int local_g = 0; local_g < num_points; ++local_g) {
+                  phi_i = basis_eval_fast(shell_i, points_scratch(local_g)[0],
+                                          points_scratch(local_g)[1],
+                                          points_scratch(local_g)[2]);
+                  phi_j = basis_eval_fast(shell_j, points_scratch(local_g)[0],
+                                          points_scratch(local_g)[1],
+                                          points_scratch(local_g)[2]);
 
-                  local_result += potential_alpha * phi_i * phi_j *
-                                  weights_scratch(local_g) *
-                                  expansion_coeff(local_alpha);
+                  local_result +=
+                      potential_scratch_scaled(local_g) * phi_i * phi_j;
                 }
+
                 Kokkos::atomic_add(&result(global_i, global_j), local_result);
+                if (local_i != local_j)
+                  Kokkos::atomic_add(&result(global_j, global_i), local_result);
               }
             });
       });
