@@ -388,8 +388,7 @@ void basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
     const double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
                      epsilon_shift; // Avoid pow(0,0)
 
-    radial_part =
-        norm * int_pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
+    radial_part = norm * int_pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
   }
 
   // Angular part of the shell
@@ -402,21 +401,23 @@ void basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
 
 KOKKOS_INLINE_FUNCTION
 double basis_eval_fast(const ShellParams &sh, double x, double y, double z) {
-  const double dx = x - sh.ox;
-  const double dy = y - sh.oy;
-  const double dz = z - sh.oz;
-  const double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + epsilon_shift;
+  x -= sh.ox;
+  y -= sh.oy;
+  z -= sh.oz;
+  double radial;
+  {
 
-  const int k = sh.n - sh.l - 1;
-  const double radial =
-      (k == 0) ? sh.norm * Kokkos::exp(-sh.zeta * r)
-               : sh.norm * int_pow(r, k) * Kokkos::exp(-sh.zeta * r);
+    const double r = Kokkos::sqrt(x * x + y * y + z * z) + epsilon_shift;
 
+    const int k = sh.n - sh.l - 1;
+
+    radial = (k == 0) ? sh.norm * Kokkos::exp(-sh.zeta * r)
+                      : sh.norm * int_pow(r, k) * Kokkos::exp(-sh.zeta * r);
+  }
   double angular_part;
   real_solid_harmonic_cart_precomputed(sh.l, sh.m, x, y, z, angular_part);
   return radial * angular_part;
-}
-
+} // namespace Nukexc
 
 KOKKOS_INLINE_FUNCTION
 void basis_eval_grad(const STOBasisSet basis, const int basis_idx,
