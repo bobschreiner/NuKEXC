@@ -319,7 +319,8 @@ DeviceView2DLeft compute_coulomb_sparse(
                       sto_potential(n, l, m, x, y, z, r, zeta);
 
                   local_result += potential_alpha * phi_i * phi_j *
-                                  weights_scratch(local_g)* expansion_coeff(local_alpha);
+                                  weights_scratch(local_g) *
+                                  expansion_coeff(local_alpha);
                 }
                 Kokkos::atomic_add(&result(global_i, global_j), local_result);
               }

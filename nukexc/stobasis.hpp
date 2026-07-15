@@ -355,36 +355,68 @@ load_thakkar_basis(const Molecule &mol,
   return make_manual_basis(temp_basis, cutoff_tol);
 }
 
+struct ShellParams {
+  int l, m, n;
+  double zeta, norm, ox, oy, oz;
+};
+
+KOKKOS_INLINE_FUNCTION
+ShellParams load_shell(const STOBasisSet &basis, int basis_idx) {
+  return {basis.l(basis_idx),    basis.m(basis_idx),    basis.n(basis_idx),
+          basis.zeta(basis_idx), basis.norm(basis_idx), basis.O(basis_idx)[0],
+          basis.O(basis_idx)[1], basis.O(basis_idx)[2]};
+}
+
 KOKKOS_INLINE_FUNCTION
 void basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
                 const double y, const double z, double &val) {
 
-  const int n_val = basis.n(basis_idx);
   const int l_val = basis.l(basis_idx);
   const int m_val = basis.m(basis_idx);
-  const double norm = basis.norm(basis_idx);
-  const double zeta = basis.zeta(basis_idx);
 
-  // radial part of the shell
-  // radial_part = R_nl(r) = r^(n-1) * C_nl * exp(-⍺ * r))
-
-  double dx = x - basis.O(basis_idx)[0];
-  double dy = y - basis.O(basis_idx)[1];
-  double dz = z - basis.O(basis_idx)[2];
-  double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
-             epsilon_shift; // Avoid pow(0,0)
+  const double dx = x - basis.O(basis_idx)[0];
+  const double dy = y - basis.O(basis_idx)[1];
+  const double dz = z - basis.O(basis_idx)[2];
 
   double radial_part;
+  {
+    // radial part of the shell
+    // radial_part = R_nl(r) = r^(n-1) * C_nl * exp(-⍺ * r))
+    const int n_val = basis.n(basis_idx);
+    const double zeta = basis.zeta(basis_idx);
+    const double norm = basis.norm(basis_idx);
+    const double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
+                     epsilon_shift; // Avoid pow(0,0)
 
-  radial_part =
-      norm * Kokkos::pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
+    radial_part =
+        norm * Kokkos::pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
+  }
 
   // Angular part of the shell
   // https://en.wikipedia.org/wiki/Spherical_harmonics
-  double angular_part = real_solid_harmonic_cart(l_val, m_val, dx, dy, dz);
+  double angular_part;
+  real_solid_harmonic_cart_precomputed(l_val, m_val, dx, dy, dz, angular_part);
 
   val = radial_part * angular_part;
 }
+
+KOKKOS_INLINE_FUNCTION
+double basis_eval_fast(const ShellParams &sh, double x, double y, double z) {
+  const double dx = x - sh.ox;
+  const double dy = y - sh.oy;
+  const double dz = z - sh.oz;
+  const double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) + epsilon_shift;
+
+  const int k = sh.n - sh.l - 1;
+  const double radial =
+      (k == 0) ? sh.norm * Kokkos::exp(-sh.zeta * r)
+               : sh.norm * int_pow(r, k) * Kokkos::exp(-sh.zeta * r);
+
+  double angular_part;
+  real_solid_harmonic_cart_precomputed(sh.l, sh.m, x, y, z, angular_part);
+  return radial * angular_part;
+}
+
 
 KOKKOS_INLINE_FUNCTION
 void basis_eval_grad(const STOBasisSet basis, const int basis_idx,
@@ -397,11 +429,11 @@ void basis_eval_grad(const STOBasisSet basis, const int basis_idx,
   const double norm = basis.norm(basis_idx);
   const double zeta = basis.zeta(basis_idx);
 
-  double dx = x - basis.O(basis_idx)[0];
-  double dy = y - basis.O(basis_idx)[1];
-  double dz = z - basis.O(basis_idx)[2];
-  double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
-             epsilon_shift; // Avoid pow(0,0)
+  const double dx = x - basis.O(basis_idx)[0];
+  const double dy = y - basis.O(basis_idx)[1];
+  const double dz = z - basis.O(basis_idx)[2];
+  const double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
+                   epsilon_shift; // Avoid pow(0,0)
 
   // Angular part
   double S_val;

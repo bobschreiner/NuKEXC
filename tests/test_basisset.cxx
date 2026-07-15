@@ -18,6 +18,8 @@
  *
  */
 
+#include "nukexc/nukexc_config.hpp"
+#include "nukexc/octree.hpp"
 #include <Kokkos_Core.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -189,7 +191,7 @@ TEST_CASE("H2O_adf_QZ4P_AUX", "[h20][adf][fit]") {
   Kokkos::deep_copy(O_h, basis.O);
   Kokkos::deep_copy(cutoff_h, basis.cutoff_radii);
 
-#if 1
+#if 0
   std::cout << "--------------------------------------------------"
             << std::endl;
 
@@ -243,7 +245,7 @@ TEST_CASE("H2O_adf_QZ4P_AUX_cholesky", "[h20][adf][fit][cholesky]") {
   Kokkos::deep_copy(O_h, basis_aux_cholesky.O);
   Kokkos::deep_copy(cutoff_h, basis_aux_cholesky.cutoff_radii);
 
-#if 1
+#if 0
   std::cout << "--------------------------------------------------"
             << std::endl;
 
@@ -320,6 +322,305 @@ TEST_CASE("Basis Cutoff", "[h20][cutoff]") {
       }
     }
   }
+};
+
+TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
+
+  using bk_type = IntegratorXX::Becke<double, double>;
+  using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
+  using ll_type = IntegratorXX::LebedevLaikov<double>;
+
+  double cutoff_tol = 1e-15;
+  Molecule mol;
+  read_xyz("input/water.xyz", mol);
+  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", cutoff_tol);
+
+  FlatGrid grid = make_flat_grid<bk_type, ll_type>(mol, 100, 50);
+  int N_bf = basis.nbf();
+  int N_quad = grid.quad_points.extent(0);
+
+  const int max_points_per_box = 32;
+  NeighborList nl;
+  auto bounding_boxes = create_bounding_boxes(grid, max_points_per_box);
+  build_neighbor_list(basis, bounding_boxes, max_points_per_box, N_quad, nl);
+
+  const int num_boxes = nl.offsets.extent(0) - 1;
+  const int num_neighbors = nl.neighbors.extent(0);
+
+  ExecSpace space;
+
+  Kokkos::TeamPolicy<ExecSpace> policy_boxes(space, num_boxes, Kokkos::AUTO());
+
+  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+  typedef ExecSpace::scratch_memory_space ScratchSpace;
+  typedef Kokkos::View<double *, ScratchSpace,
+                       Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+      shared_view_double;
+
+  typedef Kokkos::View<Point *, ScratchSpace,
+                       Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+      shared_view_points;
+
+  int scratch_size_team = shared_view_double::shmem_size(max_points_per_box) +
+                          shared_view_points::shmem_size(max_points_per_box);
+
+  policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_size_team));
+
+  Kokkos::Timer time_vector, time_serial;
+  time_vector.reset();
+  time_serial.reset();
+
+  double start_vector = time_vector.seconds();
+  Kokkos::parallel_for(
+      "Benchmark [Team->Thread->Vector] [basis_eval_fast]", policy_boxes,
+      KOKKOS_LAMBDA(const member_type &team_member) {
+        const int box_idx = team_member.league_rank();
+        // Compute number of points per box
+        const int start_points = box_idx * max_points_per_box;
+        const int end_points =
+            Kokkos::min(start_points + max_points_per_box, N_quad);
+        const int num_points = end_points - start_points;
+
+        // Compute number of neighbors per box
+        const int start_neighbors = nl.offsets(box_idx);
+        const int end_neighbors = nl.offsets(box_idx + 1);
+        const int num_neighbors = end_neighbors - start_neighbors;
+
+        shared_view_double weights_scratch(team_member.team_scratch(0),
+                                           num_points);
+
+        shared_view_points points_scratch(team_member.team_scratch(0),
+                                          num_points);
+
+        Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
+                             [=](const int local_g) {
+                               const int global_g = start_points + local_g;
+                               weights_scratch(local_g) =
+                                   grid.weights(global_g);
+                               points_scratch(local_g) =
+                                   grid.quad_points(global_g);
+                             });
+
+        team_member.team_barrier();
+
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadMDRange(team_member, num_neighbors,
+                                      num_neighbors),
+            [=](const int local_i, const int local_j) {
+              const int global_i = nl.neighbors(start_neighbors + local_i);
+              const int global_j = nl.neighbors(start_neighbors + local_j);
+
+              const ShellParams shell_i = load_shell(basis, global_i);
+              const ShellParams shell_j = load_shell(basis, global_j);
+
+              double sum = 0;
+              Kokkos::parallel_reduce(
+                  Kokkos::ThreadVectorRange(team_member, num_points),
+                  [=](const int local_g, double &local_sum) {
+                    local_sum +=
+                        basis_eval_fast(shell_i, points_scratch(local_g)[0],
+                                        points_scratch(local_g)[1],
+                                        points_scratch(local_g)[2]) +
+                        basis_eval_fast(shell_j, points_scratch(local_g)[0],
+                                        points_scratch(local_g)[1],
+                                        points_scratch(local_g)[2]);
+                  },
+                  sum);
+            });
+      });
+
+  double end_vector = time_vector.seconds();
+
+  double start_serial = time_serial.seconds();
+  Kokkos::parallel_for(
+      "Benchmark [Team->Thread->Serial] [basis_eval_fast]", policy_boxes,
+      KOKKOS_LAMBDA(const member_type &team_member) {
+        const int box_idx = team_member.league_rank();
+        // Compute number of points per box
+        const int start_points = box_idx * max_points_per_box;
+        const int end_points =
+            Kokkos::min(start_points + max_points_per_box, N_quad);
+        const int num_points = end_points - start_points;
+
+        // Compute number of neighbors per box
+        const int start_neighbors = nl.offsets(box_idx);
+        const int end_neighbors = nl.offsets(box_idx + 1);
+        const int num_neighbors = end_neighbors - start_neighbors;
+
+        shared_view_double weights_scratch(team_member.team_scratch(0),
+                                           num_points);
+
+        shared_view_points points_scratch(team_member.team_scratch(0),
+                                          num_points);
+
+        Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
+                             [=](const int local_g) {
+                               const int global_g = start_points + local_g;
+                               weights_scratch(local_g) =
+                                   grid.weights(global_g);
+                               points_scratch(local_g) =
+                                   grid.quad_points(global_g);
+                             });
+
+        team_member.team_barrier();
+
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadMDRange(team_member, num_neighbors,
+                                      num_neighbors),
+            [=](const int local_i, const int local_j) {
+              const int global_i = nl.neighbors(start_neighbors + local_i);
+              const int global_j = nl.neighbors(start_neighbors + local_j);
+
+              const ShellParams shell_i = load_shell(basis, global_i);
+              const ShellParams shell_j = load_shell(basis, global_j);
+
+              double sum = 0;
+              for (int local_g = 0; local_g < num_points; ++local_g) {
+                sum = basis_eval_fast(shell_i, points_scratch(local_g)[0],
+                                      points_scratch(local_g)[1],
+                                      points_scratch(local_g)[2]) +
+                      basis_eval_fast(shell_j, points_scratch(local_g)[0],
+                                      points_scratch(local_g)[1],
+                                      points_scratch(local_g)[2]);
+              }
+            });
+      });
+  double end_serial = time_serial.seconds();
+
+  double start_vector_slow = time_vector.seconds();
+  Kokkos::parallel_for(
+      "Benchmark [Team->Thread->Vector] [basis_eval]", policy_boxes,
+      KOKKOS_LAMBDA(const member_type &team_member) {
+        const int box_idx = team_member.league_rank();
+        // Compute number of points per box
+        const int start_points = box_idx * max_points_per_box;
+        const int end_points =
+            Kokkos::min(start_points + max_points_per_box, N_quad);
+        const int num_points = end_points - start_points;
+
+        // Compute number of neighbors per box
+        const int start_neighbors = nl.offsets(box_idx);
+        const int end_neighbors = nl.offsets(box_idx + 1);
+        const int num_neighbors = end_neighbors - start_neighbors;
+
+        shared_view_double weights_scratch(team_member.team_scratch(0),
+                                           num_points);
+
+        shared_view_points points_scratch(team_member.team_scratch(0),
+                                          num_points);
+
+        Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
+                             [=](const int local_g) {
+                               const int global_g = start_points + local_g;
+                               weights_scratch(local_g) =
+                                   grid.weights(global_g);
+                               points_scratch(local_g) =
+                                   grid.quad_points(global_g);
+                             });
+
+        team_member.team_barrier();
+
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadMDRange(team_member, num_neighbors,
+                                      num_neighbors),
+            [=](const int local_i, const int local_j) {
+              const int global_i = nl.neighbors(start_neighbors + local_i);
+              const int global_j = nl.neighbors(start_neighbors + local_j);
+
+              double sum = 0;
+              Kokkos::parallel_reduce(
+                  Kokkos::ThreadVectorRange(team_member, num_points),
+                  [=](const int local_g, double &local_sum) {
+                    double phi_i;
+                    double phi_j;
+
+                    basis_eval(basis, global_i, points_scratch(local_g)[0],
+                               points_scratch(local_g)[1],
+                               points_scratch(local_g)[2], phi_i);
+
+                    basis_eval(basis, global_j, points_scratch(local_g)[0],
+                               points_scratch(local_g)[1],
+                               points_scratch(local_g)[2], phi_j);
+                    local_sum += phi_i * phi_j;
+                  },
+                  sum);
+            });
+      });
+
+  double end_vector_slow = time_vector.seconds();
+
+  double start_serial_slow = time_serial.seconds();
+  Kokkos::parallel_for(
+      "Benchmark [Team->Thread->Serial] [basis_eval_fast]", policy_boxes,
+      KOKKOS_LAMBDA(const member_type &team_member) {
+        const int box_idx = team_member.league_rank();
+        // Compute number of points per box
+        const int start_points = box_idx * max_points_per_box;
+        const int end_points =
+            Kokkos::min(start_points + max_points_per_box, N_quad);
+        const int num_points = end_points - start_points;
+
+        // Compute number of neighbors per box
+        const int start_neighbors = nl.offsets(box_idx);
+        const int end_neighbors = nl.offsets(box_idx + 1);
+        const int num_neighbors = end_neighbors - start_neighbors;
+
+        shared_view_double weights_scratch(team_member.team_scratch(0),
+                                           num_points);
+
+        shared_view_points points_scratch(team_member.team_scratch(0),
+                                          num_points);
+
+        Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
+                             [=](const int local_g) {
+                               const int global_g = start_points + local_g;
+                               weights_scratch(local_g) =
+                                   grid.weights(global_g);
+                               points_scratch(local_g) =
+                                   grid.quad_points(global_g);
+                             });
+
+        team_member.team_barrier();
+
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadMDRange(team_member, num_neighbors,
+                                      num_neighbors),
+            [=](const int local_i, const int local_j) {
+              const int global_i = nl.neighbors(start_neighbors + local_i);
+              const int global_j = nl.neighbors(start_neighbors + local_j);
+
+              double sum = 0;
+              for (int local_g = 0; local_g < num_points; ++local_g) {
+                double phi_i;
+                double phi_j;
+
+                basis_eval(basis, global_i, points_scratch(local_g)[0],
+                           points_scratch(local_g)[1],
+                           points_scratch(local_g)[2], phi_i);
+
+                basis_eval(basis, global_j, points_scratch(local_g)[0],
+                           points_scratch(local_g)[1],
+                           points_scratch(local_g)[2], phi_j);
+                sum += phi_i * phi_j;
+              }
+            });
+      });
+
+  double end_serial_slow = time_serial.seconds();
+
+  Kokkos::printf(
+      "Benchmark [Team->Thread->Serial] [basis_eval_fast] took %fs \n",
+      end_serial - start_serial);
+
+  Kokkos::printf(
+      "Benchmark [Team->Thread->Vector] [basis_eval_fast] took %fs \n",
+      end_vector - start_vector);
+
+  Kokkos::printf("Benchmark [Team->Thread->Serial] [basis_eval] took %fs \n",
+                 end_serial_slow - start_serial_slow);
+
+  Kokkos::printf("Benchmark [Team->Thread->Vector] [basis_eval] took %fs \n",
+                 end_vector_slow - start_vector_slow);
 };
 
 int main() {
