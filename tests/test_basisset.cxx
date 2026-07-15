@@ -22,6 +22,7 @@
 #include "nukexc/octree.hpp"
 #include <Kokkos_Core.hpp>
 
+#include <Kokkos_Core_fwd.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
@@ -339,7 +340,7 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
   int N_bf = basis.nbf();
   int N_quad = grid.quad_points.extent(0);
 
-  const int max_points_per_box = 64;
+  const int max_points_per_box = 32;
   NeighborList nl;
   auto bounding_boxes = create_bounding_boxes(grid, max_points_per_box);
   build_neighbor_list(basis, bounding_boxes, max_points_per_box, N_quad, nl);
@@ -362,17 +363,10 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
                        Kokkos::MemoryTraits<Kokkos::Unmanaged>>
       shared_view_points;
 
-  typedef Kokkos::View<ShellParams *, ScratchSpace,
-                       Kokkos::MemoryTraits<Kokkos::Unmanaged>>
-      shared_view_shells;
-
   int scratch_size_team = shared_view_double::shmem_size(max_points_per_box) +
                           shared_view_points::shmem_size(max_points_per_box);
 
-  int scratch_size_thread = shared_view_shells::shmem_size(2);
-
-  policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_size_team),
-                                Kokkos::PerThread(scratch_size_thread));
+  policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_size_team));
 
   Kokkos::Timer time_vector, time_serial;
   time_vector.reset();
@@ -400,8 +394,6 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
         shared_view_points points_scratch(team_member.team_scratch(0),
                                           num_points);
 
-        shared_view_shells shell_view(team_member.thread_scratch(0), 2);
-
         Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
                              [=](const int local_g) {
                                const int global_g = start_points + local_g;
@@ -417,23 +409,23 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
             Kokkos::TeamThreadMDRange(team_member, num_neighbors,
                                       num_neighbors),
             [=](const int local_i, const int local_j) {
-              shell_view(0) =
-                  load_shell(basis, nl.neighbors(start_neighbors + local_i));
-              shell_view(1) =
-                  load_shell(basis, nl.neighbors(start_neighbors + local_j));
+              const int global_i = nl.neighbors(start_neighbors + local_i);
+              const int global_j = nl.neighbors(start_neighbors + local_j);
+
+              const ShellParams shell_i = load_shell(basis, global_i);
+              const ShellParams shell_j = load_shell(basis, global_j);
 
               double sum = 0;
               Kokkos::parallel_reduce(
                   Kokkos::ThreadVectorRange(team_member, num_points),
                   [=](const int local_g, double &local_sum) {
-                    local_sum += basis_eval_fast(shell_view(0),
-                                                 points_scratch(local_g)[0],
-                                                 points_scratch(local_g)[1],
-                                                 points_scratch(local_g)[2]) *
-                                 basis_eval_fast(shell_view(1),
-                                                 points_scratch(local_g)[0],
-                                                 points_scratch(local_g)[1],
-                                                 points_scratch(local_g)[2]);
+                    local_sum +=
+                        basis_eval_fast(shell_i, points_scratch(local_g)[0],
+                                        points_scratch(local_g)[1],
+                                        points_scratch(local_g)[2]) *
+                        basis_eval_fast(shell_j, points_scratch(local_g)[0],
+                                        points_scratch(local_g)[1],
+                                        points_scratch(local_g)[2]);
                   },
                   sum);
               S(local_i, local_j) = sum;
@@ -465,8 +457,6 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
         shared_view_points points_scratch(team_member.team_scratch(0),
                                           num_points);
 
-        shared_view_shells shell_view(team_member.thread_scratch(0), 2);
-
         Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
                              [=](const int local_g) {
                                const int global_g = start_points + local_g;
@@ -482,21 +472,23 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
             Kokkos::TeamThreadMDRange(team_member, num_neighbors,
                                       num_neighbors),
             [=](const int local_i, const int local_j) {
+              const int global_i = nl.neighbors(start_neighbors + local_i);
+              const int global_j = nl.neighbors(start_neighbors + local_j);
 
-              shell_view(0) =
-                  load_shell(basis, nl.neighbors(start_neighbors + local_i));
-              shell_view(1) =
-                  load_shell(basis, nl.neighbors(start_neighbors + local_j));
+              const ShellParams shell_i = load_shell(basis, global_i);
+              const ShellParams shell_j = load_shell(basis, global_j);
 
+              double sum = 0;
               for (int local_g = 0; local_g < num_points; ++local_g) {
-                S(local_i, local_j) +=
-                    basis_eval_fast(shell_view(0), points_scratch(local_g)[0],
-                                    points_scratch(local_g)[1],
-                                    points_scratch(local_g)[2]) *
-                    basis_eval_fast(shell_view(1), points_scratch(local_g)[0],
-                                    points_scratch(local_g)[1],
-                                    points_scratch(local_g)[2]);
+                sum += basis_eval_fast(shell_i, points_scratch(local_g)[0],
+                                       points_scratch(local_g)[1],
+                                       points_scratch(local_g)[2]) *
+                       basis_eval_fast(shell_j, points_scratch(local_g)[0],
+                                       points_scratch(local_g)[1],
+                                       points_scratch(local_g)[2]);
               }
+
+              S(local_i, local_j) = sum;
             });
       });
   Kokkos::fence();
