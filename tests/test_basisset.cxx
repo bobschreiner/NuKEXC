@@ -349,7 +349,7 @@ TEST_CASE("Benchmark collocation", "[h20][benchmark]") {
                             N_bf); // per box, or global-indexed
   ExecSpace space;
 
-  Kokkos::TeamPolicy<ExecSpace> policy_boxes(space, num_boxes, Kokkos::AUTO());
+  Kokkos::TeamPolicy<ExecSpace> policy_boxes(space, num_boxes, Kokkos::AUTO(), Kokkos::AUTO());
 
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
   typedef ExecSpace::scratch_memory_space ScratchSpace;
