@@ -216,6 +216,7 @@ TEST_CASE("NeighborList: taxol regression",
           "[octree][neighborlist][regression]") {
   // Checks that the neighbor list on a real molecule is strictly smaller
   // than the dense N*num_boxes product (i.e. screening is actually happening).
+#if (defined(KOKKOS_ENABLE_HIP) || defined(KOKKOS_ENABLE_CUDA))
   using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
   using ll_type = IntegratorXX::LebedevLaikov<double>;
 
@@ -258,6 +259,7 @@ TEST_CASE("NeighborList: taxol regression",
   }
 
   create_histogram(percentages, 50, "taxol_histogram");
+#endif
 }
 
 int main(int argc, char *argv[]) {
