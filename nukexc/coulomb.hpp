@@ -108,12 +108,11 @@ DeviceView2DLeft compute_coulomb_sparse(
   const int N_bf = basis.nbf();
   const int N_bf_aux = basis_aux.nbf();
   const int N_quad = grid.quad_points.extent(0);
-  const int N_elec = mo_coeff.extent(0);
+  const int N_occ = mo_coeff.extent(0);
   const int K = half_inverse_X.extent(1);
 
   const int max_points_per_box = nl.max_points_per_box;
   const int num_boxes = nl.offsets.extent(0) - 1;
-  const int num_neighbors = nl.neighbors.extent(0);
 
   DeviceView1DLeft expansion_coeff("Expansion coeff", N_bf_aux);
   DeviceView2DLeft density_matrix("Density matrix", N_bf, N_bf);
@@ -123,7 +122,7 @@ DeviceView2DLeft compute_coulomb_sparse(
       "Fill Density matrix",
       Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf, N_bf}),
       KOKKOS_LAMBDA(const int mu, const int nu) {
-        for (unsigned int k = 0; k < N_elec; ++k)
+        for (unsigned int k = 0; k < N_occ; ++k)
           density_matrix(mu, nu) +=
               mo_coeff(k) * mo_orbitals(mu, k) * mo_orbitals(nu, k);
       });
@@ -222,25 +221,25 @@ DeviceView2DLeft compute_coulomb_sparse(
 
         Kokkos::parallel_for(
             Kokkos::TeamThreadRange(team_member, N_bf_aux),
-            [=](const int local_alpha) {
+            [=](const int global_alpha) {
               double local_sum_alpha = 0;
 
               for (int local_g = 0; local_g < num_points; ++local_g) {
 
                 const double dx =
-                    points_scratch(local_g)[0] - basis_aux.O(local_alpha)[0];
+                    points_scratch(local_g)[0] - basis_aux.O(global_alpha)[0];
                 const double dy =
-                    points_scratch(local_g)[1] - basis_aux.O(local_alpha)[1];
+                    points_scratch(local_g)[1] - basis_aux.O(global_alpha)[1];
                 const double dz =
-                    points_scratch(local_g)[2] - basis_aux.O(local_alpha)[2];
+                    points_scratch(local_g)[2] - basis_aux.O(global_alpha)[2];
                 const double r =
-                    dist(points_scratch(local_g), basis_aux.O(local_alpha));
+                    dist(points_scratch(local_g), basis_aux.O(global_alpha));
 
                 local_sum_alpha +=
                     density_scratch_scaled(local_g) *
-                    sto_potential(basis_aux, local_alpha, dx, dy, dz, r);
+                    sto_potential(basis_aux, global_alpha, dx, dy, dz, r);
               }
-              Kokkos::atomic_add(&expansion_coeff(local_alpha),
+              Kokkos::atomic_add(&expansion_coeff(global_alpha),
                                  local_sum_alpha);
             });
       });
@@ -278,6 +277,7 @@ DeviceView2DLeft compute_coulomb_sparse(
         shared_view_double potential_scratch_scaled(team_member.team_scratch(0),
                                                     num_points);
 
+        // Fill points, weights and portential scratch
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange(team_member, num_points),
             [=](const int local_g) {
@@ -286,23 +286,23 @@ DeviceView2DLeft compute_coulomb_sparse(
               points_scratch(local_g) = grid.quad_points(global_g);
               potential_scratch_scaled(local_g) = 0;
 
-              for (int local_alpha = 0; local_alpha < N_bf_aux; ++local_alpha) {
-                const double zeta = basis_aux.zeta(local_alpha);
+              for (int global_alpha = 0; global_alpha < N_bf_aux;
+                   ++global_alpha) {
                 const double x =
-                    points_scratch(local_g)[0] - basis_aux.O(local_alpha)[0];
+                    points_scratch(local_g)[0] - basis_aux.O(global_alpha)[0];
                 const double y =
-                    points_scratch(local_g)[1] - basis_aux.O(local_alpha)[1];
+                    points_scratch(local_g)[1] - basis_aux.O(global_alpha)[1];
                 const double z =
-                    points_scratch(local_g)[2] - basis_aux.O(local_alpha)[2];
+                    points_scratch(local_g)[2] - basis_aux.O(global_alpha)[2];
                 const double r =
-                    dist(points_scratch(local_g), basis_aux.O(local_alpha));
+                    dist(points_scratch(local_g), basis_aux.O(global_alpha));
 
                 double potential_alpha =
-                    sto_potential(basis_aux, local_alpha, x, y, z, r);
+                    sto_potential(basis_aux, global_alpha, x, y, z, r);
 
                 potential_scratch_scaled(local_g) +=
                     potential_alpha * weights_scratch(local_g) *
-                    expansion_coeff(local_alpha);
+                    expansion_coeff(global_alpha);
               }
             });
         team_member.team_barrier();
@@ -316,7 +316,7 @@ DeviceView2DLeft compute_coulomb_sparse(
 
               for (int local_j = 0; local_j <= local_i; ++local_j) {
                 const int global_j = nl.neighbors(start_neighbors + local_j);
-                ShellParams shell_j = load_shell(basis, global_i);
+                ShellParams shell_j = load_shell(basis, global_j);
                 double phi_j;
 
                 double local_result = 0;

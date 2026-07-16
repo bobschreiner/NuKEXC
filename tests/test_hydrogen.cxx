@@ -766,6 +766,82 @@ TEST_CASE("compute_exchange -- hydrogen 1s self-exchange", "[exchange]") {
   REQUIRE_THAT(K_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
 }
 
+TEST_CASE("compute_exchange sprse -- hydrogen 1s self-exchange"
+          "[exchange][sparse]") {
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
+
+  // Primary basis: single 1s STO
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+
+  // Aux basis: needs to be rich enough to represent the density ρ = φ^2,
+  // which for a 1s STO with ζ=1 is a 1s-like function with ζ=2.
+  // Use a few s-type STOs spanning a range of exponents.
+
+  STOBasisSet basis_aux = make_manual_basis({
+      {1, 0, 0, 0.5, 0., 0., 0.},
+      {1, 0, 0, 1.0, 0., 0., 0.},
+      {1, 0, 0, 2.0, 0., 0., 0.},
+      {1, 0, 0, 3.0, 0., 0., 0.},
+      {1, 0, 0, 4.0, 0., 0., 0.},
+  });
+  // Density matrix: fully occupied single orbital, D_11 = 1
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  const int N_bf = basis.nbf();
+  const int N_bf_aux = basis_aux.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  DeviceView2DLeft basis_aux_collocation("Auxillary Basis collocation",
+                                         N_bf_aux, N_quad);
+
+  DeviceView2DLeft potential_collocation_scaled("Potential collocation",
+                                                N_bf_aux, N_quad);
+  DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
+  DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
+
+  ExecSpace space;
+
+  fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
+  sto_potential_collocation_scaled(space, basis_aux, grid,
+                                   potential_collocation_scaled);
+
+  // Compute (A|B)
+  KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
+                   potential_collocation_scaled, 0.0, aux_overlap);
+
+  Kokkos::parallel_for(
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
+      KOKKOS_LAMBDA(int i, int j) {
+        aux_overlap_sym(i, j) = 0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
+      });
+
+  DeviceView2DLeft half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
+
+  int max_points_per_box = 32;
+  auto bb = create_bounding_boxes(grid, max_points_per_box);
+  NeighborList nl;
+  build_neighbor_list(basis, bb, max_points_per_box, grid.quad_points.extent(0),
+                      nl);
+
+  DeviceView2DLeft K = compute_exact_exchange_sparse(
+      space, mo_orbitals, mo_coeff, basis, basis_aux, grid, nl, half_inverse_X);
+
+  auto K_h = Kokkos::create_mirror_view(K);
+  Kokkos::deep_copy(K_h, K);
+
+  // Analytical self-repulsion of hydrogen 1s: 5/8 hartree
+  REQUIRE_THAT(K_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
+}
+
 TEST_CASE("compute_lda -- hydrogen 1s lda", "[lda]") {
   // Analytical Slater Exchange LDA energy for a 1s STO (zeta = 1.0)
   const double ref_value = -0.2127415030860106;

@@ -22,6 +22,7 @@
 
 #include "density.hpp"
 #include "grid.hpp"
+#include "nukexc/octree.hpp"
 #include "nukexc_config.hpp"
 #include "stobasis.hpp"
 #include "stopotential.hpp"
@@ -34,6 +35,7 @@
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Macros.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
+#include <impl/Kokkos_Profiling.hpp>
 
 namespace Nukexc {
 
@@ -48,7 +50,7 @@ DeviceView2DLeft compute_exact_exchange(
   const int N_bf = basis_collocation.extent(0);
   const int N_bf_aux = basis_aux_collocation.extent(0);
   const int N_quad = basis_collocation.extent(1);
-  const int N_occ = mo_orbitals.extent(1);
+  const int N_occ = mo_coeff.extent(0);
   const int K = half_inverse_X.extent(1);
 
   DeviceView2DLeft basis_collocation_scaled("Basis collocation Scaled", N_bf,
@@ -101,4 +103,152 @@ DeviceView2DLeft compute_exact_exchange(
   return result;
 }
 
+DeviceView2DLeft compute_exact_exchange_sparse(
+    const ExecSpace space, const DeviceView2DLeft mo_orbitals,
+    const DeviceView1D mo_coeff, const STOBasisSet basis,
+    const STOBasisSet basis_aux, const FlatGrid grid, const NeighborList nl,
+    const DeviceView2DLeft half_inverse_X) {
+
+  Kokkos::Profiling::pushRegion("Compute Exact Exchange Integral Sparse");
+  const int N_bf = basis.nbf();
+  const int N_bf_aux = basis_aux.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+  const int N_occ = mo_coeff.extent(0);
+  const int K = half_inverse_X.extent(1);
+
+  const int max_points_per_box = nl.max_points_per_box;
+  const int num_boxes = nl.offsets.extent(0) - 1;
+
+  DeviceView2DLeft three_center_integral("Three_center_integral", N_bf_aux,
+                                         N_bf);
+  DeviceView2DLeft three_center_integral_scaled("Three_center_integral_scaled",
+                                                N_bf, K);
+
+  DeviceView2DLeft result("Exchange matrix", N_bf, N_bf);
+
+  auto mo_coeff_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, mo_coeff);
+
+  Kokkos::TeamPolicy<ExecSpace> policy_boxes(space, num_boxes, Kokkos::AUTO());
+
+  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+  typedef ExecSpace::scratch_memory_space ScratchSpace;
+  typedef Kokkos::View<double *, ScratchSpace,
+                       Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+      shared_view_double;
+
+  typedef Kokkos::View<Point *, ScratchSpace,
+                       Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+      shared_view_points;
+
+  int scratch_size_team = shared_view_double::shmem_size(max_points_per_box) +
+                          shared_view_points::shmem_size(max_points_per_box);
+
+  int scratch_size_thread = shared_view_double::shmem_size(max_points_per_box);
+
+  policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_size_team),
+                                Kokkos::PerThread(scratch_size_thread));
+
+  // Loop over the occupied orbitals and compute contributions for each occupied
+  // orbital
+
+  for (unsigned int i = 0; i < N_occ; ++i) {
+    // Reset the three center integral
+    Kokkos::deep_copy(space, three_center_integral, 0);
+    ;
+
+    Kokkos::parallel_for(
+        "Sparse three center integral:(alpha |i m) ", policy_boxes,
+        KOKKOS_LAMBDA(const member_type &team_member) {
+          const int box_idx = team_member.league_rank();
+          // Compute number of points per box
+          const int start_points = box_idx * max_points_per_box;
+          const int end_points =
+              Kokkos::min(start_points + max_points_per_box, N_quad);
+          const int num_points = end_points - start_points;
+
+          // Compute number of neighbors per box
+          const int start_neighbors = nl.offsets(box_idx);
+          const int end_neighbors = nl.offsets(box_idx + 1);
+          const int num_neighbors = end_neighbors - start_neighbors;
+
+          shared_view_double potential_scratch_scaled(
+              team_member.thread_scratch(0), num_points);
+
+          shared_view_double weights_scratch(team_member.team_scratch(0),
+                                             num_points);
+
+          shared_view_points points_scratch(team_member.team_scratch(0),
+                                            num_points);
+
+          // Fill points and weights scratch
+          Kokkos::parallel_for(
+              Kokkos::TeamVectorRange(team_member, num_points),
+              [=](const int local_g) {
+                const int global_g = start_points + local_g;
+                weights_scratch(local_g) = grid.weights(global_g);
+                points_scratch(local_g) = grid.quad_points(global_g);
+
+                // Fold the i_th orbital into the weights
+                double orbital_i_at_point = 0.0;
+                for (int k = 0; k < N_bf; ++k) {
+                  orbital_i_at_point +=
+                      mo_orbitals(k, i) *
+                      basis_eval_fast(load_shell(basis, k),
+                                      points_scratch(local_g)[0],
+                                      points_scratch(local_g)[1],
+                                      points_scratch(local_g)[2]);
+                }
+                weights_scratch(local_g) *= orbital_i_at_point;
+              });
+          team_member.team_barrier();
+
+          Kokkos::parallel_for(
+              Kokkos::TeamThreadRange(team_member, N_bf_aux),
+              [=](const int global_alpha) {
+                // Pcompute the potential once and store in scratch
+                for (int local_g = 0; local_g < num_points; ++local_g) {
+                  const double x =
+                      points_scratch(local_g)[0] - basis_aux.O(global_alpha)[0];
+                  const double y =
+                      points_scratch(local_g)[1] - basis_aux.O(global_alpha)[1];
+                  const double z =
+                      points_scratch(local_g)[2] - basis_aux.O(global_alpha)[2];
+                  const double r =
+                      dist(points_scratch(local_g), basis_aux.O(global_alpha));
+
+                  potential_scratch_scaled(local_g) =
+                      sto_potential(basis_aux, global_alpha, x, y, z, r) *
+                      weights_scratch(local_g);
+                }
+
+                for (int local_j = 0; local_j < num_neighbors; ++local_j) {
+                  const int global_j = nl.neighbors(start_neighbors + local_j);
+                  ShellParams shell_j = load_shell(basis, global_j);
+
+                  double local_sum = 0;
+                  for (int local_g = 0; local_g < num_points; ++local_g) {
+                    local_sum +=
+                        potential_scratch_scaled(local_g) *
+                        basis_eval_fast(shell_j, points_scratch(local_g)[0],
+                                        points_scratch(local_g)[1],
+                                        points_scratch(local_g)[2]);
+                  }
+                  Kokkos::atomic_add(
+                      &three_center_integral(global_alpha, global_j),
+                      local_sum);
+                }
+              });
+        });
+
+    KokkosBlas::gemm(space, "T", "N", 1.0, three_center_integral,
+                     half_inverse_X, 0.0, three_center_integral_scaled);
+
+    KokkosBlas::gemm(space, "N", "T", mo_coeff_h(i),
+                     three_center_integral_scaled, three_center_integral_scaled,
+                     1.0, result);
+  }
+  Kokkos::fence();
+  Kokkos::Profiling::popRegion();
+  return result;
+}
 } // namespace Nukexc
