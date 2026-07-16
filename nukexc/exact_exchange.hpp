@@ -46,7 +46,7 @@ DeviceView2DLeft compute_exact_exchange(
     const DeviceView2DLeft potential_collocation_scaled,
     const DeviceView2DLeft half_inverse_X) {
 
-  Kokkos::Profiling::pushRegion("Compute Exact Exchange Integral");
+  Kokkos::Profiling::pushRegion("Compute_Exact_Exchange_Integral");
   const int N_bf = basis_collocation.extent(0);
   const int N_bf_aux = basis_aux_collocation.extent(0);
   const int N_quad = basis_collocation.extent(1);
@@ -157,7 +157,7 @@ DeviceView2DLeft compute_exact_exchange_sparse(
     ;
 
     Kokkos::parallel_for(
-        "Sparse three center integral:(alpha |i m) ", policy_boxes,
+        "Sparse_three_center_integral_exchange", policy_boxes,
         KOKKOS_LAMBDA(const member_type &team_member) {
           const int box_idx = team_member.league_rank();
           // Compute number of points per box
