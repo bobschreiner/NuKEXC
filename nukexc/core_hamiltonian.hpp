@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include "nukexc/grid.hpp"
 #include "nukexc_config.hpp"
 #include "octree.hpp"
 #include "stobasis.hpp"
@@ -125,6 +126,7 @@ diag_overlap_integral(STOBasisSet &basis,
       });
   return diag_overlap_matrix;
 }
+
 
 DeviceView2DLeft nuclear_potential_integral(
     STOBasisSet &basis, Kokkos::View<Point *> quadrature_points,

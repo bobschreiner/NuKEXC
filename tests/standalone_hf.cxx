@@ -17,6 +17,7 @@
  *
  */
 
+#include "nukexc/octree.hpp"
 #include <Kokkos_Core.hpp>
 
 #include <iomanip>
@@ -46,12 +47,14 @@ using ll_type = IntegratorXX::LebedevLaikov<double>;
 struct Config {
   std::string xyz_file = "input/water.xyz";
   std::string basis_file = "input/zorabasis_cholesky/TZ2P.cholesky";
+  std::string algorithm = "dense";
   int nrad = 100;
   int nang = 30;
   double lin_dep_threshold = 1e-6;
   double conv_thr = 1e-8;
   int charge = 0;
   int multiplicity = 1;
+  int max_points_per_box = 32;
 };
 
 Config parse_args(int argc, char *argv[]) {
@@ -90,17 +93,19 @@ Config parse_args(int argc, char *argv[]) {
           << cfg.basis_file << ")\n"
           << "  --nrad=<int>          Radial grid points       (default: "
           << cfg.nrad << ")\n"
+          << "  --alg=<string>  Algorithm       (default: " << cfg.algorithm
+          << ")\n"
           << "  --nang=<int>          Angular grid points      (default: "
           << cfg.nang << ")\n"
           << "  --lin-dep=<float>     Linear dep. threshold    (default: "
+          << cfg.lin_dep_threshold << ")\n"
           << "  --conv-thr=<float>    SCF convergence threshold (default: "
-
-          << cfg.conv_thr << ")\n"
-          << cfg.lin_dep_threshold << ")\n";
+          << cfg.conv_thr << ")\n";
 
       std::exit(0);
     } else if (!parse_string("--xyz=", cfg.xyz_file) &&
                !parse_string("--basis=", cfg.basis_file) &&
+               !parse_string("--alg=", cfg.algorithm) &&
                !parse_int("--nrad=", cfg.nrad) &&
                !parse_int("--nang=", cfg.nang) &&
                !parse_double("--lin-dep=", cfg.lin_dep_threshold) &&
@@ -134,6 +139,8 @@ void print_config(const Config &cfg) {
             << cfg.xyz_file << " │\n";
   std::cout << "│ Basis file           │ " << std::setw(width) << std::left
             << cfg.basis_file << " │\n";
+  std::cout << "│ Algorithm            │ " << std::setw(width) << std::left
+            << cfg.algorithm << " │\n";
   std::cout << "│ Radial points        │ " << std::setw(width) << cfg.nrad
             << " │\n";
   std::cout << "│ Angular order        │ " << std::setw(width) << cfg.nang
@@ -213,35 +220,55 @@ int main(int argc, char *argv[]) {
 
     // ---- Compute collocations --------------------------------------------
 
+    ExecSpace space;
     const int N_bf = basis.nbf();
     const int N_bf_aux = basis_aux.nbf();
     const int N_quad = grid.quad_points.extent(0);
 
-    DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
-    DeviceView2DLeft basis_aux_collocation("Auxillary Basis collocation",
-                                           N_bf_aux, N_quad);
-    DeviceView2DLeft potential_collocation_scaled("Potential collocation",
-                                                  N_bf_aux, N_quad);
-
-    DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
     DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
 
-    ExecSpace space;
-    fill_collocation(space, basis, grid.quad_points, basis_collocation);
-    fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
-    sto_potential_collocation_scaled(space, basis_aux, grid,
-                                     potential_collocation_scaled);
+    DeviceView2DLeft basis_collocation;
+    DeviceView2DLeft basis_aux_collocation;
+    DeviceView2DLeft potential_collocation_scaled;
 
-    // Compute (A|B)
-    KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
-                     potential_collocation_scaled, 0.0, aux_overlap);
+    DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
 
-    Kokkos::parallel_for(
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
-        KOKKOS_LAMBDA(int i, int j) {
-          aux_overlap_sym(i, j) = 0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
-        });
+    if (cfg.algorithm == "dense") {
+      basis_collocation = DeviceView2DLeft("Basis collocation", N_bf, N_quad);
+      basis_aux_collocation =
+          DeviceView2DLeft("Auxillary Basis collocation", N_bf_aux, N_quad);
+      potential_collocation_scaled =
+          DeviceView2DLeft("Potential collocation", N_bf_aux, N_quad);
 
+      DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
+
+      fill_collocation(space, basis, grid.quad_points, basis_collocation);
+      fill_collocation(space, basis_aux, grid.quad_points,
+                       basis_aux_collocation);
+      sto_potential_collocation_scaled(space, basis_aux, grid,
+                                       potential_collocation_scaled);
+
+      // Compute (A|B)
+      KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
+                       potential_collocation_scaled, 0.0, aux_overlap);
+
+      Kokkos::parallel_for(
+          Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
+          KOKKOS_LAMBDA(int i, int j) {
+            aux_overlap_sym(i, j) =
+                0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
+          });
+    }
+
+    else if (cfg.algorithm == "sparse") {
+      NeighborList nl_aux;
+      auto bb = create_bounding_boxes(grid, cfg.max_points_per_box);
+      build_neighbor_list(basis_aux, bb, cfg.max_points_per_box, N_quad,
+                          nl_aux);
+
+      aux_overlap_sym =
+          coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
+    }
     DeviceView2DLeft half_inverse_X =
         compute_half_inverse(aux_overlap_sym, cfg.lin_dep_threshold);
 
@@ -283,6 +310,7 @@ int main(int argc, char *argv[]) {
 
     // Compute the nuclear repulsion energy once and pass it to the fock_builder
     double E_nuc = compute_nuclear_repulsion(mol);
+
     // ---- Fock builder -----------------------------------------------------
     // Captures by value everything that doesn't change between iterations.
     // OOO calls this every SCF iteration with the current DensityMatrix.
@@ -386,6 +414,110 @@ int main(int argc, char *argv[]) {
       return std::make_pair(Etot, fock_arma); // two Fock matrices for OOO
     };
 
+    auto bounding_boxes = create_bounding_boxes(grid, cfg.max_points_per_box);
+    NeighborList nl;
+    build_neighbor_list(basis, bounding_boxes, cfg.max_points_per_box, N_quad,
+                        nl);
+
+    auto fock_builder_sparse =
+        [space, basis, basis_aux, grid, nl, h_core, X_arma, N_bf, E_nuc, S_arma,
+         half_inverse_X,
+         cfg](const OpenOrbitalOptimizer::DensityMatrix<double, double> &dm)
+        -> std::pair<double, OpenOrbitalOptimizer::FockMatrix<double>> {
+      const auto &orbitals = dm.first;     // vector<arma::mat>, one per block
+      const auto &occupations = dm.second; // vector<arma::vec>, one per block
+
+      // orbitals[0] : (nbf x nbf) MO coefficient matrix (columns = MOs)
+      // occupations[0] : (nbf) occupation numbers
+      // α and β orbitals and occupations from OOO
+      const arma::mat C_alpha = X_arma * orbitals[0];
+      const arma::mat C_beta = X_arma * orbitals[1];
+      const arma::vec occ_alpha = occupations[0]; // 0 or 1
+      const arma::vec occ_beta = occupations[1];  // 0 or 1
+
+      // Build total density for Coulomb
+      arma::mat D_alpha = C_alpha * arma::diagmat(occ_alpha) * C_alpha.t();
+      arma::mat D_beta = C_beta * arma::diagmat(occ_beta) * C_beta.t();
+      arma::mat D_tot = D_alpha + D_beta;
+
+      // Diagnostics
+#ifndef NDEBUG
+      std::cout << "Tr[D_alpha * S] = " << arma::trace(D_alpha * S_arma)
+                << "\n"; // expect 5
+      std::cout << "Tr[D_beta  * S] = " << arma::trace(D_beta * S_arma)
+                << "\n"; // expect 5
+      std::cout << "Tr[D_tot   * S] = " << arma::trace(D_tot * S_arma)
+                << "\n"; // expect 10
+
+#endif
+      // Need to pass D_tot into compute_coulomb somehow
+      // Easiest: pass combined orbitals [C_alpha | C_beta] with combined
+      // occupations
+      arma::mat C_combined = arma::join_horiz(C_alpha, C_beta);
+      arma::vec occ_combined = arma::join_vert(occ_alpha, occ_beta);
+
+      DeviceView2DLeft k_C_tot = arma_to_kokkos(C_combined, "C_combined");
+      DeviceView1D k_occ_tot = arma_to_kokkos1d(occ_combined, "occ_combined");
+
+      // J built from total density — same as RHF
+      DeviceView2DLeft J =
+          compute_coulomb_sparse(space, k_C_tot, k_occ_tot, basis, basis_aux,
+                                 grid, nl, half_inverse_X);
+
+      // K built separately per spin — pass 0/1 occupations (no occ prefactor)
+      DeviceView2DLeft k_C_alpha = arma_to_kokkos(C_alpha, "C_alpha");
+      DeviceView2DLeft k_C_beta = arma_to_kokkos(C_beta, "C_beta");
+      DeviceView1D k_occ_alpha = arma_to_kokkos1d(occ_alpha, "occ_alpha");
+      DeviceView1D k_occ_beta = arma_to_kokkos1d(occ_beta, "occ_beta");
+
+      DeviceView2DLeft K_alpha =
+          compute_exact_exchange_sparse(space, k_C_alpha, k_occ_alpha, basis,
+                                        basis_aux, grid, nl, half_inverse_X);
+
+      DeviceView2DLeft K_beta =
+          compute_exact_exchange_sparse(space, k_C_beta, k_occ_beta, basis,
+                                        basis_aux, grid, nl, half_inverse_X);
+
+      // Convert to Kokkos for NuKEXC compute_coulomb / compute_exact_exchange
+      auto J_arma = kokkos_to_arma(J);
+      auto K_alpha_arma = kokkos_to_arma(K_alpha);
+      auto K_beta_arma = kokkos_to_arma(K_beta);
+
+      // No factors of 2 anywhere — D_α and D_β have occupation 0/1
+      double E_core = arma::trace(D_tot * h_core); // Tr[(Dα+Dβ)*H]
+      double E_coulomb =
+          0.5 * arma::trace(D_tot * J_arma); // 0.5 * Tr[D_tot * J]
+      double E_exchange =
+          -0.5 * arma::trace(D_alpha * K_alpha_arma) -
+          0.5 * arma::trace(D_beta * K_beta_arma); // one per spin
+                                                   //
+      double Etot = E_nuc + E_core + E_coulomb + E_exchange;
+
+      std::cout << "Total energy        : " << std::setprecision(10) << Etot
+                << "\n";
+      std::cout << "--------------------------------------------- \n";
+      std::cout << "Nuclear Repulsion   : " << std::setprecision(10) << E_nuc
+                << "\n";
+      std::cout << "Electronic   Energy : " << std::setprecision(10)
+                << E_core + E_coulomb + E_exchange << "\n";
+      std::cout << "One Electron Energy : " << std::setprecision(10) << E_core
+                << "\n";
+      std::cout << "Two Electron Energy : " << std::setprecision(10)
+                << E_coulomb + E_exchange << "\n\n";
+
+      arma::mat F_alpha = h_core + J_arma - K_alpha_arma;
+      arma::mat F_beta = h_core + J_arma - K_beta_arma;
+
+      arma::mat F_alpha_orth = X_arma.t() * F_alpha * X_arma;
+      arma::mat F_beta_orth = X_arma.t() * F_beta * X_arma;
+
+      std::vector<arma::mat> fock_arma;
+      fock_arma.push_back(F_alpha_orth);
+      fock_arma.push_back(F_beta_orth);
+
+      return std::make_pair(Etot, fock_arma); // two Fock matrices for OOO
+    };
+
     // ---- GWH initial guess (replaces h_core_orth as the starting Fock) ----
     arma::mat F_gwh(N_bf, N_bf, arma::fill::zeros);
     const double K_gwh = 1.75;
@@ -401,9 +533,24 @@ int main(int argc, char *argv[]) {
     }
     arma::mat F_gwh_orth = X_arma.t() * F_gwh * X_arma;
     // ---- Construct and run SCF solver -------------------------------------
+
+    std::function<std::pair<double, OpenOrbitalOptimizer::FockMatrix<double>>(
+        const OpenOrbitalOptimizer::DensityMatrix<double, double> &)>
+        selected_fock_builder;
+
+    if (cfg.algorithm == "sparse") {
+      selected_fock_builder = fock_builder_sparse;
+    } else if (cfg.algorithm == "dense") {
+      selected_fock_builder = fock_builder;
+    } else {
+      throw std::runtime_error("Unknown --alg: " + cfg.algorithm +
+                               " (expected 'dense' or 'sparse')");
+    }
+
     OpenOrbitalOptimizer::SCFSolver<double, double> solver(
-        blocks_per_type, max_occupations, number_of_particles, fock_builder,
-        block_descriptions);
+        blocks_per_type, max_occupations, number_of_particles,
+        selected_fock_builder, block_descriptions);
+
     solver.convergence_threshold(cfg.conv_thr);
     solver.verbosity(5);
     solver.initialize_with_fock({F_gwh_orth, F_gwh_orth});

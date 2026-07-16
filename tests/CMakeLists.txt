@@ -28,6 +28,8 @@ add_executable(benchmark_cutoff standards.cxx benchmark_cutoff.cxx )
 add_executable(standalone_hf standards.cxx standalone_hf.cxx)
 add_executable(standalone_dft standards.cxx standalone_dft.cxx)
 
+add_executable(standalone standards.cxx standalone.cxx)
+
 add_custom_target(copy_test_inputs 
     COMMAND  ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_SOURCE_DIR}/input" "${CMAKE_CURRENT_BINARY_DIR}/input"
@@ -59,8 +61,10 @@ set(ALL_TEST_TARGETS
     benchmark_coreH
     benchmark_cutoff
 
+    standalone
     standalone_hf 
     standalone_dft
+
 )
 
 # Apply linking to all of them at once
@@ -69,8 +73,6 @@ foreach(tgt IN LISTS ALL_TEST_TARGETS)
 
     add_dependencies(${tgt} copy_test_inputs)
 endforeach()
-
-target_link_libraries( standalone_hf PRIVATE OpenOrbitalOptimizer::OpenOrbitalOptimizer )
 
 add_test( NAME GRID_TEST COMMAND $<TARGET_FILE:test_grid> )
 add_test( NAME PARTITION_TEST COMMAND $<TARGET_FILE:test_partition> )

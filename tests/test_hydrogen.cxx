@@ -651,38 +651,23 @@ TEST_CASE("compute_coulomb sprse -- hydrogen 1s self-repulsion"
   const int N_bf_aux = basis_aux.nbf();
   const int N_quad = grid.quad_points.extent(0);
 
-  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
-  DeviceView2DLeft basis_aux_collocation("Auxillary Basis collocation",
-                                         N_bf_aux, N_quad);
-  DeviceView2DLeft potential_collocation_scaled("Potential collocation",
-                                                N_bf_aux, N_quad);
-  DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
   DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
 
   ExecSpace space;
-
-  fill_collocation(space, basis, grid.quad_points, basis_collocation);
-  fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
-  sto_potential_collocation_scaled(space, basis_aux, grid,
-                                   potential_collocation_scaled);
-
-  // Compute (A|B)
-  KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
-                   potential_collocation_scaled, 0.0, aux_overlap);
-
-  Kokkos::parallel_for(
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
-      KOKKOS_LAMBDA(int i, int j) {
-        aux_overlap_sym(i, j) = 0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
-      });
-
-  DeviceView2DLeft half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
-
   int max_points_per_box = 32;
   auto bb = create_bounding_boxes(grid, max_points_per_box);
   NeighborList nl;
   build_neighbor_list(basis, bb, max_points_per_box, grid.quad_points.extent(0),
                       nl);
+  NeighborList nl_aux;
+  build_neighbor_list(basis_aux, bb, max_points_per_box,
+                      grid.quad_points.extent(0), nl_aux);
+
+  // Compute (A|B)
+
+  aux_overlap_sym =
+      coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
+  DeviceView2DLeft half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
 
   DeviceView2DLeft J = compute_coulomb_sparse(
       space, mo_orbitals, mo_coeff, basis, basis_aux, grid, nl, half_inverse_X);
@@ -809,28 +794,20 @@ TEST_CASE("compute_exchange sprse -- hydrogen 1s self-exchange"
   DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
 
   ExecSpace space;
-
-  fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
-  sto_potential_collocation_scaled(space, basis_aux, grid,
-                                   potential_collocation_scaled);
-
-  // Compute (A|B)
-  KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
-                   potential_collocation_scaled, 0.0, aux_overlap);
-
-  Kokkos::parallel_for(
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
-      KOKKOS_LAMBDA(int i, int j) {
-        aux_overlap_sym(i, j) = 0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
-      });
-
-  DeviceView2DLeft half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
-
   int max_points_per_box = 32;
   auto bb = create_bounding_boxes(grid, max_points_per_box);
   NeighborList nl;
   build_neighbor_list(basis, bb, max_points_per_box, grid.quad_points.extent(0),
                       nl);
+  NeighborList nl_aux;
+  build_neighbor_list(basis_aux, bb, max_points_per_box,
+                      grid.quad_points.extent(0), nl_aux);
+
+  // Compute (A|B)
+
+  aux_overlap_sym =
+      coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
+  DeviceView2DLeft half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
 
   DeviceView2DLeft K = compute_exact_exchange_sparse(
       space, mo_orbitals, mo_coeff, basis, basis_aux, grid, nl, half_inverse_X);
