@@ -25,9 +25,6 @@ add_executable(benchmark_scf standards.cxx benchmark_scf.cxx )
 add_executable(benchmark_coreH standards.cxx benchmark_coreH.cxx )
 add_executable(benchmark_cutoff standards.cxx benchmark_cutoff.cxx )
 
-add_executable(standalone_hf standards.cxx standalone_hf.cxx)
-add_executable(standalone_dft standards.cxx standalone_dft.cxx)
-
 add_executable(standalone standards.cxx standalone.cxx)
 
 add_custom_target(copy_test_inputs 
@@ -62,8 +59,6 @@ set(ALL_TEST_TARGETS
     benchmark_cutoff
 
     standalone
-    standalone_hf 
-    standalone_dft
 
 )
 

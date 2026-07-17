@@ -45,6 +45,24 @@ using MemSpace = ExecSpace::memory_space;
 using Layout = Kokkos::LayoutRight;
 const double epsilon_shift = 1e-30;
 
+// Force a real call boundary (no inlining) so a register-heavy callee's
+// temporaries stay confined to its own frame instead of inflating the
+// caller's simultaneously-live register set. Combined with the `inline` from
+// KOKKOS_INLINE_FUNCTION it remains ODR-safe for header definitions, while the
+// optimizer is told not to substitute the body at the call site -- this caps a
+// kernel's register count at max-over-call-graph rather than the inlined sum,
+// which is what buys occupancy on GPU.
+// Define NUKEXC_DISABLE_NOINLINE (e.g. -DNUKEXC_DISABLE_NOINLINE) to fall back
+// to full inlining -- useful for A/B profiling the register/occupancy effect
+// with ncu on GPU.
+#if defined(NUKEXC_DISABLE_NOINLINE)
+#define NUKEXC_NOINLINE
+#elif defined(KOKKOS_ENABLE_CUDA) || defined(KOKKOS_ENABLE_HIP)
+#define NUKEXC_NOINLINE __noinline__
+#else
+#define NUKEXC_NOINLINE __attribute__((noinline))
+#endif
+
 // Standard Views
 using View1D = Kokkos::View<double *>;
 using DeviceView2D = Kokkos::View<double **, ExecSpace>;

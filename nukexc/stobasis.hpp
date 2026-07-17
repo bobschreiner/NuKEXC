@@ -356,7 +356,8 @@ load_thakkar_basis(const Molecule &mol,
 }
 
 struct ShellParams {
-  int l, m, n;
+  int l, m;
+  int k; // radial power exponent, precomputed as n - l - 1
   double zeta, norm, ox, oy, oz;
 };
 
@@ -394,9 +395,28 @@ void basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
 
 KOKKOS_INLINE_FUNCTION
 ShellParams load_shell(const STOBasisSet &basis, int basis_idx) {
-  return {basis.l(basis_idx),    basis.m(basis_idx),    basis.n(basis_idx),
-          basis.zeta(basis_idx), basis.norm(basis_idx), basis.O(basis_idx)[0],
-          basis.O(basis_idx)[1], basis.O(basis_idx)[2]};
+  const int l = basis.l(basis_idx);
+  return {l,
+          basis.m(basis_idx),
+          basis.n(basis_idx) - l - 1, // k = n - l - 1
+          basis.zeta(basis_idx),
+          basis.norm(basis_idx),
+          basis.O(basis_idx)[0],
+          basis.O(basis_idx)[1],
+          basis.O(basis_idx)[2]};
+}
+
+// Non-inlined boundary around the angular polynomial switch. The high-l cases
+// of real_solid_harmonic_cart_precomputed materialize up to ~10 degree-7
+// monomial temporaries; keeping them in this callee's own frame stops them from
+// widening the live-register set of the pairwise integral loops that call
+// basis_eval_fast. (The generated harmonics header is left untouched.)
+KOKKOS_INLINE_FUNCTION NUKEXC_NOINLINE double
+eval_solid_harmonic(const int l, const int m, const double x, const double y,
+                    const double z) {
+  double angular_part;
+  real_solid_harmonic_cart_precomputed(l, m, x, y, z, angular_part);
+  return angular_part;
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -408,12 +428,11 @@ double basis_eval_fast(const ShellParams &sh, double x, double y, double z) {
   {
 
     const double r = Kokkos::sqrt(x * x + y * y + z * z) + epsilon_shift;
-    const int k = sh.n - sh.l - 1;
-    radial = (k == 0) ? sh.norm * Kokkos::exp(-sh.zeta * r)
-                      : sh.norm * int_pow(r, k) * Kokkos::exp(-sh.zeta * r);
+    radial = (sh.k == 0)
+                 ? sh.norm * Kokkos::exp(-sh.zeta * r)
+                 : sh.norm * int_pow(r, sh.k) * Kokkos::exp(-sh.zeta * r);
   }
-  double angular_part;
-  real_solid_harmonic_cart_precomputed(sh.l, sh.m, x, y, z, angular_part);
+  const double angular_part = eval_solid_harmonic(sh.l, sh.m, x, y, z);
   return radial * angular_part;
 } // namespace Nukexc
 

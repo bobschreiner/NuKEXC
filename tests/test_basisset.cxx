@@ -82,7 +82,8 @@ Config parse_args(int argc, char *argv[]) {
           << "  --benchmark=<int> Benchmark? (0=No, 1=Yes) (default: "
           << cfg.benchmark << ")\n"
 
-          << "  --alg=<string>    Algorithm(fasts,fastv,slows,slowv) (default: "
+          << "  --alg=<string>    "
+             "Algorithm(fasts,fastv,slows,slowv,cached) (default: "
           << cfg.algorithm << ")\n"
           << "  --nrad=<int>              Radial grid points        (default: "
           << cfg.nrad << ")\n"
@@ -731,6 +732,106 @@ void benchmark_collocation(Config cfg) {
     double end_serial_slow = time_serial.seconds();
     Kokkos::printf("Benchmark [Team->Thread->Serial] [basis_eval] took %fs \n",
                    end_serial_slow - start_serial_slow);
+  } else if (cfg.algorithm == "cached") {
+    // Precompute phi(neighbor, point) once into team scratch, then form the
+    // pairwise S(i,j) by reading the cache. This removes the O(neighbors^2 *
+    // points) redundant basis_eval_fast calls (and the two live ShellParams)
+    // from the hot reduction loop -- the register-pressure fix intended for
+    // compute_coulomb_sparse / compute_exact_exchange_sparse.
+
+    // Upper bound on neighbors per box, needed to size the phi cache scratch.
+    auto offsets_h =
+        Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, nl.offsets);
+    int max_neighbors = 0;
+    for (int b = 0; b + 1 < static_cast<int>(offsets_h.extent(0)); ++b) {
+      const int nb = offsets_h(b + 1) - offsets_h(b);
+      if (nb > max_neighbors)
+        max_neighbors = nb;
+    }
+
+    const int scratch_cached =
+        shared_view_double::shmem_size(max_points_per_box) +           // weights
+        shared_view_points::shmem_size(max_points_per_box) +           // points
+        shared_view_double::shmem_size(max_neighbors *                 // phi cache
+                                       max_points_per_box);
+    policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_cached));
+
+    Kokkos::Timer time_cached;
+    double start_cached = time_cached.seconds();
+    Kokkos::parallel_for(
+        "Benchmark [Team->Cache->Thread] [basis_eval_fast cached]", policy_boxes,
+        KOKKOS_LAMBDA(const member_type &team_member) {
+          const int box_idx = team_member.league_rank();
+          // Compute number of points per box
+          const int start_points = box_idx * max_points_per_box;
+          const int end_points =
+              Kokkos::min(start_points + max_points_per_box, N_quad);
+          const int num_points = end_points - start_points;
+
+          // Compute number of neighbors per box
+          const int start_neighbors = nl.offsets(box_idx);
+          const int end_neighbors = nl.offsets(box_idx + 1);
+          const int num_neighbors = end_neighbors - start_neighbors;
+
+          shared_view_double weights_scratch(team_member.team_scratch(0),
+                                             num_points);
+
+          shared_view_points points_scratch(team_member.team_scratch(0),
+                                            num_points);
+
+          // phi_cache is laid out [neighbor][point] with stride num_points.
+          shared_view_double phi_cache(team_member.team_scratch(0),
+                                       num_neighbors * num_points);
+
+          Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
+                               [=](const int local_g) {
+                                 const int global_g = start_points + local_g;
+                                 weights_scratch(local_g) =
+                                     grid.weights(global_g);
+                                 points_scratch(local_g) =
+                                     grid.quad_points(global_g);
+                               });
+
+          team_member.team_barrier();
+
+          // Evaluate each basis function on every point exactly once.
+          Kokkos::parallel_for(
+              Kokkos::TeamThreadRange(team_member, num_neighbors),
+              [=](const int local_i) {
+                const int global_i = nl.neighbors(start_neighbors + local_i);
+                const ShellParams shell_i = load_shell(basis, global_i);
+                const int base_i = local_i * num_points;
+                for (int local_g = 0; local_g < num_points; ++local_g) {
+                  phi_cache(base_i + local_g) = basis_eval_fast(
+                      shell_i, points_scratch(local_g)[0],
+                      points_scratch(local_g)[1], points_scratch(local_g)[2]);
+                }
+              });
+
+          team_member.team_barrier();
+
+          // Pairwise contraction reads only the cache: no ShellParams, no
+          // harmonic switch, no int_pow in the inner loop.
+          Kokkos::parallel_for(
+              Kokkos::TeamThreadMDRange(team_member, num_neighbors,
+                                        num_neighbors),
+              [=](const int local_i, const int local_j) {
+                const int base_i = local_i * num_points;
+                const int base_j = local_j * num_points;
+                double sum = 0;
+                for (int local_g = 0; local_g < num_points; ++local_g) {
+                  sum +=
+                      phi_cache(base_i + local_g) * phi_cache(base_j + local_g);
+                }
+                S(local_i, local_j) = sum;
+              });
+        });
+
+    Kokkos::fence();
+    double end_cached = time_cached.seconds();
+    Kokkos::printf(
+        "Benchmark [Team->Cache->Thread] [basis_eval_fast cached] took %fs \n",
+        end_cached - start_cached);
   }
 };
 
