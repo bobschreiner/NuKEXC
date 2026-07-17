@@ -767,7 +767,7 @@ int main(int argc, char *argv[]) {
         TIME_SCOPE(fock_timing, "Coulomb (J) build");
         DeviceView2DLeft J;
         if (is_sparse) {
-          J = compute_coulomb_sparse(space, k_C_tot, k_occ_tot, basis,
+          J = compute_coulomb_tiled(space, k_C_tot, k_occ_tot, basis,
                                      basis_aux, grid, nl, half_inverse_X);
         } else {
           J = compute_coulomb(space, k_C_tot, k_occ_tot, basis_collocation,
@@ -797,7 +797,7 @@ int main(int argc, char *argv[]) {
         {
           TIME_SCOPE(fock_timing, "  K alpha");
           if (is_sparse) {
-            K_alpha = compute_exact_exchange_sparse(
+            K_alpha = compute_exact_exchange_tiled(
                 space, k_C_alpha, k_occ_alpha, basis, basis_aux, grid, nl,
                 half_inverse_X);
           } else {
@@ -810,7 +810,7 @@ int main(int argc, char *argv[]) {
         {
           TIME_SCOPE(fock_timing, "  K beta");
           if (is_sparse) {
-            K_beta = compute_exact_exchange_sparse(space, k_C_beta, k_occ_beta,
+            K_beta = compute_exact_exchange_tiled(space, k_C_beta, k_occ_beta,
                                                    basis, basis_aux, grid, nl,
                                                    half_inverse_X);
           } else {

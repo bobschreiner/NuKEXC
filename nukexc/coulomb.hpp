@@ -353,6 +353,320 @@ DeviceView2DLeft compute_coulomb_sparse(
   return result;
 }
 
+// ============================================================================
+//  Neighbor-tiled Coulomb
+// ============================================================================
+//
+// Same result as compute_coulomb_sparse, but the phi(neighbor, point)
+// evaluations that the two kernels otherwise recompute O(neighbors^2 * points)
+// times are staged through a bounded, fixed-size neighbor-tile cache in team
+// scratch. Two tile buffers hold one tile of neighbor-phi each (phi_a = outer
+// tile, phi_b = inner tile); the pairwise contractions are done as blocked,
+// lower-triangular tiles. The shared-memory footprint is
+//   2 * tile_size * max_points_per_box * sizeof(double)
+// and is INDEPENDENT of the number of neighbors -- so unlike a full
+// [neighbors x points] cache it does not overflow scratch on large molecules.
+DeviceView2DLeft compute_coulomb_tiled(
+    const ExecSpace space, const DeviceView2DLeft mo_orbitals,
+    const DeviceView1D mo_coeff, const STOBasisSet basis,
+    const STOBasisSet basis_aux, const FlatGrid grid, const NeighborList nl,
+    const DeviceView2DLeft half_inverse_X, const int tile_size = 32) {
+
+  Kokkos::Profiling::pushRegion("Compute Coulomb Integral Tiled");
+  const int N_bf = basis.nbf();
+  const int N_bf_aux = basis_aux.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+  const int N_occ = mo_coeff.extent(0);
+  const int K = half_inverse_X.extent(1);
+
+  const int max_points_per_box = nl.max_points_per_box;
+  const int num_boxes = nl.offsets.extent(0) - 1;
+
+  DeviceView1DLeft expansion_coeff("Expansion coeff", N_bf_aux);
+  DeviceView2DLeft density_matrix("Density matrix", N_bf, N_bf);
+  DeviceView2DLeft result("Coulomb matrix", N_bf, N_bf);
+
+  Kokkos::parallel_for(
+      "Fill Density matrix",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf, N_bf}),
+      KOKKOS_LAMBDA(const int mu, const int nu) {
+        for (unsigned int k = 0; k < N_occ; ++k)
+          density_matrix(mu, nu) +=
+              mo_coeff(k) * mo_orbitals(mu, k) * mo_orbitals(nu, k);
+      });
+
+  DeviceView1DLeft scaling_factor("Scaling factor", K);
+
+  Kokkos::TeamPolicy<ExecSpace> policy_boxes(space, num_boxes, Kokkos::AUTO());
+  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+  typedef ExecSpace::scratch_memory_space ScratchSpace;
+  typedef Kokkos::View<double *, ScratchSpace,
+                       Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+      shared_view_double;
+  typedef Kokkos::View<Point *, ScratchSpace,
+                       Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+      shared_view_points;
+
+  // ---- Kernel 1 (tiled): rho(g) = sum_{i,j} phi_i(g) phi_j(g) D_ij, then
+  //      expansion_coeff(alpha) += sum_g rho(g) (alpha|g) ----
+  const int scratch_k1 =
+      shared_view_double::shmem_size(max_points_per_box) * 2 + // weights + rho
+      shared_view_points::shmem_size(max_points_per_box) +     // points
+      shared_view_double::shmem_size(tile_size * max_points_per_box) *
+          2; // phi_a + phi_b
+  policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_k1));
+
+  Kokkos::parallel_for(
+      "Coulomb tiled: coeff(alpha) = sum_{ij} (alpha|ij) D_ij", policy_boxes,
+      KOKKOS_LAMBDA(const member_type &team_member) {
+        const int box_idx = team_member.league_rank();
+        const int start_points = box_idx * max_points_per_box;
+        const int end_points =
+            Kokkos::min(start_points + max_points_per_box, N_quad);
+        const int num_points = end_points - start_points;
+
+        const int start_neighbors = nl.offsets(box_idx);
+        const int num_neighbors = nl.offsets(box_idx + 1) - start_neighbors;
+
+        shared_view_double weights_scratch(team_member.team_scratch(0),
+                                           num_points);
+        shared_view_points points_scratch(team_member.team_scratch(0),
+                                          num_points);
+        shared_view_double density_scratch_scaled(team_member.team_scratch(0),
+                                                  num_points);
+        shared_view_double phi_a(team_member.team_scratch(0),
+                                 tile_size * num_points);
+        shared_view_double phi_b(team_member.team_scratch(0),
+                                 tile_size * num_points);
+
+        Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
+                             [=](const int local_g) {
+                               const int global_g = start_points + local_g;
+                               weights_scratch(local_g) =
+                                   grid.weights(global_g);
+                               points_scratch(local_g) =
+                                   grid.quad_points(global_g);
+                               density_scratch_scaled(local_g) = 0;
+                             });
+        team_member.team_barrier();
+
+        const int num_tiles = (num_neighbors + tile_size - 1) / tile_size;
+        for (int ti = 0; ti < num_tiles; ++ti) {
+          const int i0 = ti * tile_size;
+          const int ilen = Kokkos::min(tile_size, num_neighbors - i0);
+
+          Kokkos::parallel_for(
+              Kokkos::TeamThreadRange(team_member, ilen), [=](const int li) {
+                const int gi = nl.neighbors(start_neighbors + i0 + li);
+                const ShellParams shell = load_shell(basis, gi);
+                const int base = li * num_points;
+                for (int g = 0; g < num_points; ++g)
+                  phi_a(base + g) = basis_eval_fast(shell, points_scratch(g)[0],
+                                                    points_scratch(g)[1],
+                                                    points_scratch(g)[2]);
+              });
+          team_member.team_barrier();
+
+          for (int tj = 0; tj <= ti; ++tj) {
+            const int j0 = tj * tile_size;
+            const int jlen = Kokkos::min(tile_size, num_neighbors - j0);
+            const bool diag = (tj == ti);
+            if (!diag) {
+              Kokkos::parallel_for(
+                  Kokkos::TeamThreadRange(team_member, jlen),
+                  [=](const int lj) {
+                    const int gj = nl.neighbors(start_neighbors + j0 + lj);
+                    const ShellParams shell = load_shell(basis, gj);
+                    const int base = lj * num_points;
+                    for (int g = 0; g < num_points; ++g)
+                      phi_b(base + g) = basis_eval_fast(
+                          shell, points_scratch(g)[0], points_scratch(g)[1],
+                          points_scratch(g)[2]);
+                  });
+              team_member.team_barrier();
+            }
+            const double *pj = diag ? phi_a.data() : phi_b.data();
+
+            // Accumulate the full ordered double sum for this tile block into
+            // rho(g). Threads own points, so density_scratch_scaled(g) has no
+            // race; the lower-triangular tile loop + symmetric D terms
+            // replicate the sparse kernel's sum over all ordered (i,j).
+            Kokkos::parallel_for(
+                Kokkos::TeamThreadRange(team_member, num_points),
+                [=](const int g) {
+                  double acc = 0;
+                  for (int li = 0; li < ilen; ++li) {
+                    const int gi = nl.neighbors(start_neighbors + i0 + li);
+                    const double phi_i = phi_a(li * num_points + g);
+                    const int lj_hi = diag ? li : (jlen - 1);
+                    for (int lj = 0; lj <= lj_hi; ++lj) {
+                      const int gj = nl.neighbors(start_neighbors + j0 + lj);
+                      const double phi_ij = phi_i * pj[lj * num_points + g];
+                      acc += phi_ij * density_matrix(gi, gj);
+                      if (!(diag && li == lj))
+                        acc += phi_ij * density_matrix(gj, gi);
+                    }
+                  }
+                  density_scratch_scaled(g) += acc * weights_scratch(g);
+                });
+            team_member.team_barrier();
+          }
+        }
+
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadRange(team_member, N_bf_aux),
+            [=](const int global_alpha) {
+              double local_sum_alpha = 0;
+              for (int g = 0; g < num_points; ++g) {
+                const double dx =
+                    points_scratch(g)[0] - basis_aux.O(global_alpha)[0];
+                const double dy =
+                    points_scratch(g)[1] - basis_aux.O(global_alpha)[1];
+                const double dz =
+                    points_scratch(g)[2] - basis_aux.O(global_alpha)[2];
+                const double r =
+                    dist(points_scratch(g), basis_aux.O(global_alpha));
+                local_sum_alpha +=
+                    density_scratch_scaled(g) *
+                    sto_potential(basis_aux, global_alpha, dx, dy, dz, r);
+              }
+              Kokkos::atomic_add(&expansion_coeff(global_alpha),
+                                 local_sum_alpha);
+            });
+      });
+
+  space.fence();
+
+  // Apply (A|B)^{-1}
+  KokkosBlas::gemv(space, "T", 1.0, half_inverse_X, expansion_coeff, 0.0,
+                   scaling_factor);
+  KokkosBlas::gemv(space, "N", 1.0, half_inverse_X, scaling_factor, 0.0,
+                   expansion_coeff);
+
+  // ---- Kernel 2 (tiled): J_{i,j} = sum_g V(g) phi_i(g) phi_j(g) ----
+  const int scratch_k2 =
+      shared_view_double::shmem_size(max_points_per_box) * 2 + // weights + pot
+      shared_view_points::shmem_size(max_points_per_box) +     // points
+      shared_view_double::shmem_size(tile_size * max_points_per_box) *
+          2; // phi_a + phi_b
+  policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_k2));
+
+  Kokkos::parallel_for(
+      "Coulomb tiled: J_{mu,nu} = sum_{alpha} (mu nu|alpha)", policy_boxes,
+      KOKKOS_LAMBDA(const member_type &team_member) {
+        const int box_idx = team_member.league_rank();
+        const int start_points = box_idx * max_points_per_box;
+        const int end_points =
+            Kokkos::min(start_points + max_points_per_box, N_quad);
+        const int num_points = end_points - start_points;
+
+        const int start_neighbors = nl.offsets(box_idx);
+        const int num_neighbors = nl.offsets(box_idx + 1) - start_neighbors;
+
+        shared_view_double weights_scratch(team_member.team_scratch(0),
+                                           num_points);
+        shared_view_points points_scratch(team_member.team_scratch(0),
+                                          num_points);
+        shared_view_double potential_scratch_scaled(team_member.team_scratch(0),
+                                                    num_points);
+        shared_view_double phi_a(team_member.team_scratch(0),
+                                 tile_size * num_points);
+        shared_view_double phi_b(team_member.team_scratch(0),
+                                 tile_size * num_points);
+
+        Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
+                             [=](const int local_g) {
+                               const int global_g = start_points + local_g;
+                               weights_scratch(local_g) =
+                                   grid.weights(global_g);
+                               points_scratch(local_g) =
+                                   grid.quad_points(global_g);
+                               potential_scratch_scaled(local_g) = 0;
+                             });
+        team_member.team_barrier();
+
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadRange(team_member, N_bf_aux),
+            [=](const int global_alpha) {
+              for (int g = 0; g < num_points; ++g) {
+                const double x =
+                    points_scratch(g)[0] - basis_aux.O(global_alpha)[0];
+                const double y =
+                    points_scratch(g)[1] - basis_aux.O(global_alpha)[1];
+                const double z =
+                    points_scratch(g)[2] - basis_aux.O(global_alpha)[2];
+                const double r =
+                    dist(points_scratch(g), basis_aux.O(global_alpha));
+                const double pot =
+                    sto_potential(basis_aux, global_alpha, x, y, z, r) *
+                    weights_scratch(g) * expansion_coeff(global_alpha);
+                Kokkos::atomic_add(&potential_scratch_scaled(g), pot);
+              }
+            });
+        team_member.team_barrier();
+
+        const int num_tiles = (num_neighbors + tile_size - 1) / tile_size;
+        for (int ti = 0; ti < num_tiles; ++ti) {
+          const int i0 = ti * tile_size;
+          const int ilen = Kokkos::min(tile_size, num_neighbors - i0);
+
+          Kokkos::parallel_for(
+              Kokkos::TeamThreadRange(team_member, ilen), [=](const int li) {
+                const int gi = nl.neighbors(start_neighbors + i0 + li);
+                const ShellParams shell = load_shell(basis, gi);
+                const int base = li * num_points;
+                for (int g = 0; g < num_points; ++g)
+                  phi_a(base + g) = basis_eval_fast(shell, points_scratch(g)[0],
+                                                    points_scratch(g)[1],
+                                                    points_scratch(g)[2]);
+              });
+          team_member.team_barrier();
+
+          for (int tj = 0; tj <= ti; ++tj) {
+            const int j0 = tj * tile_size;
+            const int jlen = Kokkos::min(tile_size, num_neighbors - j0);
+            const bool diag = (tj == ti);
+            if (!diag) {
+              Kokkos::parallel_for(
+                  Kokkos::TeamThreadRange(team_member, jlen),
+                  [=](const int lj) {
+                    const int gj = nl.neighbors(start_neighbors + j0 + lj);
+                    const ShellParams shell = load_shell(basis, gj);
+                    const int base = lj * num_points;
+                    for (int g = 0; g < num_points; ++g)
+                      phi_b(base + g) = basis_eval_fast(
+                          shell, points_scratch(g)[0], points_scratch(g)[1],
+                          points_scratch(g)[2]);
+                  });
+              team_member.team_barrier();
+            }
+            const double *pj = diag ? phi_a.data() : phi_b.data();
+
+            Kokkos::parallel_for(
+                Kokkos::TeamThreadMDRange(team_member, ilen, jlen),
+                [=](const int li, const int lj) {
+                  if (diag && lj > li)
+                    return; // lower-triangular block only
+                  const int gi = nl.neighbors(start_neighbors + i0 + li);
+                  const int gj = nl.neighbors(start_neighbors + j0 + lj);
+                  double lr = 0;
+                  for (int g = 0; g < num_points; ++g)
+                    lr += potential_scratch_scaled(g) *
+                          phi_a(li * num_points + g) * pj[lj * num_points + g];
+                  Kokkos::atomic_add(&result(gi, gj), lr);
+                  if (gi != gj)
+                    Kokkos::atomic_add(&result(gj, gi), lr);
+                });
+            team_member.team_barrier();
+          }
+        }
+      });
+
+  space.fence();
+  Kokkos::Profiling::popRegion();
+  return result;
+}
+
 DeviceView2DLeft coulomb_overlap_integral_sparse(const ExecSpace space,
                                                  const STOBasisSet &basis_aux,
                                                  const FlatGrid &grid,

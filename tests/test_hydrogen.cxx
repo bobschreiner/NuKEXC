@@ -918,6 +918,156 @@ TEST_CASE("compute_gga -- hydrogen 1s gga", "[gga]") {
                Catch::Matchers::WithinRel(ref_potential, 1e-10));
 }
 
+TEST_CASE("compute_coulomb_tiled -- hydrogen 1s self-repulsion",
+          "[coulomb][tiled]") {
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+  STOBasisSet basis_aux = make_manual_basis({
+      {1, 0, 0, 0.5, 0., 0., 0.},
+      {1, 0, 0, 1.0, 0., 0., 0.},
+      {1, 0, 0, 2.0, 0., 0., 0.},
+      {1, 0, 0, 3.0, 0., 0., 0.},
+      {1, 0, 0, 4.0, 0., 0., 0.},
+  });
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  ExecSpace space;
+  int max_points_per_box = 32;
+  auto bb = create_bounding_boxes(grid, max_points_per_box);
+  NeighborList nl, nl_aux;
+  build_neighbor_list(basis, bb, max_points_per_box, grid.quad_points.extent(0),
+                      nl);
+  build_neighbor_list(basis_aux, bb, max_points_per_box,
+                      grid.quad_points.extent(0), nl_aux);
+  auto aux_overlap_sym =
+      coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
+  auto half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
+
+  DeviceView2DLeft J = compute_coulomb_tiled(
+      space, mo_orbitals, mo_coeff, basis, basis_aux, grid, nl, half_inverse_X);
+  auto J_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, J);
+  REQUIRE_THAT(J_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
+}
+
+TEST_CASE("compute_exact_exchange_tiled -- hydrogen 1s self-exchange",
+          "[exchange][tiled]") {
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+  STOBasisSet basis_aux = make_manual_basis({
+      {1, 0, 0, 0.5, 0., 0., 0.},
+      {1, 0, 0, 1.0, 0., 0., 0.},
+      {1, 0, 0, 2.0, 0., 0., 0.},
+      {1, 0, 0, 3.0, 0., 0., 0.},
+      {1, 0, 0, 4.0, 0., 0., 0.},
+  });
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  ExecSpace space;
+  int max_points_per_box = 32;
+  auto bb = create_bounding_boxes(grid, max_points_per_box);
+  NeighborList nl, nl_aux;
+  build_neighbor_list(basis, bb, max_points_per_box, grid.quad_points.extent(0),
+                      nl);
+  build_neighbor_list(basis_aux, bb, max_points_per_box,
+                      grid.quad_points.extent(0), nl_aux);
+  auto aux_overlap_sym =
+      coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
+  auto half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
+
+  DeviceView2DLeft K = compute_exact_exchange_tiled(
+      space, mo_orbitals, mo_coeff, basis, basis_aux, grid, nl, half_inverse_X);
+  auto K_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, K);
+  REQUIRE_THAT(K_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
+}
+
+TEST_CASE("tiled Coulomb/exchange match sparse (multi-tile, tile=1)",
+          "[coulomb][exchange][tiled]") {
+  // Two H atoms, two s-STOs each -> N_bf = 4, so central boxes have several
+  // neighbors; tile_size = 1 forces the multi-tile / off-diagonal-block path.
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}, {0., 0., 1.4}},
+               std::vector<unsigned>{1u, 1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 60, 14);
+
+  STOBasisSet basis = make_manual_basis({
+      {1, 0, 0, 1.0, 0., 0., 0.},
+      {1, 0, 0, 1.6, 0., 0., 0.},
+      {1, 0, 0, 1.0, 0., 0., 1.4},
+      {1, 0, 0, 1.6, 0., 0., 1.4},
+  });
+  STOBasisSet basis_aux = make_manual_basis({
+      {1, 0, 0, 0.7, 0., 0., 0.},
+      {1, 0, 0, 2.0, 0., 0., 0.},
+      {1, 0, 0, 0.7, 0., 0., 1.4},
+      {1, 0, 0, 2.0, 0., 0., 1.4},
+  });
+
+  const int N_bf = basis.nbf();
+  DeviceView2DLeft mo_orbitals("Mo orbitals", N_bf, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 0.6;
+  orbitals_h(1, 0) = 0.3;
+  orbitals_h(2, 0) = 0.6;
+  orbitals_h(3, 0) = 0.3;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  ExecSpace space;
+  int max_points_per_box = 32;
+  auto bb = create_bounding_boxes(grid, max_points_per_box);
+  NeighborList nl, nl_aux;
+  build_neighbor_list(basis, bb, max_points_per_box, grid.quad_points.extent(0),
+                      nl);
+  build_neighbor_list(basis_aux, bb, max_points_per_box,
+                      grid.quad_points.extent(0), nl_aux);
+  auto aux_overlap_sym =
+      coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
+  auto half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-6);
+
+  // --- Coulomb: tiled(tile=1) vs sparse, element-wise ---
+  auto J_sparse = compute_coulomb_sparse(space, mo_orbitals, mo_coeff, basis,
+                                         basis_aux, grid, nl, half_inverse_X);
+  auto J_tiled = compute_coulomb_tiled(space, mo_orbitals, mo_coeff, basis,
+                                       basis_aux, grid, nl, half_inverse_X, 1);
+  auto Js_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, J_sparse);
+  auto Jt_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, J_tiled);
+  for (int a = 0; a < N_bf; ++a)
+    for (int b = 0; b < N_bf; ++b)
+      REQUIRE_THAT(Jt_h(a, b), Catch::Matchers::WithinAbs(Js_h(a, b), 1e-9));
+
+  // --- Exchange: tiled(tile=1) vs sparse, element-wise ---
+  auto K_sparse = compute_exact_exchange_sparse(
+      space, mo_orbitals, mo_coeff, basis, basis_aux, grid, nl, half_inverse_X);
+  auto K_tiled = compute_exact_exchange_tiled(
+      space, mo_orbitals, mo_coeff, basis, basis_aux, grid, nl, half_inverse_X,
+      1);
+  auto Ks_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, K_sparse);
+  auto Kt_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, K_tiled);
+  for (int a = 0; a < N_bf; ++a)
+    for (int b = 0; b < N_bf; ++b)
+      REQUIRE_THAT(Kt_h(a, b), Catch::Matchers::WithinAbs(Ks_h(a, b), 1e-9));
+}
+
 // ============================================================
 int main() {
   Kokkos::initialize();

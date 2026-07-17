@@ -47,6 +47,7 @@ struct Config {
   int nang = 20;
   double screening_tol = 1e-6;
   int max_points_per_box = 32;
+  int tile = 32; // neighbor-tile size for the "tiled" algorithm
 };
 
 Config parse_args(int argc, char *argv[]) {
@@ -83,7 +84,7 @@ Config parse_args(int argc, char *argv[]) {
           << cfg.benchmark << ")\n"
 
           << "  --alg=<string>    "
-             "Algorithm(fasts,fastv,slows,slowv,cached) (default: "
+             "Algorithm(fasts,fastv,slows,slowv,cached,tiled) (default: "
           << cfg.algorithm << ")\n"
           << "  --nrad=<int>              Radial grid points        (default: "
           << cfg.nrad << ")\n"
@@ -92,14 +93,17 @@ Config parse_args(int argc, char *argv[]) {
           << "  --tol=<float>             Screening tolerance       (default: "
           << cfg.screening_tol << ")\n"
           << "  --box-size=<int>          Max points per box        (default: "
-          << cfg.max_points_per_box << ")\n";
+          << cfg.max_points_per_box << ")\n"
+          << "  --tile=<int>              Neighbor tile (alg=tiled) (default: "
+          << cfg.tile << ")\n";
       std::exit(0);
     } else if (!parse_int("--benchmark=", cfg.benchmark) &&
                !parse_string("--alg=", cfg.algorithm) &&
                !parse_int("--nrad=", cfg.nrad) &&
                !parse_int("--nang=", cfg.nang) &&
                !parse_double("--tol=", cfg.screening_tol) &&
-               !parse_int("--box-size=", cfg.max_points_per_box)) {
+               !parse_int("--box-size=", cfg.max_points_per_box) &&
+               !parse_int("--tile=", cfg.tile)) {
       throw std::runtime_error("Unknown argument: " + arg + " (try --help)");
     }
   }
@@ -832,6 +836,127 @@ void benchmark_collocation(Config cfg) {
     Kokkos::printf(
         "Benchmark [Team->Cache->Thread] [basis_eval_fast cached] took %fs \n",
         end_cached - start_cached);
+  } else if (cfg.algorithm == "tiled") {
+    // Neighbor-tiled cache. Same idea as "cached" (evaluate phi once, then
+    // contract from scratch) but the phi buffers hold only a fixed-size TILE of
+    // neighbors at a time, so the shared-memory footprint depends on tile_size
+    // and max_points_per_box ONLY -- never on num_neighbors. This is what makes
+    // it usable for large molecules where the full [num_neighbors x points]
+    // cache overflows scratch.
+    //
+    // The pairwise S = Phi^T Phi is done as a blocked, lower-triangular product:
+    // tile ti is held in phi_a, tile tj (<= ti) in phi_b, and the ilen x jlen
+    // block is contracted from the two buffers. A tile's phi is re-evaluated
+    // once per outer tile it pairs with -- eval work is ~num_neighbors^2/(2*tile)
+    // vs num_neighbors^2 for the recompute kernels, i.e. ~2*tile fewer evals,
+    // for a bounded 2*tile*points scratch cost.
+    const int tile_size = cfg.tile;
+
+    const int scratch_tiled =
+        shared_view_double::shmem_size(max_points_per_box) +           // weights
+        shared_view_points::shmem_size(max_points_per_box) +           // points
+        shared_view_double::shmem_size(tile_size * max_points_per_box) + // phi_a
+        shared_view_double::shmem_size(tile_size * max_points_per_box);  // phi_b
+    policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_tiled));
+
+    Kokkos::Timer time_tiled;
+    double start_tiled = time_tiled.seconds();
+    Kokkos::parallel_for(
+        "Benchmark [Team->Tile->Thread] [basis_eval_fast tiled]", policy_boxes,
+        KOKKOS_LAMBDA(const member_type &team_member) {
+          const int box_idx = team_member.league_rank();
+          const int start_points = box_idx * max_points_per_box;
+          const int end_points =
+              Kokkos::min(start_points + max_points_per_box, N_quad);
+          const int num_points = end_points - start_points;
+
+          const int start_neighbors = nl.offsets(box_idx);
+          const int end_neighbors = nl.offsets(box_idx + 1);
+          const int num_neighbors = end_neighbors - start_neighbors;
+
+          shared_view_double weights_scratch(team_member.team_scratch(0),
+                                             num_points);
+          shared_view_points points_scratch(team_member.team_scratch(0),
+                                             num_points);
+
+          // Fixed-size neighbor tiles: footprint independent of num_neighbors.
+          shared_view_double phi_a(team_member.team_scratch(0),
+                                   tile_size * num_points);
+          shared_view_double phi_b(team_member.team_scratch(0),
+                                   tile_size * num_points);
+
+          Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
+                               [=](const int local_g) {
+                                 const int global_g = start_points + local_g;
+                                 weights_scratch(local_g) =
+                                     grid.weights(global_g);
+                                 points_scratch(local_g) =
+                                     grid.quad_points(global_g);
+                               });
+          team_member.team_barrier();
+
+          const int num_tiles = (num_neighbors + tile_size - 1) / tile_size;
+
+          for (int ti = 0; ti < num_tiles; ++ti) {
+            const int i0 = ti * tile_size;
+            const int ilen = Kokkos::min(tile_size, num_neighbors - i0);
+
+            // Evaluate the outer tile's phi into phi_a (once per outer tile).
+            Kokkos::parallel_for(
+                Kokkos::TeamThreadRange(team_member, ilen), [=](const int li) {
+                  const int global_i = nl.neighbors(start_neighbors + i0 + li);
+                  const ShellParams shell_i = load_shell(basis, global_i);
+                  const int base = li * num_points;
+                  for (int g = 0; g < num_points; ++g)
+                    phi_a(base + g) = basis_eval_fast(
+                        shell_i, points_scratch(g)[0], points_scratch(g)[1],
+                        points_scratch(g)[2]);
+                });
+            team_member.team_barrier();
+
+            for (int tj = 0; tj <= ti; ++tj) {
+              const int j0 = tj * tile_size;
+              const int jlen = Kokkos::min(tile_size, num_neighbors - j0);
+
+              // Diagonal tile reuses phi_a; off-diagonal is evaluated into phi_b.
+              if (tj != ti) {
+                Kokkos::parallel_for(
+                    Kokkos::TeamThreadRange(team_member, jlen),
+                    [=](const int lj) {
+                      const int global_j =
+                          nl.neighbors(start_neighbors + j0 + lj);
+                      const ShellParams shell_j = load_shell(basis, global_j);
+                      const int base = lj * num_points;
+                      for (int g = 0; g < num_points; ++g)
+                        phi_b(base + g) = basis_eval_fast(
+                            shell_j, points_scratch(g)[0], points_scratch(g)[1],
+                            points_scratch(g)[2]);
+                    });
+                team_member.team_barrier();
+              }
+
+              const double *pj = (tj == ti) ? phi_a.data() : phi_b.data();
+
+              Kokkos::parallel_for(
+                  Kokkos::TeamThreadMDRange(team_member, ilen, jlen),
+                  [=](const int li, const int lj) {
+                    const int base_i = li * num_points;
+                    const int base_j = lj * num_points;
+                    double sum = 0;
+                    for (int g = 0; g < num_points; ++g)
+                      sum += phi_a(base_i + g) * pj[base_j + g];
+                    S(i0 + li, j0 + lj) = sum;
+                  });
+              team_member.team_barrier();
+            }
+          }
+        });
+
+    Kokkos::fence();
+    double end_tiled = time_tiled.seconds();
+    Kokkos::printf(
+        "Benchmark [Team->Tile->Thread] [basis_eval_fast tiled] took %fs \n",
+        end_tiled - start_tiled);
   }
 };
 
