@@ -347,10 +347,9 @@ DeviceView2DLeft compute_exact_exchange_tiled(
                 for (int k = 0; k < N_bf; ++k) {
                   orbital_i_at_point +=
                       mo_orbitals(k, i) *
-                      basis_eval_fast(load_shell(basis, k),
-                                      points_scratch(local_g)[0],
-                                      points_scratch(local_g)[1],
-                                      points_scratch(local_g)[2]);
+                      basis_eval_at(basis, k, points_scratch(local_g)[0],
+                                    points_scratch(local_g)[1],
+                                    points_scratch(local_g)[2]);
                 }
                 weights_scratch(local_g) *= orbital_i_at_point;
               });
@@ -361,16 +360,17 @@ DeviceView2DLeft compute_exact_exchange_tiled(
             const int j0 = jt * tile_size;
             const int jlen = Kokkos::min(tile_size, num_neighbors - j0);
 
-            // Evaluate this neighbor tile's phi once into the cache.
+            // Evaluate this neighbor tile's phi once into the cache. basis_eval_at
+            // keeps the ShellParams out of this kernel's register footprint (at
+            // the cost of re-loading the shell per point).
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange(team_member, jlen), [=](const int lj) {
                   const int gj = nl.neighbors(start_neighbors + j0 + lj);
-                  const ShellParams shell = load_shell(basis, gj);
                   const int base = lj * num_points;
                   for (int g = 0; g < num_points; ++g)
-                    phi_cache(base + g) = basis_eval_fast(
-                        shell, points_scratch(g)[0], points_scratch(g)[1],
-                        points_scratch(g)[2]);
+                    phi_cache(base + g) =
+                        basis_eval_at(basis, gj, points_scratch(g)[0],
+                                      points_scratch(g)[1], points_scratch(g)[2]);
                 });
             team_member.team_barrier();
 
