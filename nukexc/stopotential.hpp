@@ -53,8 +53,15 @@ double C_prefactor(const int n, const int l, const double zeta) {
          (Kokkos::sqrt(factorial(2 * n)) * (2 * l + 1));
 }
 
-// Potential — just three multiplications
-KOKKOS_INLINE_FUNCTION
+// Potential — just three multiplications.
+//
+// Non-inlined on purpose: this pulls in the angular switch
+// (real_solid_harmonic_cart_precomputed) AND the gamma-function series in
+// I_tilde (lower_gamma / upper_gamma), which together are register-heavy.
+// Keeping them in this callee's own frame stops them from widening the live
+// register set of the integral kernels that fill a potential buffer (Coulomb
+// Gram, aux overlap, exchange three-center).
+NUKEXC_NOINLINE_FUNCTION
 double sto_potential(const int n, const int l, const int m, const double x,
                      const double y, const double z, const double r,
                      const double zeta) {
