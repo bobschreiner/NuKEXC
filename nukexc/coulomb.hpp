@@ -397,9 +397,14 @@ DeviceView2DLeft compute_coulomb_tiled(
 
   DeviceView1DLeft scaling_factor("Scaling factor", K);
 
+  // Kernel 1 (density, ~66 registers) is close to the 64-register LaunchBounds
+  // cap, so it spills little and the occupancy gain is a net win -> bounded.
+  // Kernel 2 (the J Gram, ~86 registers) is far above the cap: forcing it there
+  // spills heavily and profiled *slower*, so it runs on an unbounded policy.
   using Bounds = Kokkos::LaunchBounds<128, NUKEXC_TILED_MIN_BLOCKS>;
   Kokkos::TeamPolicy<ExecSpace, Bounds> policy_boxes(space, num_boxes,
                                                      Kokkos::AUTO());
+  Kokkos::TeamPolicy<ExecSpace> policy_gram(space, num_boxes, Kokkos::AUTO());
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
   typedef ExecSpace::scratch_memory_space ScratchSpace;
   typedef Kokkos::View<double *, ScratchSpace,
@@ -551,10 +556,10 @@ DeviceView2DLeft compute_coulomb_tiled(
       shared_view_points::shmem_size(max_points_per_box) +     // points
       shared_view_double::shmem_size(tile_size * max_points_per_box) *
           2; // phi_a + phi_b
-  policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_k2));
+  policy_gram.set_scratch_size(0, Kokkos::PerTeam(scratch_k2));
 
   Kokkos::parallel_for(
-      "Coulomb tiled: J_{mu,nu} = sum_{alpha} (mu nu|alpha)", policy_boxes,
+      "Coulomb tiled: J_{mu,nu} = sum_{alpha} (mu nu|alpha)", policy_gram,
       KOKKOS_LAMBDA(const member_type &team_member) {
         const int box_idx = team_member.league_rank();
         const int start_points = box_idx * max_points_per_box;
