@@ -738,6 +738,7 @@ void real_solid_harmonic_cart_precomputed(const int l, const int m,
     break;
   }
 }
+
 KOKKOS_INLINE_FUNCTION
 void real_solid_harmonic_cart_and_grad_precomputed(
     const int l, const int m, const double x, const double y, const double z,
