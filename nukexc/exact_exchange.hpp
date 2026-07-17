@@ -297,15 +297,18 @@ DeviceView2DLeft compute_exact_exchange_tiled(
                        Kokkos::MemoryTraits<Kokkos::Unmanaged>>
       shared_view_points;
 
+  // Option A: the per-alpha potential lives in a single PerTeam [num_points]
+  // buffer (filled and consumed one alpha at a time) instead of a PerThread
+  // buffer replicated across every team thread. That per-thread replication was
+  // the dominant shared-memory consumer (threads * num_points) and the occupancy
+  // limiter; a single team buffer frees it.
   const int scratch_team =
-      shared_view_double::shmem_size(max_points_per_box) +          // weights
-      shared_view_points::shmem_size(max_points_per_box) +          // points
-      shared_view_double::shmem_size(tile_size * max_points_per_box); // phi tile
-  const int scratch_thread =
-      shared_view_double::shmem_size(max_points_per_box); // potential per alpha
+      shared_view_double::shmem_size(max_points_per_box) +            // weights
+      shared_view_points::shmem_size(max_points_per_box) +            // points
+      shared_view_double::shmem_size(tile_size * max_points_per_box) + // phi tile
+      shared_view_double::shmem_size(max_points_per_box); // potential (team)
 
-  policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_team),
-                                Kokkos::PerThread(scratch_thread));
+  policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_team));
 
   for (unsigned int i = 0; i < N_occ; ++i) {
     Kokkos::deep_copy(space, three_center_integral, 0);
@@ -328,8 +331,8 @@ DeviceView2DLeft compute_exact_exchange_tiled(
                                              num_points);
           shared_view_double phi_cache(team_member.team_scratch(0),
                                        tile_size * num_points);
-          shared_view_double potential_scratch_scaled(
-              team_member.thread_scratch(0), num_points);
+          shared_view_double potential_scratch_scaled(team_member.team_scratch(0),
+                                                      num_points);
 
           // Fill points/weights and fold the i-th orbital into the weights.
           // (Each phi_k is evaluated once here -- no redundancy to tile away.)
@@ -371,12 +374,14 @@ DeviceView2DLeft compute_exact_exchange_tiled(
                 });
             team_member.team_barrier();
 
-            // Each alpha computes its potential once, then contracts against the
-            // cached tile of phi_j (instead of re-evaluating phi_j per alpha).
-            Kokkos::parallel_for(
-                Kokkos::TeamThreadRange(team_member, N_bf_aux),
-                [=](const int global_alpha) {
-                  for (int g = 0; g < num_points; ++g) {
+            // One alpha at a time: the whole team fills the shared potential
+            // buffer, then the whole team contracts it against the cached tile
+            // of phi_j. phi_j is still evaluated only once per tile (read from
+            // phi_cache); only the single team potential buffer is reused.
+            for (int global_alpha = 0; global_alpha < N_bf_aux; ++global_alpha) {
+              Kokkos::parallel_for(
+                  Kokkos::TeamVectorRange(team_member, num_points),
+                  [=](const int g) {
                     const double x =
                         points_scratch(g)[0] - basis_aux.O(global_alpha)[0];
                     const double y =
@@ -388,19 +393,21 @@ DeviceView2DLeft compute_exact_exchange_tiled(
                     potential_scratch_scaled(g) =
                         sto_potential(basis_aux, global_alpha, x, y, z, r) *
                         weights_scratch(g);
-                  }
+                  });
+              team_member.team_barrier();
 
-                  for (int lj = 0; lj < jlen; ++lj) {
+              Kokkos::parallel_for(
+                  Kokkos::TeamThreadRange(team_member, jlen), [=](const int lj) {
                     const int gj = nl.neighbors(start_neighbors + j0 + lj);
                     double local_sum = 0;
                     for (int g = 0; g < num_points; ++g)
                       local_sum += potential_scratch_scaled(g) *
                                    phi_cache(lj * num_points + g);
-                    Kokkos::atomic_add(
-                        &three_center_integral(global_alpha, gj), local_sum);
-                  }
-                });
-            team_member.team_barrier();
+                    Kokkos::atomic_add(&three_center_integral(global_alpha, gj),
+                                       local_sum);
+                  });
+              team_member.team_barrier();
+            }
           }
         });
 
