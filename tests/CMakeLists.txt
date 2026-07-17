@@ -69,6 +69,26 @@ foreach(tgt IN LISTS ALL_TEST_TARGETS)
     add_dependencies(${tgt} copy_test_inputs)
 endforeach()
 
+# Opt-in: make ptxas print per-kernel register / shared-memory usage at compile
+# time (CUDA / nvcc_wrapper only). Configure with -DNUKEXC_PTXAS_VERBOSE=ON.
+# Applied per-target (not via CMAKE_CXX_FLAGS) so it never touches CMake's
+# compiler-detection test program.
+option(NUKEXC_PTXAS_VERBOSE
+       "Print ptxas per-kernel register/smem usage (CUDA nvcc_wrapper builds)"
+       OFF)
+if(NUKEXC_PTXAS_VERBOSE)
+    if(Kokkos_ENABLE_CUDA)
+        foreach(tgt IN LISTS ALL_TEST_TARGETS)
+            target_compile_options(${tgt} PRIVATE -Xptxas=-v)
+        endforeach()
+        message(STATUS "NUKEXC_PTXAS_VERBOSE: ptxas -v enabled on test targets")
+    else()
+        message(WARNING
+            "NUKEXC_PTXAS_VERBOSE requested but Kokkos_ENABLE_CUDA is OFF; "
+            "-Xptxas=-v only works with the nvcc_wrapper CXX compiler.")
+    endif()
+endif()
+
 add_test( NAME GRID_TEST COMMAND $<TARGET_FILE:test_grid> )
 add_test( NAME PARTITION_TEST COMMAND $<TARGET_FILE:test_partition> )
 add_test( NAME HARMONICS_TEST COMMAND $<TARGET_FILE:test_spherical_harmonics> )
