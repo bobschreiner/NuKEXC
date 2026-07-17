@@ -249,7 +249,7 @@ struct Config {
   std::string xyz_file = "input/water.xyz";
   std::string basis_file = "input/zorabasis_cholesky/TZ2P.cholesky";
   std::string method = "hf";       // "hf" or "dft"
-  std::string algorithm = "dense"; // "dense" or "sparse"
+  std::string algorithm = "dense"; // "dense", "sparse" or "tiled"
   int nrad = 100;
   int nang = 30;
   double lin_dep_threshold = 1e-6;
@@ -257,6 +257,7 @@ struct Config {
   int charge = 0;
   int multiplicity = 1;
   int max_points_per_box = 32; // runtime via --box-size=
+  int tile_size = 32;          // neighbor tile (--tile=, only used by --alg=tiled)
   std::string xfunc = "lda_x";
   std::string cfunc = "lda_c_pw";
 };
@@ -297,10 +298,13 @@ Config parse_args(int argc, char *argv[]) {
           << cfg.basis_file << ")\n"
           << "  --method=<string>     'hf' or 'dft'              (default: "
           << cfg.method << ")\n"
-          << "  --alg=<string>        'dense' or 'sparse'        (default: "
+          << "  --alg=<string>        'dense','sparse' or 'tiled'(default: "
           << cfg.algorithm << ")\n"
           << "  --box-size=<int>      Max quadrature points/box  (default: "
-          << cfg.max_points_per_box << ")  [only used by --alg=sparse]\n"
+          << cfg.max_points_per_box
+          << ")  [used by --alg=sparse,tiled]\n"
+          << "  --tile=<int>          Neighbor tile size         (default: "
+          << cfg.tile_size << ")  [only used by --alg=tiled]\n"
           << "  --nrad=<int>          Radial grid points         (default: "
           << cfg.nrad << ")\n"
           << "  --nang=<int>          Angular grid points        (default: "
@@ -329,6 +333,7 @@ Config parse_args(int argc, char *argv[]) {
                !parse_string("--method=", cfg.method) &&
                !parse_string("--alg=", cfg.algorithm) &&
                !parse_int("--box-size=", cfg.max_points_per_box) &&
+               !parse_int("--tile=", cfg.tile_size) &&
                !parse_int("--nrad=", cfg.nrad) &&
                !parse_int("--nang=", cfg.nang) &&
                !parse_double("--lin-dep=", cfg.lin_dep_threshold) &&
@@ -344,12 +349,15 @@ Config parse_args(int argc, char *argv[]) {
     throw std::runtime_error("--nrad and --nang must be positive");
   if (cfg.max_points_per_box <= 0)
     throw std::runtime_error("--box-size must be positive");
+  if (cfg.tile_size <= 0)
+    throw std::runtime_error("--tile must be positive");
   if (cfg.method != "hf" && cfg.method != "dft")
     throw std::runtime_error("Unknown --method: " + cfg.method +
                              " (expected 'hf' or 'dft')");
-  if (cfg.algorithm != "dense" && cfg.algorithm != "sparse")
+  if (cfg.algorithm != "dense" && cfg.algorithm != "sparse" &&
+      cfg.algorithm != "tiled")
     throw std::runtime_error("Unknown --alg: " + cfg.algorithm +
-                             " (expected 'dense' or 'sparse')");
+                             " (expected 'dense', 'sparse' or 'tiled')");
   return cfg;
 }
 
@@ -382,6 +390,9 @@ void print_config(const Config &cfg) {
             << cfg.algorithm << " │\n";
   std::cout << "│ Box size (pts/box)   │ " << std::setw(width) << std::left
             << cfg.max_points_per_box << " │\n";
+  if (cfg.algorithm == "tiled")
+    std::cout << "│ Neighbor tile size   │ " << std::setw(width) << std::left
+              << cfg.tile_size << " │\n";
   std::cout << "│ Radial points        │ " << std::setw(width) << cfg.nrad
             << " │\n";
   std::cout << "│ Angular order        │ " << std::setw(width) << cfg.nang
@@ -461,8 +472,13 @@ int main(int argc, char *argv[]) {
   {
     const bool is_dft = (cfg.method == "dft");
     const bool is_sparse = (cfg.algorithm == "sparse");
-    const bool need_dense_aux_colloc = !is_sparse; // dense (A|B) + J/K paths
-    const bool need_basis_colloc = !is_sparse || is_dft;
+    const bool is_tiled = (cfg.algorithm == "tiled");
+    // Both "sparse" and "tiled" use the neighbor-list quadrature path; they
+    // differ only in which integral kernels are invoked.
+    const bool use_neighbor_path = is_sparse || is_tiled;
+    const int tile = cfg.tile_size;
+    const bool need_dense_aux_colloc = !use_neighbor_path; // dense (A|B) + J/K
+    const bool need_basis_colloc = !use_neighbor_path || is_dft;
     const bool need_grad_colloc = is_dft; // needed for GGA quadrature
 
     Molecule mol;
@@ -552,7 +568,7 @@ int main(int argc, char *argv[]) {
     NeighborList nl;     // primary basis neighbor list (K/J sparse)
     NeighborList nl_aux; // auxiliary basis neighbor list (aux overlap sparse)
 
-    if (is_sparse) {
+    if (use_neighbor_path) {
       TIME_SCOPE(startup_timing, "Build neighbor lists (sparse)");
       {
         TIME_SCOPE(startup_timing, "Bounding boxes + neighbor list (aux)");
@@ -609,8 +625,12 @@ int main(int argc, char *argv[]) {
                                        potential_collocation_scaled);
     }
 
-    // ---- Auxiliary overlap (A|B), dense or sparse --------------------------
-    if (is_sparse) {
+    // ---- Auxiliary overlap (A|B), dense / sparse / tiled -------------------
+    if (is_tiled) {
+      TIME_SCOPE(startup_timing, "Auxiliary Coulomb overlap (tiled)");
+      aux_overlap_sym =
+          coulomb_overlap_integral_tiled(space, basis_aux, grid, nl_aux, tile);
+    } else if (is_sparse) {
       TIME_SCOPE(startup_timing, "Auxiliary Coulomb overlap (sparse)");
       aux_overlap_sym =
           coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
@@ -713,7 +733,8 @@ int main(int argc, char *argv[]) {
          basis_aux_collocation, potential_collocation_scaled, h_core, X_arma,
          half_inverse_X, N_bf, E_nuc, S_arma, cfg, func_c, func_x, x_info,
          c_info, has_separate_c, a_exx, is_dft = is_dft, is_sparse = is_sparse,
-         call_count, &fock_cumulative_timing](
+         is_tiled = is_tiled, tile = tile, call_count,
+         &fock_cumulative_timing](
             const OpenOrbitalOptimizer::DensityMatrix<double, double> &dm)
         -> std::pair<double, OpenOrbitalOptimizer::FockMatrix<double>> {
       TimingRegistry fock_timing;
@@ -766,9 +787,12 @@ int main(int argc, char *argv[]) {
       {
         TIME_SCOPE(fock_timing, "Coulomb (J) build");
         DeviceView2DLeft J;
-        if (is_sparse) {
-          J = compute_coulomb_tiled(space, k_C_tot, k_occ_tot, basis,
-                                     basis_aux, grid, nl, half_inverse_X);
+        if (is_tiled) {
+          J = compute_coulomb_tiled(space, k_C_tot, k_occ_tot, basis, basis_aux,
+                                    grid, nl, half_inverse_X, tile);
+        } else if (is_sparse) {
+          J = compute_coulomb_sparse(space, k_C_tot, k_occ_tot, basis, basis_aux,
+                                     grid, nl, half_inverse_X);
         } else {
           J = compute_coulomb(space, k_C_tot, k_occ_tot, basis_collocation,
                               basis_aux_collocation,
@@ -796,8 +820,12 @@ int main(int argc, char *argv[]) {
         DeviceView2DLeft K_alpha, K_beta;
         {
           TIME_SCOPE(fock_timing, "  K alpha");
-          if (is_sparse) {
+          if (is_tiled) {
             K_alpha = compute_exact_exchange_tiled(
+                space, k_C_alpha, k_occ_alpha, basis, basis_aux, grid, nl,
+                half_inverse_X, tile);
+          } else if (is_sparse) {
+            K_alpha = compute_exact_exchange_sparse(
                 space, k_C_alpha, k_occ_alpha, basis, basis_aux, grid, nl,
                 half_inverse_X);
           } else {
@@ -809,8 +837,12 @@ int main(int argc, char *argv[]) {
         }
         {
           TIME_SCOPE(fock_timing, "  K beta");
-          if (is_sparse) {
+          if (is_tiled) {
             K_beta = compute_exact_exchange_tiled(space, k_C_beta, k_occ_beta,
+                                                  basis, basis_aux, grid, nl,
+                                                  half_inverse_X, tile);
+          } else if (is_sparse) {
+            K_beta = compute_exact_exchange_sparse(space, k_C_beta, k_occ_beta,
                                                    basis, basis_aux, grid, nl,
                                                    half_inverse_X);
           } else {
@@ -853,7 +885,11 @@ int main(int argc, char *argv[]) {
           DeviceView2DLeft K_alpha, K_beta;
           {
             TIME_SCOPE(fock_timing, "  K alpha");
-            if (is_sparse) {
+            if (is_tiled) {
+              K_alpha = compute_exact_exchange_tiled(
+                  space, k_C_alpha, k_occ_alpha, basis, basis_aux, grid, nl,
+                  half_inverse_X, tile);
+            } else if (is_sparse) {
               K_alpha = compute_exact_exchange_sparse(
                   space, k_C_alpha, k_occ_alpha, basis, basis_aux, grid, nl,
                   half_inverse_X);
@@ -866,7 +902,11 @@ int main(int argc, char *argv[]) {
           }
           {
             TIME_SCOPE(fock_timing, "  K beta");
-            if (is_sparse) {
+            if (is_tiled) {
+              K_beta = compute_exact_exchange_tiled(
+                  space, k_C_beta, k_occ_beta, basis, basis_aux, grid, nl,
+                  half_inverse_X, tile);
+            } else if (is_sparse) {
               K_beta = compute_exact_exchange_sparse(
                   space, k_C_beta, k_occ_beta, basis, basis_aux, grid, nl,
                   half_inverse_X);

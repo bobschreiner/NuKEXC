@@ -1044,6 +1044,17 @@ TEST_CASE("tiled Coulomb/exchange match sparse (multi-tile, tile=1)",
       coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
   auto half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-6);
 
+  const int N_aux = basis_aux.nbf();
+
+  // --- Coulomb overlap metric (A|B): tiled(tile=1) vs sparse, element-wise ---
+  auto aux_overlap_tiled =
+      coulomb_overlap_integral_tiled(space, basis_aux, grid, nl_aux, 1);
+  auto So_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, aux_overlap_sym);
+  auto St_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, aux_overlap_tiled);
+  for (int a = 0; a < N_aux; ++a)
+    for (int b = 0; b < N_aux; ++b)
+      REQUIRE_THAT(St_h(a, b), Catch::Matchers::WithinAbs(So_h(a, b), 1e-9));
+
   // --- Coulomb: tiled(tile=1) vs sparse, element-wise ---
   auto J_sparse = compute_coulomb_sparse(space, mo_orbitals, mo_coeff, basis,
                                          basis_aux, grid, nl, half_inverse_X);

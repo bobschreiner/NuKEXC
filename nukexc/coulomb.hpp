@@ -791,4 +791,144 @@ DeviceView2DLeft coulomb_overlap_integral_sparse(const ExecSpace space,
   return overlap_matrix_sym;
 }
 
+// ============================================================================
+//  Neighbor-tiled Coulomb overlap metric (A|B)
+// ============================================================================
+//
+// Same result as coulomb_overlap_integral_sparse, which forms
+//   (i|alpha) = sum_g w(g) V_alpha(g) phi_i(g)
+// but avoids re-evaluating phi_i for every aux function alpha. phi is staged
+// once per neighbor tile into a bounded team-scratch cache, and (as in
+// compute_exact_exchange_tiled, Option A) the per-alpha potential lives in a
+// single PerTeam [num_points] buffer rather than a per-thread one -- so the
+// shared-memory footprint is independent of both num_neighbors and the team
+// size.
+DeviceView2DLeft coulomb_overlap_integral_tiled(const ExecSpace space,
+                                                const STOBasisSet &basis_aux,
+                                                const FlatGrid &grid,
+                                                const NeighborList nl,
+                                                const int tile_size = 32) {
+
+  const int N_bf_aux = basis_aux.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  const int max_points_per_box = nl.max_points_per_box;
+  const int num_boxes = nl.offsets.extent(0) - 1;
+
+  DeviceView2DLeft overlap_matrix("Overlap matrix", N_bf_aux, N_bf_aux);
+  DeviceView2DLeft overlap_matrix_sym("Overlap matrix Symmetrized", N_bf_aux,
+                                      N_bf_aux);
+
+  Kokkos::TeamPolicy<ExecSpace> policy_boxes(space, num_boxes, Kokkos::AUTO());
+  using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+  typedef ExecSpace::scratch_memory_space ScratchSpace;
+  typedef Kokkos::View<double *, ScratchSpace,
+                       Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+      shared_view_double;
+  typedef Kokkos::View<Point *, ScratchSpace,
+                       Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+      shared_view_points;
+
+  const int scratch_team =
+      shared_view_double::shmem_size(max_points_per_box) +            // weights
+      shared_view_points::shmem_size(max_points_per_box) +            // points
+      shared_view_double::shmem_size(tile_size * max_points_per_box) + // phi tile
+      shared_view_double::shmem_size(max_points_per_box); // potential (team)
+
+  policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_team));
+
+  Kokkos::parallel_for(
+      "Tiled Kernel: Coulomb overlap matrix", policy_boxes,
+      KOKKOS_LAMBDA(const member_type &team_member) {
+        const int box_idx = team_member.league_rank();
+        const int start_points = box_idx * max_points_per_box;
+        const int end_points =
+            Kokkos::min(start_points + max_points_per_box, N_quad);
+        const int num_points = end_points - start_points;
+
+        const int start_neighbors = nl.offsets(box_idx);
+        const int num_neighbors = nl.offsets(box_idx + 1) - start_neighbors;
+
+        shared_view_double weights_scratch(team_member.team_scratch(0),
+                                           num_points);
+        shared_view_points points_scratch(team_member.team_scratch(0),
+                                           num_points);
+        shared_view_double phi_cache(team_member.team_scratch(0),
+                                     tile_size * num_points);
+        shared_view_double potential_scratch_scaled(team_member.team_scratch(0),
+                                                    num_points);
+
+        Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
+                             [=](const int local_g) {
+                               const int global_g = start_points + local_g;
+                               weights_scratch(local_g) = grid.weights(global_g);
+                               points_scratch(local_g) =
+                                   grid.quad_points(global_g);
+                             });
+        team_member.team_barrier();
+
+        const int num_tiles = (num_neighbors + tile_size - 1) / tile_size;
+        for (int jt = 0; jt < num_tiles; ++jt) {
+          const int j0 = jt * tile_size;
+          const int jlen = Kokkos::min(tile_size, num_neighbors - j0);
+
+          // Evaluate this neighbor tile's phi once into the cache.
+          Kokkos::parallel_for(
+              Kokkos::TeamThreadRange(team_member, jlen), [=](const int lj) {
+                const int gi = nl.neighbors(start_neighbors + j0 + lj);
+                const ShellParams shell = load_shell(basis_aux, gi);
+                const int base = lj * num_points;
+                for (int g = 0; g < num_points; ++g)
+                  phi_cache(base + g) =
+                      basis_eval_fast(shell, points_scratch(g)[0],
+                                      points_scratch(g)[1], points_scratch(g)[2]);
+              });
+          team_member.team_barrier();
+
+          // One alpha at a time: the team fills the shared potential buffer,
+          // then contracts it against the cached tile of phi_i.
+          for (int global_alpha = 0; global_alpha < N_bf_aux; ++global_alpha) {
+            Kokkos::parallel_for(
+                Kokkos::TeamVectorRange(team_member, num_points),
+                [=](const int g) {
+                  const double x =
+                      points_scratch(g)[0] - basis_aux.O(global_alpha)[0];
+                  const double y =
+                      points_scratch(g)[1] - basis_aux.O(global_alpha)[1];
+                  const double z =
+                      points_scratch(g)[2] - basis_aux.O(global_alpha)[2];
+                  const double r =
+                      dist(points_scratch(g), basis_aux.O(global_alpha));
+                  potential_scratch_scaled(g) =
+                      sto_potential(basis_aux, global_alpha, x, y, z, r) *
+                      weights_scratch(g);
+                });
+            team_member.team_barrier();
+
+            Kokkos::parallel_for(
+                Kokkos::TeamThreadRange(team_member, jlen), [=](const int lj) {
+                  const int gi = nl.neighbors(start_neighbors + j0 + lj);
+                  double local_result = 0;
+                  for (int g = 0; g < num_points; ++g)
+                    local_result += potential_scratch_scaled(g) *
+                                    phi_cache(lj * num_points + g);
+                  Kokkos::atomic_add(&overlap_matrix(gi, global_alpha),
+                                     local_result);
+                });
+            team_member.team_barrier();
+          }
+        }
+      });
+
+  Kokkos::parallel_for(
+      "Symmetrize Coulomb Overlap Matrix",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
+      KOKKOS_LAMBDA(int i, int j) {
+        overlap_matrix_sym(i, j) =
+            0.5 * (overlap_matrix(i, j) + overlap_matrix(j, i));
+      });
+
+  return overlap_matrix_sym;
+}
+
 } // namespace Nukexc
