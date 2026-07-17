@@ -35,6 +35,11 @@ namespace Nukexc {
 using Point = ArborX::Point<3, double>;
 using Box = ArborX::Box<3, double>;
 
+// WARNING: this function MUTATES the grid — grid.quad_points and grid.weights
+// are permuted in place into Morton (space-filling-curve) order. Any data
+// derived from the grid's point ordering (collocation matrices, cached
+// densities, ...) computed BEFORE this call becomes invalid afterwards.
+// Call this before filling any collocations.
 Kokkos::View<Box *, ExecSpace>
 create_bounding_boxes(FlatGrid &grid, const int max_points_per_bb) {
 

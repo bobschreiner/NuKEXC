@@ -66,10 +66,15 @@ public:
   };
 
   void start(const std::string &name) {
-    StackEntry stack_entry{name, std::make_unique<Kokkos::Timer>(), depth_};
     stack_.push_back(
         StackEntry{name, std::make_unique<Kokkos::Timer>(), depth_});
     ++depth_;
+  }
+
+  // Record a pre-measured duration directly (e.g. a total merged from
+  // another registry) without going through start()/stop().
+  void record(const std::string &name, double seconds) {
+    entries_.push_back(Entry{name, seconds, depth_});
   }
 
   void stop() {
@@ -537,6 +542,31 @@ int main(int argc, char *argv[]) {
 
     ExecSpace space;
 
+    // ---- Neighbor lists (sparse path only) ---------------------------------
+    // NOTE: create_bounding_boxes() PERMUTES grid.quad_points and grid.weights
+    // in place (Morton ordering). It must therefore run BEFORE any collocation
+    // is filled, otherwise the collocation columns refer to the pre-permutation
+    // point ordering while grid.weights uses the post-permutation ordering,
+    // which silently corrupts every subsequent quadrature
+
+    NeighborList nl;     // primary basis neighbor list (K/J sparse)
+    NeighborList nl_aux; // auxiliary basis neighbor list (aux overlap sparse)
+
+    if (is_sparse) {
+      TIME_SCOPE(startup_timing, "Build neighbor lists (sparse)");
+      {
+        TIME_SCOPE(startup_timing, "Bounding boxes + neighbor list (aux)");
+        auto bb_aux = create_bounding_boxes(grid, cfg.max_points_per_box);
+        build_neighbor_list(basis_aux, bb_aux, cfg.max_points_per_box, N_quad,
+                            nl_aux);
+      }
+      {
+        TIME_SCOPE(startup_timing, "Bounding boxes + neighbor list (primary)");
+        auto bb = create_bounding_boxes(grid, cfg.max_points_per_box);
+        build_neighbor_list(basis, bb, cfg.max_points_per_box, N_quad, nl);
+      }
+    }
+
     // ---- Collocations (dense path and/or DFT quadrature) ------------------
     DeviceView2DLeft basis_collocation;
     DeviceView2DLeft basis_aux_collocation;
@@ -577,25 +607,6 @@ int main(int argc, char *argv[]) {
                        basis_aux_collocation);
       sto_potential_collocation_scaled(space, basis_aux, grid,
                                        potential_collocation_scaled);
-    }
-
-    // ---- Neighbor lists (sparse path only) ---------------------------------
-    NeighborList nl;     // primary basis neighbor list (K/J sparse)
-    NeighborList nl_aux; // auxiliary basis neighbor list (aux overlap sparse)
-
-    if (is_sparse) {
-      TIME_SCOPE(startup_timing, "Build neighbor lists (sparse)");
-      {
-        TIME_SCOPE(startup_timing, "Bounding boxes + neighbor list (aux)");
-        auto bb_aux = create_bounding_boxes(grid, cfg.max_points_per_box);
-        build_neighbor_list(basis_aux, bb_aux, cfg.max_points_per_box, N_quad,
-                            nl_aux);
-      }
-      {
-        TIME_SCOPE(startup_timing, "Bounding boxes + neighbor list (primary)");
-        auto bb = create_bounding_boxes(grid, cfg.max_points_per_box);
-        build_neighbor_list(basis, bb, cfg.max_points_per_box, N_quad, nl);
-      }
     }
 
     // ---- Auxiliary overlap (A|B), dense or sparse --------------------------
@@ -917,14 +928,13 @@ int main(int argc, char *argv[]) {
 
       fock_timing.report("Fock Build #" + std::to_string(*call_count) +
                          " Timing Breakdown");
-      fock_cumulative_timing.start("Fock build #" +
-                                   std::to_string(*call_count));
-      fock_cumulative_timing.stop();
-      // Overwrite the just-recorded (near-zero) duration with the real
-      // total measured by fock_timing so the cumulative summary reflects
-      // actual per-call cost rather than the bookkeeping overhead above.
-      // (Kept simple/explicit rather than exposing internals of
-      // TimingRegistry to avoid over-engineering the merge.)
+
+      // Record this call's real total (sum of its top-level timed sections)
+      // into the cumulative registry, so the summary reflects actual
+      // per-call cost rather than bookkeeping overhead.
+      fock_cumulative_timing.record("Fock build #" +
+                                        std::to_string(*call_count),
+                                    fock_timing.total_top_level_seconds());
 
       std::vector<arma::mat> fock_arma;
       fock_arma.push_back(F_alpha_orth);
