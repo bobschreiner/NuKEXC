@@ -397,7 +397,9 @@ DeviceView2DLeft compute_coulomb_tiled(
 
   DeviceView1DLeft scaling_factor("Scaling factor", K);
 
-  Kokkos::TeamPolicy<ExecSpace> policy_boxes(space, num_boxes, Kokkos::AUTO());
+  using Bounds = Kokkos::LaunchBounds<128, NUKEXC_TILED_MIN_BLOCKS>;
+  Kokkos::TeamPolicy<ExecSpace, Bounds> policy_boxes(space, num_boxes,
+                                                     Kokkos::AUTO());
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
   typedef ExecSpace::scratch_memory_space ScratchSpace;
   typedef Kokkos::View<double *, ScratchSpace,
@@ -819,7 +821,9 @@ DeviceView2DLeft coulomb_overlap_integral_tiled(const ExecSpace space,
   DeviceView2DLeft overlap_matrix_sym("Overlap matrix Symmetrized", N_bf_aux,
                                       N_bf_aux);
 
-  Kokkos::TeamPolicy<ExecSpace> policy_boxes(space, num_boxes, Kokkos::AUTO());
+  using Bounds = Kokkos::LaunchBounds<128, NUKEXC_TILED_MIN_BLOCKS>;
+  Kokkos::TeamPolicy<ExecSpace, Bounds> policy_boxes(space, num_boxes,
+                                                     Kokkos::AUTO());
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
   typedef ExecSpace::scratch_memory_space ScratchSpace;
   typedef Kokkos::View<double *, ScratchSpace,

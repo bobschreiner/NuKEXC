@@ -436,20 +436,6 @@ double basis_eval_fast(const ShellParams &sh, double x, double y, double z) {
   return radial * angular_part;
 } // namespace Nukexc
 
-// Non-inlined per-point basis evaluation. Loads the shell parameters and
-// evaluates phi(x,y,z) entirely inside this frame, so the ShellParams struct
-// (l,m,k,zeta,norm,ox,oy,oz -- ~13 registers) and the radial temporaries stay
-// out of the *caller's* live-register set. Prefer this over
-// basis_eval_fast(load_shell(basis, idx), ...) inside register-bound integral
-// kernels. Trade-off: the shell is re-loaded on every call rather than once per
-// neighbor, i.e. a few extra (cheap) basis-View loads in exchange for kernel
-// register headroom.
-NUKEXC_NOINLINE_FUNCTION double basis_eval_at(const STOBasisSet &basis,
-                                              const int idx, const double x,
-                                              const double y, const double z) {
-  return basis_eval_fast(load_shell(basis, idx), x, y, z);
-}
-
 KOKKOS_INLINE_FUNCTION
 void basis_eval_grad(const STOBasisSet basis, const int basis_idx,
                      const double x, const double y, const double z, double &gx,

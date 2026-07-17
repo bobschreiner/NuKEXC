@@ -63,6 +63,16 @@ const double epsilon_shift = 1e-30;
   KOKKOS_INLINE_FUNCTION __attribute__((noinline))
 #endif
 
+// Min blocks/SM target for the tiled integral kernels' Kokkos::LaunchBounds.
+// The kernels launch 128-thread blocks; on sm_90 (65536 regs/SM) this caps the
+// per-thread register count: 8 -> <=64 regs (50% occupancy), 7 -> <=73 (43.75%),
+// 6 -> <=85 (37.5%). Raising it forces ptxas to spill toward the target -- cheap
+// here because these kernels leave the memory subsystem idle. Tune + rebuild to
+// sweep the occupancy/spill trade-off. (No-op on CPU backends.)
+#ifndef NUKEXC_TILED_MIN_BLOCKS
+#define NUKEXC_TILED_MIN_BLOCKS 8
+#endif
+
 // Standard Views
 using View1D = Kokkos::View<double *>;
 using DeviceView2D = Kokkos::View<double **, ExecSpace>;
