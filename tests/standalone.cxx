@@ -257,7 +257,7 @@ struct Config {
   int charge = 0;
   int multiplicity = 1;
   int max_points_per_box = 32; // runtime via --box-size=
-  int tile_size = 32;          // neighbor tile (--tile=, only used by --alg=tiled)
+  int tile_size = 32; // neighbor tile (--tile=, only used by --alg=tiled)
   std::string xfunc = "lda_x";
   std::string cfunc = "lda_c_pw";
 };
@@ -301,8 +301,7 @@ Config parse_args(int argc, char *argv[]) {
           << "  --alg=<string>        'dense','sparse' or 'tiled'(default: "
           << cfg.algorithm << ")\n"
           << "  --box-size=<int>      Max quadrature points/box  (default: "
-          << cfg.max_points_per_box
-          << ")  [used by --alg=sparse,tiled]\n"
+          << cfg.max_points_per_box << ")  [used by --alg=sparse,tiled]\n"
           << "  --tile=<int>          Neighbor tile size         (default: "
           << cfg.tile_size << ")  [only used by --alg=tiled]\n"
           << "  --nrad=<int>          Radial grid points         (default: "
@@ -733,8 +732,7 @@ int main(int argc, char *argv[]) {
          basis_aux_collocation, potential_collocation_scaled, h_core, X_arma,
          half_inverse_X, N_bf, E_nuc, S_arma, cfg, func_c, func_x, x_info,
          c_info, has_separate_c, a_exx, is_dft = is_dft, is_sparse = is_sparse,
-         is_tiled = is_tiled, tile = tile, call_count,
-         &fock_cumulative_timing](
+         is_tiled = is_tiled, tile = tile, call_count, &fock_cumulative_timing](
             const OpenOrbitalOptimizer::DensityMatrix<double, double> &dm)
         -> std::pair<double, OpenOrbitalOptimizer::FockMatrix<double>> {
       TimingRegistry fock_timing;
@@ -791,8 +789,8 @@ int main(int argc, char *argv[]) {
           J = compute_coulomb_tiled(space, k_C_tot, k_occ_tot, basis, basis_aux,
                                     grid, nl, half_inverse_X, tile);
         } else if (is_sparse) {
-          J = compute_coulomb_sparse(space, k_C_tot, k_occ_tot, basis, basis_aux,
-                                     grid, nl, half_inverse_X);
+          J = compute_coulomb_sparse(space, k_C_tot, k_occ_tot, basis,
+                                     basis_aux, grid, nl, half_inverse_X);
         } else {
           J = compute_coulomb(space, k_C_tot, k_occ_tot, basis_collocation,
                               basis_aux_collocation,
@@ -903,9 +901,9 @@ int main(int argc, char *argv[]) {
           {
             TIME_SCOPE(fock_timing, "  K beta");
             if (is_tiled) {
-              K_beta = compute_exact_exchange_tiled(
-                  space, k_C_beta, k_occ_beta, basis, basis_aux, grid, nl,
-                  half_inverse_X, tile);
+              K_beta = compute_exact_exchange_tiled(space, k_C_beta, k_occ_beta,
+                                                    basis, basis_aux, grid, nl,
+                                                    half_inverse_X, tile);
             } else if (is_sparse) {
               K_beta = compute_exact_exchange_sparse(
                   space, k_C_beta, k_occ_beta, basis, basis_aux, grid, nl,

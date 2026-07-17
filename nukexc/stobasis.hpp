@@ -411,7 +411,7 @@ ShellParams load_shell(const STOBasisSet &basis, int basis_idx) {
 // monomial temporaries; keeping them in this callee's own frame stops them from
 // widening the live-register set of the pairwise integral loops that call
 // basis_eval_fast. (The generated harmonics header is left untouched.)
-KOKKOS_INLINE_FUNCTION double
+NUKEXC_NOINLINE_FUNCTION double
 eval_solid_harmonic(const int l, const int m, const double x, const double y,
                     const double z) {
   double angular_part;
