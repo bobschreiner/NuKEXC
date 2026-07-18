@@ -25,7 +25,7 @@
 
 #include <integratorxx/composite_quadratures/spherical_quadrature.hpp>
 #include <integratorxx/generators/radial_factory.hpp>
-#include <integratorxx/generators/spherical_factory.hpp>
+#include <integratorxx/generators/spherical_factory.hpp> // create_pruned_spec (decl)
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/radial/becke.hpp>
 #include <integratorxx/quadratures/radial/treutlerahlrichs.hpp>
@@ -91,6 +91,24 @@ const std::vector<double> TA_XI = {
 constexpr double TA_M4 = 0.6;
 constexpr double TA_M3 = 0.0;
 
+// Periodic-table row (period, 1..7) of element Z. Used by the optional
+// per-element grid sizing to give heavier atoms more radial points.
+inline int periodic_row(unsigned Z) {
+  if (Z <= 2)
+    return 1;
+  if (Z <= 10)
+    return 2;
+  if (Z <= 18)
+    return 3;
+  if (Z <= 36)
+    return 4;
+  if (Z <= 54)
+    return 5;
+  if (Z <= 86)
+    return 6;
+  return 7;
+}
+
 struct FlatGrid {
 
   Kokkos::View<Point *> quad_points;
@@ -103,11 +121,23 @@ struct FlatGrid {
   Kokkos::View<int *> point_owner;
 };
 
+// Adaptive-grid knobs (both default OFF, so the default call is the uniform
+// unpruned grid used previously):
+//   * pruning     -- angular adaptivity: reduce the Lebedev order in the
+//                    inner/outer radial shells (IntegratorXX::PruningScheme
+//                    Treutler or Robust). Unpruned keeps full order everywhere.
+//   * per_element -- radial adaptivity: give heavier atoms proportionally more
+//                    radial points (scaled by periodic row) instead of a single
+//                    nrad for every centre.
+// The two axes are orthogonal, so all four combinations are selectable.
 template <typename radial_type, typename angular_type>
 FlatGrid make_flat_grid(const Molecule &mol, const size_t nrad = 50,
                         const size_t nang_order = 30,
                         const double weight_threshold = 1e-30,
-                        [[maybe_unused]] const double ta_alpha = TA_M4) {
+                        [[maybe_unused]] const double ta_alpha = TA_M4,
+                        const IntegratorXX::PruningScheme pruning =
+                            IntegratorXX::PruningScheme::Unpruned,
+                        const bool per_element = false) {
 
   using namespace IntegratorXX;
   using angular_traits = quadrature_traits<angular_type>;
@@ -162,17 +192,34 @@ FlatGrid make_flat_grid(const Molecule &mol, const size_t nrad = 50,
             0.5 * BECKE_SLATER_RADII[atomic_number] * detail::ang_to_bohr;
     }
 
+    // Per-element radial sizing (optional): heavier periods get proportionally
+    // more radial points (+nrad/5 per period beyond H/He), since their compact
+    // cores need finer radial resolution. Angular adaptivity is orthogonal and
+    // handled by `pruning` below.
+    const size_t nrad_atom =
+        per_element ? nrad + (periodic_row(atomic_number) - 1) * (nrad / 5)
+                    : nrad;
+
     // Only TA takes the M3/M4 exponent (alpha); other schemes have no such
     // parameter, so forward it exclusively on the TA path.
     std::unique_ptr<RadialTraits> rad_traits;
     if constexpr (is_ta)
-      rad_traits = make_radial_traits(rad_spec, nrad, r_atomic, ta_alpha);
+      rad_traits = make_radial_traits(rad_spec, nrad_atom, r_atomic, ta_alpha);
     else
-      rad_traits = make_radial_traits(rad_spec, nrad, r_atomic);
+      rad_traits = make_radial_traits(rad_spec, nrad_atom, r_atomic);
 
     UnprunedSphericalGridSpecification unp(
         rad_spec, *rad_traits, angular_from_type<angular_type>(), nang);
-    auto sph = SphericalGridFactory::generate_grid(unp);
+
+    // Angular pruning (optional): Unpruned uses the full order on every shell;
+    // Treutler/Robust drop the order on inner+outer shells. Either way the atom
+    // yields a flat point list whose (variable) length the flat/owner layout
+    // downstream handles regardless of shape.
+    SphericalGridFactory::spherical_grid_ptr sph;
+    if (pruning == PruningScheme::Unpruned)
+      sph = SphericalGridFactory::generate_grid(unp);
+    else
+      sph = SphericalGridFactory::generate_grid(create_pruned_spec(pruning, unp));
 
     // sph->npts() is the count for THIS atom -- keep it local so per-atom grid
     // sizes are free to differ.

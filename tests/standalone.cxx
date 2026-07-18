@@ -19,6 +19,7 @@
 
 #include <Kokkos_Core.hpp>
 
+#include <integratorxx/generators/spherical_factory.hpp>
 #include <iomanip>
 #include <nukexc/core_hamiltonian.hpp>
 #include <nukexc/coulomb.hpp>
@@ -491,8 +492,9 @@ int main(int argc, char *argv[]) {
     FlatGrid grid;
     {
       TIME_SCOPE(startup_timing, "Build molecular grid");
-      grid = make_flat_grid<bk_type, ll_type>(mol, cfg.nrad, cfg.nang,
-                                              screening_tol * 1e-5);
+      grid = make_flat_grid<ta_type, ll_type>(
+          mol, cfg.nrad, cfg.nang, screening_tol * 1e-5, TA_M4,
+          IntegratorXX::PruningScheme::Robust, true);
     }
 
     STOBasisSet basis;
