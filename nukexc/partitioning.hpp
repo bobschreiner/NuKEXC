@@ -34,14 +34,6 @@ double compute_mu(const double r_i, const double r_j, const double R_ij) {
 }
 
 KOKKOS_INLINE_FUNCTION
-double compute_mu_laqua(const double r_i, const double r_j, const double R_ij,
-                        const double R_cutoff = 5.) {
-  double R = Kokkos::min(R_ij, R_cutoff);
-  double mu = (r_i - r_j) / R;
-  mu = mu > 1.0 ? 1.0 : mu < -1.0 ? -1.0 : mu;
-  return mu;
-}
-KOKKOS_INLINE_FUNCTION
 double compute_p(const double x) { return (1.5 * x) - (0.5 * std::pow(x, 3)); }
 
 KOKKOS_INLINE_FUNCTION
@@ -70,7 +62,7 @@ void partition_becke(const Kokkos::View<Point *> &atom_centers,
   Kokkos::parallel_for(
       "Compute inter-atomic distances", range_natoms_natoms,
       KOKKOS_LAMBDA(const int &i, const int &j) {
-        R(i, j) = dist(atom_centers(i), atom_centers(j)) + epsilon_shift;
+        R(i, j) = dist(atom_centers(i), atom_centers(j));
       });
 
   Kokkos::fence();
@@ -94,7 +86,7 @@ void partition_becke(const Kokkos::View<Point *> &atom_centers,
           double part_weight = 1.;
           for (size_t j = 0; j < natoms; ++j) {
             if (i != j) {
-              double mu = compute_mu_laqua(r(p, g, i), r(p, g, j), R(i, j));
+              double mu = compute_mu(r(p, g, i), r(p, g, j), R(i, j));
               double poly = compute_p(compute_p(compute_p(mu)));
 
               double s = compute_s(poly);
@@ -120,64 +112,24 @@ void partition_becke_team(const Kokkos::View<Point *> &atom_centers,
   size_t natoms = atom_centers.extent(0);
   size_t nquad_points_per_atom = quadrature_points.extent(1);
 
+  const double R_cutoff = 5.0;
+
   Kokkos::View<double **, Layout, ExecSpace,
                Kokkos::MemoryTraits<Kokkos::RandomAccess>>
       R_ij("R_ij", natoms, natoms);
 
-  // Precompute: for each atom i, which atoms j are "close enough" to matter?
-  // Threshold: if R_ij > R_screen, s(p(p(p(mu)))) is indistinguishable from 1
-  // A value of ~8-10 bohr is typically sufficient for Becke + Laqua screening
-  //
-  // neighbor_list(i, k) = index of k-th neighbor of atom i
-  // n_neighbors(i)      = number of neighbors of atom i
-  Kokkos::View<int *> n_neighbors("n_neighbors", natoms);
+  Kokkos::MDRangePolicy range_natoms_natoms({0, 0}, {natoms, natoms});
 
-  const double R_screen = 10.0;
-
-  // --- Pass 1: count neighbors only ---
+  // Computes the atomic distances and stroes them in R_ij
   Kokkos::parallel_for(
-      "Precompute R_ij", natoms, KOKKOS_LAMBDA(const int i) {
-        for (int j = 0; j < natoms; ++j) {
-          if (i == j)
-            continue;
-          double d = dist(atom_centers(i), atom_centers(j));
-          R_ij(i, j) = d + epsilon_shift;
-          if (R_ij(i, j) < R_screen) {
-            n_neighbors(i) += 1;
-          }
-        }
+      "Compute inter-atomic distances", range_natoms_natoms,
+      KOKKOS_LAMBDA(const int &i, const int &j) {
+        R_ij(i, j) =
+            Kokkos::min(dist(atom_centers(i), atom_centers(j)), R_cutoff);
       });
 
   // --- Reduce to find max_n, then allocate with correct size ---
-  int max_n = 0;
-  Kokkos::parallel_reduce(
-      "Find maximum number of neighbors", natoms,
-      KOKKOS_LAMBDA(const int &i, int &lmax) {
-        if (lmax < n_neighbors(i))
-          lmax = n_neighbors(i);
-      },
-      Kokkos::Max<int>(max_n));
-
-  Kokkos::View<int **> neighbor_list("neighbors", natoms, max_n);
-  Kokkos::deep_copy(neighbor_list, -1);
-
-  // Reset counters to reuse as fill indices in pass 2
-  Kokkos::deep_copy(n_neighbors, 0);
-
   // --- Pass 2: fill neighbor list ---
-  Kokkos::parallel_for(
-      "Fill neighbor list", natoms, KOKKOS_LAMBDA(const int i) {
-        for (int j = 0; j < natoms; ++j) {
-          if (i == j)
-            continue;
-          if (R_ij(i, j) < R_screen) {
-            int idx = n_neighbors(i);
-            neighbor_list(i, idx) = j;
-            n_neighbors(i) += 1;
-          }
-        }
-      });
-
   using scratch_view_double =
       Kokkos::View<double *, ExecSpace::scratch_memory_space>;
 
@@ -217,10 +169,10 @@ void partition_becke_team(const Kokkos::View<Point *> &atom_centers,
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange(team_member, natoms), [=](const int i) {
               double w_i = 1.0;
-              for (int k = 0; k < n_neighbors(i); ++k) {
-                int j = neighbor_list(i, k);
-                double mu =
-                    compute_mu_laqua(r_cache(i), r_cache(j), R_ij(i, j));
+              for (int j = 0; j < natoms; ++j) {
+                if (i == j)
+                  continue;
+                double mu = compute_mu(r_cache(i), r_cache(j), R_ij(i, j));
                 w_i *= compute_s(compute_p(compute_p(compute_p(mu))));
               }
               w_cache(i) = w_i;
