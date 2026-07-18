@@ -76,9 +76,10 @@ create_bounding_boxes(FlatGrid &grid, const int max_points_per_bb) {
       ArborX::Details::PredicateIndexables<decltype(queries)>{queries},
       ArborX::Experimental::Morton64{}, bvh.bounds());
 
-  // ── Apply permutation to all three arrays in lock-step ───────────────
+  // ── Apply permutation to all grid arrays in lock-step ────────────────
   ArborX::Details::applyPermutation(ExecSpace{}, permute, grid.quad_points);
   ArborX::Details::applyPermutation(ExecSpace{}, permute, grid.weights);
+  ArborX::Details::applyPermutation(ExecSpace{}, permute, grid.point_owner);
 
   // ── Build tiling: group the Morton-sorted points into blocks of N ────
   const int n_bounding_boxes =
@@ -120,37 +121,6 @@ struct NeighborList {
   int max_points_per_box;
   int total_points;
 };
-
-Kokkos::View<Box *, ExecSpace>
-create_shell_bounding_boxes(const FlatGrid &grid) {
-
-  const int natoms = grid.atom_centers.extent(0);
-  const int nrad = grid.nrad;
-  const int nang = grid.nang;
-  const int num_boxes = natoms * nrad; // one box per (atom, shell)
-
-  Kokkos::View<Box *, ExecSpace> boxes("shell_boxes", num_boxes);
-
-  Kokkos::parallel_for(
-      "compute_shell_bounding_boxes",
-      Kokkos::RangePolicy<ExecSpace>(0, num_boxes), KOKKOS_LAMBDA(int idx) {
-        // idx == iatom * nrad + irad
-        const int start = idx * nang; // contiguous in the flat array
-
-        Box b{grid.quad_points(start), grid.quad_points(start)};
-        for (int k = 1; k < nang; ++k) {
-          const auto &p = grid.quad_points(start + k);
-          for (int d = 0; d < 3; ++d) {
-            b.minCorner()[d] = Kokkos::min(b.minCorner()[d], p[d]);
-            b.maxCorner()[d] = Kokkos::max(b.maxCorner()[d], p[d]);
-          }
-        }
-        boxes(idx) = b;
-      });
-
-  ExecSpace{}.fence();
-  return boxes;
-}
 
 struct NeighborInsertCallback {
   template <typename Query, typename Value, typename Output>

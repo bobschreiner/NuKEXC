@@ -94,36 +94,38 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
       Molecule mol = molecules[mol_ind];
       int natoms = mol.natoms;
 
-      // Create all the Kokkos Views on host device
+      const size_t total = (size_t)natoms * npts;
+
+      // Flat grid: one owner tag per point instead of a 2D (atom, point) shape.
       Kokkos::View<Point *> atom_centers_device("atom centers", natoms);
-      Kokkos::View<Point **> quadrature_points_device("quadrature_points",
-                                                      natoms, npts);
-      Kokkos::View<double **> weights_device("weights", natoms, npts);
+      Kokkos::View<Point *> quadrature_points_device("quadrature_points", total);
+      Kokkos::View<int *> point_owner_device("point owner", total);
+      Kokkos::View<double *> weights_device("weights", total);
 
       // Create all the Kokkos Mirror Views on Execution device
       auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
       auto quadrature_points_h =
           Kokkos::create_mirror_view(quadrature_points_device);
+      auto point_owner_h = Kokkos::create_mirror_view(point_owner_device);
       auto weights_h = Kokkos::create_mirror_view(weights_device);
 
       Kokkos::deep_copy(atom_centers_h, mol.atom_centers);
       for (int i = 0; i < natoms; ++i) {
         for (int j = 0; j < npts; ++j) {
-          quadrature_points_h(i, j)[0] =
-              atom_centers_h(i)[0] + sph->points()[j][0];
-          quadrature_points_h(i, j)[1] =
-              atom_centers_h(i)[1] + sph->points()[j][1];
-          quadrature_points_h(i, j)[2] =
-              atom_centers_h(i)[2] + sph->points()[j][2];
+          const size_t g = (size_t)i * npts + j;
+          quadrature_points_h(g)[0] = atom_centers_h(i)[0] + sph->points()[j][0];
+          quadrature_points_h(g)[1] = atom_centers_h(i)[1] + sph->points()[j][1];
+          quadrature_points_h(g)[2] = atom_centers_h(i)[2] + sph->points()[j][2];
 
-          // weights(i,j) = sph->weights()[i];
-          weights_h(i, j) = 1.0;
+          weights_h(g) = 1.0;
+          point_owner_h(g) = i;
         }
       }
 
       // Copy the views from host device to the execution device
       Kokkos::deep_copy(atom_centers_device, atom_centers_h);
       Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
+      Kokkos::deep_copy(point_owner_device, point_owner_h);
       Kokkos::deep_copy(weights_device, weights_h);
 
       // Compute the adjusted weights
@@ -131,7 +133,7 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
       Kokkos::Timer timer;
       double time;
       partition_becke(atom_centers_device, quadrature_points_device,
-                      weights_device);
+                      point_owner_device, weights_device);
       time = timer.seconds();
 
       std::cout << std::left << std::setw(50) << "Partitioning "
@@ -141,7 +143,7 @@ TEST_CASE("Fuzzy cell partitioning", "[fuzzy_cells]") {
       timer.reset();
 
       partition_becke_team(atom_centers_device, quadrature_points_device,
-                           weights_device);
+                           point_owner_device, weights_device);
       time = timer.seconds();
       std::cout << std::left << std::setw(50)
                 << "Partitioning using thread teams " << std::setw(15)

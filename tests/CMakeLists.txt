@@ -19,6 +19,8 @@ add_executable(test_helium test_helium.cxx)
 add_executable(convergence_integration convergence_integration.cxx standards.cxx)
 add_executable(convergence_h2plus convergence_h2plus.cxx)
 add_executable(convergence_coreH convergence_coreH.cxx)
+add_executable(convergence_2d convergence_2d.cxx)
+add_executable(convergence_radial_h convergence_radial_h.cxx)
 
 add_executable(benchmark_partition  standards.cxx benchmark_partition.cxx )
 add_executable(benchmark_scf standards.cxx benchmark_scf.cxx )
@@ -52,6 +54,8 @@ set(ALL_TEST_TARGETS
     convergence_integration
     convergence_h2plus
     convergence_coreH
+    convergence_2d
+    convergence_radial_h
 
     benchmark_partition
     benchmark_scf

@@ -149,9 +149,13 @@ void visualize_points_with_tiles(const FlatGrid &grid) {
       << "SCALARS tile_id int 1\n"
       << "LOOKUP_TABLE default\n";
 
-  for (int j = 0; j < grid.nang; ++j)
-    for (int i = 0; i < grid.nrad; ++i)
-      out << i << '\n';
+  // Colour each surviving point by its owning atom. This always matches the
+  // point count (even for compacted / irregular grids), unlike the old
+  // nrad*nang shell indexing.
+  auto owners =
+      Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, grid.point_owner);
+  for (int i = 0; i < total; ++i)
+    out << owners(i) << '\n';
 
   out.flush();
   std::cout << "[visualize_points_with_tiles]\n"

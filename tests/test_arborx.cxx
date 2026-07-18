@@ -200,7 +200,9 @@ int main(int argc, char *argv[]) {
   {
     Molecule mol = make_taxol();
     FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, 40, 10);
-    int max_points_per_bb = grid.nang;
+    // Box-size heuristic (previously grid.nang, which no longer exists now that
+    // grids may be irregular); any modest tile size works for the visualization.
+    int max_points_per_bb = 128;
     // Create bounding boxes
     auto bb = create_bounding_boxes(grid, max_points_per_bb);
 

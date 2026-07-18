@@ -36,6 +36,7 @@
 #include "partitioning.hpp"
 #include "stobasis.hpp"
 
+#include <type_traits>
 #include <vector>
 
 //
@@ -82,20 +83,31 @@ const std::vector<double> TA_XI = {
     0.8,  0.9, 1.8, 1.4, 1.3, 1.1, 0.9, 0.9, 0.9, 0.9, 1.4, 1.3,
     1.3,  1.2, 1.1, 1.0, 1.0, 1.0, 1.5, 1.4, 1.3, 1.2, 1.2, 1.2,
     1.2,  1.2, 1.2, 1.1, 1.1, 1.1, 1.1, 1.0, 0.9, 0.9, 0.9, 0.9};
+
+// Treutler-Ahlrichs radial mapping exponent alpha (JCP 102, 346 (1995)).
+//   r = R * (1+x)^alpha * ln(2/(1-x)) / ln2 ,  with R == the element xi.
+// M4 (alpha = 0.6, Eq. 19) is the recommended default; M3 (alpha = 0.0, Eq. 18)
+// drops the (1+x)^alpha factor. Pass one of these as make_flat_grid's ta_alpha.
+constexpr double TA_M4 = 0.6;
+constexpr double TA_M3 = 0.0;
+
 struct FlatGrid {
 
   Kokkos::View<Point *> quad_points;
   Kokkos::View<double *> weights;
   Kokkos::View<Point *> atom_centers;
   Kokkos::View<unsigned *> Z;
-  unsigned nrad; // radial points per atom
-  unsigned nang; // angular points per radial shell
+  // Owning atom of each surviving quadrature point (length == quad_points).
+  // Because ownership is stored per point rather than implied by a fixed
+  // (atom, point) 2D shape, centers may carry different numbers of points.
+  Kokkos::View<int *> point_owner;
 };
 
 template <typename radial_type, typename angular_type>
 FlatGrid make_flat_grid(const Molecule &mol, const size_t nrad = 50,
                         const size_t nang_order = 30,
-                        const double weight_threshold = 1e-30) {
+                        const double weight_threshold = 1e-30,
+                        [[maybe_unused]] const double ta_alpha = TA_M4) {
 
   using namespace IntegratorXX;
   using angular_traits = quadrature_traits<angular_type>;
@@ -110,67 +122,97 @@ FlatGrid make_flat_grid(const Molecule &mol, const size_t nrad = 50,
 
   Kokkos::View<Point *> ac_dev("atom centers", natoms);
   Kokkos::View<unsigned *> Z_dev("Z", natoms);
-  Kokkos::View<Point **> qp_2d("quadrature points", natoms, npts);
-  Kokkos::View<double **> wt_2d("weights", natoms, npts);
 
   auto ac_h = Kokkos::create_mirror_view(ac_dev);
   auto Z_h = Kokkos::create_mirror_view(Z_dev);
-  auto qp_h = Kokkos::create_mirror_view(qp_2d);
-  auto wt_h = Kokkos::create_mirror_view(wt_2d);
 
   Kokkos::deep_copy(ac_h, mol.atom_centers);
   Kokkos::deep_copy(Z_h, mol.Z);
+
+  // Build the grid one atom at a time into flat host buffers. Each atom appends
+  // its own spherical grid together with an owner tag, so different centers may
+  // contribute different numbers of points (irregular grids) without any
+  // rectangular (atom, point) shape constraining them.
+  std::vector<Point> qp_host;
+  std::vector<double> wt_host;
+  std::vector<int> owner_host;
+  qp_host.reserve((size_t)natoms * npts);
+  wt_host.reserve((size_t)natoms * npts);
+  owner_host.reserve((size_t)natoms * npts);
 
   for (unsigned i = 0; i < natoms; ++i) {
 
     unsigned atomic_number = Z_h(i);
 
-    // Fallback scale to 1.0 if Z is out of range of your vector
+    // Per-atom radial scaling factor R (defaults to 1.0 if Z is out of range).
+    // For TA this R is the element-specific xi (JCP 102, 346 (1995), Table 1);
+    // for Becke it is half the Bragg-Slater radius (JCP 88, 2547 (1988)).
+    constexpr bool is_ta =
+        std::is_same_v<radial_type, IntegratorXX::TreutlerAhlrichs<double, double>>;
+    constexpr bool is_becke =
+        std::is_same_v<radial_type, IntegratorXX::Becke<double, double>>;
+
     double r_atomic = 1.0;
-
-    if (typeid(IntegratorXX::TreutlerAhlrichs<double, double>).name() ==
-        typeid(radial_type).name()) {
-      /*
-if (atomic_number < TA_XI.size()) {
-  r_atomic = TA_XI[atomic_number];
-}
-*/
-
-    } else if ((typeid(IntegratorXX::Becke<double, double>).name() ==
-                typeid(radial_type).name())) {
-      if (atomic_number < BECKE_SLATER_RADII.size()) {
+    if constexpr (is_ta) {
+      if (atomic_number < TA_XI.size())
+        r_atomic = TA_XI[atomic_number];
+    } else if constexpr (is_becke) {
+      if (atomic_number < BECKE_SLATER_RADII.size())
         r_atomic =
             0.5 * BECKE_SLATER_RADII[atomic_number] * detail::ang_to_bohr;
-      }
     }
 
-    auto rad_traits = make_radial_traits(rad_spec, nrad, r_atomic);
+    // Only TA takes the M3/M4 exponent (alpha); other schemes have no such
+    // parameter, so forward it exclusively on the TA path.
+    std::unique_ptr<RadialTraits> rad_traits;
+    if constexpr (is_ta)
+      rad_traits = make_radial_traits(rad_spec, nrad, r_atomic, ta_alpha);
+    else
+      rad_traits = make_radial_traits(rad_spec, nrad, r_atomic);
+
     UnprunedSphericalGridSpecification unp(
         rad_spec, *rad_traits, angular_from_type<angular_type>(), nang);
     auto sph = SphericalGridFactory::generate_grid(unp);
 
-    for (unsigned j = 0; j < npts; ++j) {
-      qp_h(i, j)[0] = ac_h(i)[0] + sph->points()[j][0];
-      qp_h(i, j)[1] = ac_h(i)[1] + sph->points()[j][1];
-      qp_h(i, j)[2] = ac_h(i)[2] + sph->points()[j][2];
-      wt_h(i, j) = sph->weights()[j];
+    // sph->npts() is the count for THIS atom -- keep it local so per-atom grid
+    // sizes are free to differ.
+    const size_t npts_atom = sph->npts();
+    for (size_t j = 0; j < npts_atom; ++j) {
+      Point p;
+      p[0] = ac_h(i)[0] + sph->points()[j][0];
+      p[1] = ac_h(i)[1] + sph->points()[j][1];
+      p[2] = ac_h(i)[2] + sph->points()[j][2];
+      qp_host.push_back(p);
+      wt_host.push_back(sph->weights()[j]);
+      owner_host.push_back((int)i);
     }
   }
 
+  const size_t total_points = qp_host.size();
+
   Kokkos::deep_copy(ac_dev, ac_h);
   Kokkos::deep_copy(Z_dev, Z_h);
-  Kokkos::deep_copy(qp_2d, qp_h);
-  Kokkos::deep_copy(wt_2d, wt_h);
 
-  partition_becke_team(ac_dev, qp_2d, wt_2d);
+  // Upload the flat grid to the device.
+  Kokkos::View<Point *> qp_flat("quadrature points", total_points);
+  Kokkos::View<double *> wt_flat("weights", total_points);
+  Kokkos::View<int *> owner_flat("point owner", total_points);
+  Kokkos::deep_copy(
+      qp_flat, Kokkos::View<Point *, HostSpace>(qp_host.data(), total_points));
+  Kokkos::deep_copy(
+      wt_flat, Kokkos::View<double *, HostSpace>(wt_host.data(), total_points));
+  Kokkos::deep_copy(owner_flat, Kokkos::View<int *, HostSpace>(
+                                    owner_host.data(), total_points));
 
-  // Remove all weights below the weight threshold
+  partition_becke_team(ac_dev, qp_flat, owner_flat, wt_flat);
+
+  // Remove all weights below the weight threshold, compacting points, weights
+  // and owners together so the surviving grid stays self-consistent.
   Kokkos::View<int *> w_counter("Counter", 1);
   Kokkos::parallel_for(
-      "Count weights",
-      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>({0, 0}, {natoms, npts}),
-      KOKKOS_LAMBDA(const int iatoms, const int ipts) {
-        if (wt_2d(iatoms, ipts) > weight_threshold) {
+      "Count weights", Kokkos::RangePolicy<ExecSpace>(0, total_points),
+      KOKKOS_LAMBDA(const int g) {
+        if (wt_flat(g) > weight_threshold) {
           Kokkos::atomic_add(&w_counter(0), 1);
         };
       });
@@ -178,34 +220,32 @@ if (atomic_number < TA_XI.size()) {
   auto w_counter_h =
       Kokkos::create_mirror_view_and_copy(HostSpace{}, w_counter);
 
-  // Initialize the Flatterend views with the correct sizes
+  // Initialize the compacted views with the correct sizes
   Kokkos::View<Point *> qp_1d("quad points 1D", w_counter_h(0));
   Kokkos::View<double *> wt_1d("weights 1D", w_counter_h(0));
+  Kokkos::View<int *> owner_1d("point owner 1D", w_counter_h(0));
 
   // Reset the counter
   Kokkos::deep_copy(w_counter, 0);
 
   Kokkos::parallel_for(
-      "FlattenViews",
-      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<3>>(
-          {0, 0, 0}, {(int)natoms, (int)nrad, (int)nang}),
-      KOKKOS_LAMBDA(const int iatoms, const int iradial, const int iangular) {
-        const int src = iradial * nang + iangular;
-
-        if (wt_2d(iatoms, src) > weight_threshold) {
+      "FlattenViews", Kokkos::RangePolicy<ExecSpace>(0, total_points),
+      KOKKOS_LAMBDA(const int g) {
+        if (wt_flat(g) > weight_threshold) {
           int dest = Kokkos::atomic_fetch_add(&w_counter(0), 1);
-          wt_1d(dest) = wt_2d(iatoms, src);
-          qp_1d(dest) = qp_2d(iatoms, src);
+          wt_1d(dest) = wt_flat(g);
+          qp_1d(dest) = qp_flat(g);
+          owner_1d(dest) = owner_flat(g);
         }
       });
 
-  Kokkos::printf("Reduced weight count from %d to %d (%f %%) for a weight "
+  Kokkos::printf("Reduced weight count from %zu to %d (%f %%) for a weight "
                  "threshold of %e\n",
-                 npts * natoms, w_counter_h(0),
-                 100 * (1.0 - w_counter_h(0) / double(npts * natoms)),
+                 total_points, w_counter_h(0),
+                 100 * (1.0 - w_counter_h(0) / double(total_points)),
                  weight_threshold);
 
-  return {qp_1d, wt_1d, ac_dev, Z_dev, (unsigned)nrad, (unsigned)nang};
+  return {qp_1d, wt_1d, ac_dev, Z_dev, owner_1d};
 }
 
 } // namespace Nukexc
