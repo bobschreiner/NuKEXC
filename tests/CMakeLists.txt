@@ -22,6 +22,7 @@ add_executable(convergence_coreH convergence_coreH.cxx)
 add_executable(convergence_2d convergence_2d.cxx)
 add_executable(convergence_radial_h convergence_radial_h.cxx)
 add_executable(convergence_adaptive convergence_adaptive.cxx standards.cxx)
+add_executable(convergence_pruning convergence_pruning.cxx standards.cxx)
 
 add_executable(benchmark_partition  standards.cxx benchmark_partition.cxx )
 add_executable(benchmark_scf standards.cxx benchmark_scf.cxx )
@@ -58,6 +59,7 @@ set(ALL_TEST_TARGETS
     convergence_2d
     convergence_radial_h
     convergence_adaptive
+    convergence_pruning
 
     benchmark_partition
     benchmark_scf

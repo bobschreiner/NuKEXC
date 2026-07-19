@@ -22,17 +22,22 @@
  * (water), for the core-Hamiltonian occupied-orbital energy sum.
  *
  * make_flat_grid exposes two orthogonal, independently toggleable knobs:
- *   * pruning     -- angular adaptivity (Unpruned vs Treutler): fewer Lebedev
+ *   * pruning     -- angular adaptivity (Unpruned vs Robust): fewer Lebedev
  *                    points on the inner/outer radial shells.
- *   * per_element -- radial adaptivity: heavier atoms (here O) get more radial
- *                    points than light ones (H).
+ *   * radial_sizing -- radial adaptivity: RadialSizing::PySCF gives heavier
+ *                      atoms (here O) more radial points than light ones (H),
+ *                      following the GauXC/PySCF per-period pattern.
  * That gives four combinations, swept here over grid levels that grow the
  * radial count and Lebedev order together (a fixed angular order would cap every
  * curve at the same angular floor and hide the differences):
- *   uniform      (Unpruned, per_element=false)
- *   pruned       (Treutler, per_element=false)
- *   per-element  (Unpruned, per_element=true)
- *   both         (Treutler, per_element=true)
+ *   uniform      (Unpruned, radial=Uniform)
+ *   pruned       (Robust,   radial=Uniform)
+ *   per-element  (Unpruned, radial=PySCF)
+ *   both         (Robust,   radial=PySCF)
+ *
+ * (Robust pruning is used rather than Treutler: its middle-shell order tracks
+ * the base order instead of being fixed at 11, so it converges to the reference
+ * rather than plateauing -- see tests/convergence_pruning.cxx.)
  *
  * For each combination and base nrad we record the TOTAL number of grid points
  * actually used and the error of the observable. Plotting error vs total points
@@ -85,7 +90,7 @@ static constexpr double WEIGHT_THRESHOLD = 1e-30;
 struct Combo {
   const char *label;
   PruningScheme pruning;
-  bool per_element;
+  RadialSizing radial_sizing;
 };
 
 // A grid "level": both axes grow together so every combination can converge
@@ -100,10 +105,10 @@ struct Level {
 // also returns the total number of grid points actually used.
 static double band_sum(const STOBasisSet &basis, const Molecule &mol,
                        size_t nrad, size_t nang_order, PruningScheme pruning,
-                       bool per_element, int nocc, size_t &npts_out) {
+                       RadialSizing radial_sizing, int nocc, size_t &npts_out) {
   auto grid = make_flat_grid<ta_type, ll_type>(mol, nrad, nang_order,
                                                WEIGHT_THRESHOLD, TA_M4, pruning,
-                                               per_element);
+                                               radial_sizing);
   npts_out = grid.quad_points.extent(0);
 
   CoreHamiltonianResult coreH = compute_core_hamiltonian(basis, grid);
@@ -142,8 +147,8 @@ int main() {
     // radial and angular).
     size_t npts_ref = 0;
     const double e_ref =
-        band_sum(basis, mol, nrad_ref, nang_ref, PruningScheme::Unpruned, false,
-                 nocc, npts_ref);
+        band_sum(basis, mol, nrad_ref, nang_ref, PruningScheme::Unpruned,
+                 RadialSizing::Uniform, nocc, npts_ref);
     std::cout << std::fixed << std::setprecision(10)
               << "Molecule: water (Z_total=" << mol.Z_total
               << ", nocc=" << nocc << ")\n"
@@ -152,10 +157,10 @@ int main() {
               << "): band sum = " << e_ref << " Ha\n";
 
     const std::vector<Combo> combos = {
-        {"uniform", PruningScheme::Unpruned, false},
-        {"pruned", PruningScheme::Robust, false},
-        {"per-element", PruningScheme::Unpruned, true},
-        {"both", PruningScheme::Robust, true},
+        {"uniform", PruningScheme::Unpruned, RadialSizing::Uniform},
+        {"pruned", PruningScheme::Robust, RadialSizing::Uniform},
+        {"per-element", PruningScheme::Unpruned, RadialSizing::PySCF},
+        {"both", PruningScheme::Robust, RadialSizing::PySCF},
     };
 
     const std::string csv_path = "convergence_adaptive.csv";
@@ -164,7 +169,8 @@ int main() {
     csv << "# Adaptive-grid accuracy-per-point study on water (core-Hamiltonian "
            "occupied-orbital energy sum)\n";
     csv << "# radial scheme: TA-M4 ; angular: Lebedev-Laikov ; basis: QZ4P\n";
-    csv << "# knobs: pruning (Unpruned/Treutler) x per_element (false/true)\n";
+    csv << "# knobs: pruning (Unpruned/Robust) x radial sizing "
+           "(Uniform/PySCF per-period)\n";
     csv << "# grid levels sweep (nrad, nang_order) together so curves converge\n";
     csv << "# observable: sum of lowest nocc=" << nocc << " core-H MO energies\n";
     csv << "# E_ref = fine uniform unpruned grid (shared self-reference, NOT "
@@ -178,8 +184,10 @@ int main() {
     for (const auto &c : combos) {
       std::cout << "\n=== " << c.label << " (pruning="
                 << (c.pruning == PruningScheme::Unpruned ? "Unpruned"
-                                                         : "Treutler")
-                << ", per_element=" << (c.per_element ? "true" : "false")
+                                                         : "Robust")
+                << ", radial="
+                << (c.radial_sizing == RadialSizing::Uniform ? "Uniform"
+                                                             : "PySCF")
                 << ") ===\n";
       std::cout << std::setw(w) << std::left << "nrad" << std::setw(w)
                 << std::left << "nang" << std::setw(w) << std::right << "npts"
@@ -191,7 +199,7 @@ int main() {
       for (const auto &lv : levels) {
         size_t npts = 0;
         const double e = band_sum(basis, mol, lv.nrad, lv.nang_order, c.pruning,
-                                  c.per_element, nocc, npts);
+                                  c.radial_sizing, nocc, npts);
         const double err = std::abs(e - e_ref);
 
         csv << c.label << ',' << lv.nrad << ',' << lv.nang_order << ',' << npts

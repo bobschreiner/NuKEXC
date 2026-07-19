@@ -261,6 +261,9 @@ struct Config {
   int tile_size = 32; // neighbor tile (--tile=, only used by --alg=tiled)
   std::string xfunc = "lda_x";
   std::string cfunc = "lda_c_pw";
+  std::string pruning = "none";   // grid angular pruning: none/robust/treutler
+  std::string radial = "uniform"; // per-element radial sizing: uniform/pyscf
+  bool nl_histogram = false;      // runtime via --nl-histogram
 };
 
 Config parse_args(int argc, char *argv[]) {
@@ -321,6 +324,12 @@ Config parse_args(int argc, char *argv[]) {
           << cfg.xfunc << ")\n"
           << "  --cfunc=<name>        Correlation functional(dft)(default: "
           << cfg.cfunc << ")\n"
+          << "  --pruning=<name>      Angular pruning none/robust/treutler "
+          << "(default: " << cfg.pruning << ")\n"
+          << "  --radial=<name>       Radial sizing uniform/pyscf   (default: "
+          << cfg.radial << ")\n"
+          << "  --nl-histogram        Print neighbor-list histogram and write "
+          << "pgfplots files  [used by --alg=sparse,tiled]\n"
           << "\n"
           << "  Supported functional names (only relevant for --method=dft):\n"
           << "    LDA exchange:     lda_x\n"
@@ -328,6 +337,8 @@ Config parse_args(int argc, char *argv[]) {
           << "    GGA exchange:     gga_x_pbe, gga_x_b88, gga_x_pw91\n"
           << "    GGA correlation:  gga_c_pbe, gga_c_lyp, gga_c_pw91\n";
       std::exit(0);
+    } else if (arg == "--nl-histogram") {
+      cfg.nl_histogram = true;
     } else if (!parse_string("--xyz=", cfg.xyz_file) &&
                !parse_string("--basis=", cfg.basis_file) &&
                !parse_string("--method=", cfg.method) &&
@@ -341,7 +352,9 @@ Config parse_args(int argc, char *argv[]) {
                !parse_int("--charge=", cfg.charge) &&
                !parse_int("--multiplicity=", cfg.multiplicity) &&
                !parse_string("--xfunc=", cfg.xfunc) &&
-               !parse_string("--cfunc=", cfg.cfunc)) {
+               !parse_string("--cfunc=", cfg.cfunc) &&
+               !parse_string("--pruning=", cfg.pruning) &&
+               !parse_string("--radial=", cfg.radial)) {
       throw std::runtime_error("Unknown argument: " + arg + " (try --help)");
     }
   }
@@ -358,6 +371,13 @@ Config parse_args(int argc, char *argv[]) {
       cfg.algorithm != "tiled")
     throw std::runtime_error("Unknown --alg: " + cfg.algorithm +
                              " (expected 'dense', 'sparse' or 'tiled')");
+  if (cfg.pruning != "none" && cfg.pruning != "robust" &&
+      cfg.pruning != "treutler")
+    throw std::runtime_error("Unknown --pruning: " + cfg.pruning +
+                             " (expected 'none', 'robust' or 'treutler')");
+  if (cfg.radial != "uniform" && cfg.radial != "pyscf")
+    throw std::runtime_error("Unknown --radial: " + cfg.radial +
+                             " (expected 'uniform' or 'pyscf')");
   return cfg;
 }
 
@@ -492,9 +512,15 @@ int main(int argc, char *argv[]) {
     FlatGrid grid;
     {
       TIME_SCOPE(startup_timing, "Build molecular grid");
-      grid = make_flat_grid<ta_type, ll_type>(
-          mol, cfg.nrad, cfg.nang, screening_tol * 1e-5, TA_M4,
-          IntegratorXX::PruningScheme::Robust, true);
+      const IntegratorXX::PruningScheme prune_scheme =
+          cfg.pruning == "none"       ? IntegratorXX::PruningScheme::Unpruned
+          : cfg.pruning == "treutler" ? IntegratorXX::PruningScheme::Treutler
+                                      : IntegratorXX::PruningScheme::Robust;
+      const RadialSizing radial_scheme =
+          cfg.radial == "uniform" ? RadialSizing::Uniform : RadialSizing::PySCF;
+      grid = make_flat_grid<ta_type, ll_type>(mol, cfg.nrad, cfg.nang,
+                                              screening_tol * 1e-5, TA_M4,
+                                              prune_scheme, radial_scheme);
     }
 
     STOBasisSet basis;
@@ -575,12 +601,13 @@ int main(int argc, char *argv[]) {
         TIME_SCOPE(startup_timing, "Bounding boxes + neighbor list (aux)");
         auto bb_aux = create_bounding_boxes(grid, cfg.max_points_per_box);
         build_neighbor_list(basis_aux, bb_aux, cfg.max_points_per_box, N_quad,
-                            nl_aux);
+                            nl_aux, cfg.nl_histogram, "neighbor_histogram_aux");
       }
       {
         TIME_SCOPE(startup_timing, "Bounding boxes + neighbor list (primary)");
         auto bb = create_bounding_boxes(grid, cfg.max_points_per_box);
-        build_neighbor_list(basis, bb, cfg.max_points_per_box, N_quad, nl);
+        build_neighbor_list(basis, bb, cfg.max_points_per_box, N_quad, nl,
+                            cfg.nl_histogram, "neighbor_histogram");
       }
     }
 

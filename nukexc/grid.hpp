@@ -91,8 +91,8 @@ const std::vector<double> TA_XI = {
 constexpr double TA_M4 = 0.6;
 constexpr double TA_M3 = 0.0;
 
-// Periodic-table row (period, 1..7) of element Z. Used by the optional
-// per-element grid sizing to give heavier atoms more radial points.
+// Periodic-table row (period, 1..7) of element Z. Used by the per-element
+// radial sizing to give heavier atoms more radial points.
 inline int periodic_row(unsigned Z) {
   if (Z <= 2)
     return 1;
@@ -107,6 +107,27 @@ inline int periodic_row(unsigned Z) {
   if (Z <= 86)
     return 6;
   return 7;
+}
+
+// Per-element radial-sizing policy for make_flat_grid.
+enum class RadialSizing {
+  Uniform, // every atom gets `nrad` radial points (the previous default)
+  PySCF    // GauXC/PySCF per-period pattern (see pyscf_radial_size)
+};
+
+// GauXC/PySCF per-period radial multipliers, normalized so period 1 (H/He) is
+// 1.0. Calibrated to PySCF's default (level-3) grid (50,75,80,90,95,100,105),
+// i.e. the ratios relative to 50. The characteristic shape -- a +50% jump at the
+// first row of heavy atoms, then a slow saturation -- is what distinguishes the
+// standard scheme from a naive linear-in-period increment. Matches GauXC's
+// PySCF* presets and PySCF's RAD_GRIDS table (Treutler-Ahlrichs lineage,
+// JCP 102, 346 (1995)).
+constexpr double PYSCF_RADIAL_RATIO[7] = {1.0, 1.5, 1.6, 1.8, 1.9, 2.0, 2.1};
+
+// Radial point count for element Z given the period-1 (H/He) base count.
+inline size_t pyscf_radial_size(unsigned Z, size_t base_nrad) {
+  const double ratio = PYSCF_RADIAL_RATIO[periodic_row(Z) - 1];
+  return static_cast<size_t>(base_nrad * ratio + 0.5);
 }
 
 struct FlatGrid {
@@ -126,9 +147,10 @@ struct FlatGrid {
 //   * pruning     -- angular adaptivity: reduce the Lebedev order in the
 //                    inner/outer radial shells (IntegratorXX::PruningScheme
 //                    Treutler or Robust). Unpruned keeps full order everywhere.
-//   * per_element -- radial adaptivity: give heavier atoms proportionally more
-//                    radial points (scaled by periodic row) instead of a single
-//                    nrad for every centre.
+//   * radial_sizing -- radial adaptivity: RadialSizing::Uniform gives every
+//                      centre `nrad` points; RadialSizing::PySCF applies the
+//                      GauXC/PySCF per-period pattern (nrad is the H/He count,
+//                      heavier atoms scale up -- see pyscf_radial_size).
 // The two axes are orthogonal, so all four combinations are selectable.
 template <typename radial_type, typename angular_type>
 FlatGrid make_flat_grid(const Molecule &mol, const size_t nrad = 50,
@@ -137,7 +159,7 @@ FlatGrid make_flat_grid(const Molecule &mol, const size_t nrad = 50,
                         [[maybe_unused]] const double ta_alpha = TA_M4,
                         const IntegratorXX::PruningScheme pruning =
                             IntegratorXX::PruningScheme::Unpruned,
-                        const bool per_element = false) {
+                        const RadialSizing radial_sizing = RadialSizing::Uniform) {
 
   using namespace IntegratorXX;
   using angular_traits = quadrature_traits<angular_type>;
@@ -192,13 +214,13 @@ FlatGrid make_flat_grid(const Molecule &mol, const size_t nrad = 50,
             0.5 * BECKE_SLATER_RADII[atomic_number] * detail::ang_to_bohr;
     }
 
-    // Per-element radial sizing (optional): heavier periods get proportionally
-    // more radial points (+nrad/5 per period beyond H/He), since their compact
-    // cores need finer radial resolution. Angular adaptivity is orthogonal and
-    // handled by `pruning` below.
-    const size_t nrad_atom =
-        per_element ? nrad + (periodic_row(atomic_number) - 1) * (nrad / 5)
-                    : nrad;
+    // Per-element radial sizing (optional): the GauXC/PySCF per-period pattern
+    // gives heavier atoms more radial points than H/He (see pyscf_radial_size),
+    // since their compact cores need finer radial resolution. Angular
+    // adaptivity is orthogonal and handled by `pruning` below.
+    const size_t nrad_atom = (radial_sizing == RadialSizing::PySCF)
+                                 ? pyscf_radial_size(atomic_number, nrad)
+                                 : nrad;
 
     // Only TA takes the M3/M4 exponent (alpha); other schemes have no such
     // parameter, so forward it exclusively on the TA path.

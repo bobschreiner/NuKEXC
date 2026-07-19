@@ -137,7 +137,7 @@ def main():
     ax.set_title("Adaptive grids on water: accuracy per point\n"
                  "core-Hamiltonian occupied-orbital energy sum")
     ax.grid(True, which="both", ls=":", alpha=0.5)
-    ax.legend(title="pruning x per_element", fontsize=9, loc="upper right")
+    ax.legend(title="pruning x radial sizing", fontsize=9, loc="upper right")
 
     fig.text(0.5, 0.01, reference_caption(meta), ha="center", va="bottom", fontsize=9)
     fig.tight_layout(rect=(0, 0.08, 1, 1))
