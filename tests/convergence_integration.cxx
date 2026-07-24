@@ -43,6 +43,7 @@
 #include <nukexc/stobasis.hpp>
 
 #include "standards.hpp"
+#include "test_io.hpp"
 
 using namespace Nukexc;
 
@@ -74,31 +75,9 @@ struct Config {
 Config parse_args(int argc, char *argv[]) {
   Config cfg;
   for (int i = 1; i < argc; ++i) {
-    std::string arg = argv[i];
+    ArgParser p{argv[i]};
 
-    auto parse_string = [&](const std::string &prefix, std::string &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = arg.substr(prefix.size());
-        return true;
-      }
-      return false;
-    };
-    auto parse_int = [&](const std::string &prefix, int &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = std::stoi(arg.substr(prefix.size()));
-        return true;
-      }
-      return false;
-    };
-    auto parse_double = [&](const std::string &prefix, double &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = std::stod(arg.substr(prefix.size()));
-        return true;
-      }
-      return false;
-    };
-
-    if (arg == "--help" || arg == "-h") {
+    if (p.arg == "--help" || p.arg == "-h") {
       std::cout
           << "Usage: " << argv[0] << " [options]\n"
           << "  --xyz=<file>        XYZ input file          (default: "
@@ -117,14 +96,14 @@ Config parse_args(int argc, char *argv[]) {
           << cfg.screening << ")\n";
 
       std::exit(0);
-    } else if (!parse_string("--xyz=", cfg.xyz_file) &&
-               !parse_string("--basis=", cfg.basis_dir) &&
-               !parse_int("--n_max=", cfg.n_max) &&
-               !parse_int("--m_max=", cfg.m_max) &&
-               !parse_double("--tol=", cfg.screening_tol) &&
-               !parse_int("--box-size=", cfg.max_points_per_box) &&
-               !parse_int("--screening=", cfg.screening)) {
-      throw std::runtime_error("Unknown argument: " + arg + " (try --help)");
+    } else if (!p.string_opt("--xyz=", cfg.xyz_file) &&
+               !p.string_opt("--basis=", cfg.basis_dir) &&
+               !p.int_opt("--n_max=", cfg.n_max) &&
+               !p.int_opt("--m_max=", cfg.m_max) &&
+               !p.double_opt("--tol=", cfg.screening_tol) &&
+               !p.int_opt("--box-size=", cfg.max_points_per_box) &&
+               !p.int_opt("--screening=", cfg.screening)) {
+      throw std::runtime_error("Unknown argument: " + p.arg + " (try --help)");
     }
   }
   if (cfg.n_max <= 0 || cfg.m_max <= 0)
@@ -237,37 +216,17 @@ void convergence_analysis(const Config &cfg,
            max_error_hamiltontian);
 }
 
-auto repeat(const std::string &s, int n) {
-  std::string r;
-  for (int i = 0; i < n; ++i)
-    r += s;
-  return r;
-}
 void print_config(const Config &cfg) {
-  int width = std::max(cfg.basis_dir.size(), size_t(20));
-  std::string h = repeat("─", width + 2);
-
-  std::cout << "\n";
-  std::cout << "┌───────────────────────" << h << "┐\n";
-  std::cout << "│       Integral Convergence Config." << repeat(" ", width - 10)
-            << "│\n";
-  std::cout << "├───────────────────────" << h << "┤\n";
-  std::cout << "│ XYZ file             │ " << std::setw(width) << cfg.xyz_file
-            << " │\n";
-  std::cout << "│ Basis directory      │ " << std::setw(width) << cfg.basis_dir
-            << " │\n";
-  std::cout << "│ Radial points        │ " << std::setw(width)
-            << std::pow(2, cfg.n_max) << " │\n";
-  std::cout << "│ Angular order        │ " << std::setw(width) << cfg.m_max * 10
-            << " │\n";
-  std::cout << "│ Screening tolerance  │ " << std::setw(width)
-            << cfg.screening_tol << " │\n";
-  std::cout << "│ Max points per box   │ " << std::setw(width)
-            << cfg.max_points_per_box << " │\n";
-  std::cout << "│ Screening            │ " << std::setw(width) << cfg.screening
-            << " │\n";
-  std::cout << "└──────────────────────┴" << h << "┘\n\n";
-  std::cout << std::flush;
+  print_config_box("Integral Convergence Config.",
+                   {
+                       {"XYZ file", cfg.xyz_file},
+                       {"Basis directory", cfg.basis_dir},
+                       {"Radial points", cfg_val(std::pow(2, cfg.n_max))},
+                       {"Angular order", cfg_val(cfg.m_max * 10)},
+                       {"Screening tolerance", cfg_val(cfg.screening_tol)},
+                       {"Max points per box", cfg_val(cfg.max_points_per_box)},
+                       {"Screening", cfg_val(cfg.screening)},
+                   });
 }
 int main(int argc, char *argv[]) {
   Config cfg;

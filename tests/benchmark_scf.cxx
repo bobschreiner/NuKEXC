@@ -33,6 +33,7 @@
 #include <nukexc/stobasis.hpp>
 
 #include "standards.hpp"
+#include "test_io.hpp"
 
 using namespace Nukexc;
 
@@ -49,31 +50,9 @@ struct Config {
 Config parse_args(int argc, char *argv[]) {
   Config cfg;
   for (int i = 1; i < argc; ++i) {
-    std::string arg = argv[i];
+    ArgParser p{argv[i]};
 
-    auto parse_string = [&](const std::string &prefix, std::string &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = arg.substr(prefix.size());
-        return true;
-      }
-      return false;
-    };
-    auto parse_int = [&](const std::string &prefix, int &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = std::stoi(arg.substr(prefix.size()));
-        return true;
-      }
-      return false;
-    };
-    auto parse_double = [&](const std::string &prefix, double &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = std::stod(arg.substr(prefix.size()));
-        return true;
-      }
-      return false;
-    };
-
-    if (arg == "--help" || arg == "-h") {
+    if (p.arg == "--help" || p.arg == "-h") {
       std::cout
           << "Usage: " << argv[0] << " [options]\n"
           << "  --basis=<dir>          Basis set directory       (default: "
@@ -87,12 +66,12 @@ Config parse_args(int argc, char *argv[]) {
           << "  --box-size=<int>       Max points per box        (default: "
           << cfg.max_points_per_box << ")\n";
       std::exit(0);
-    } else if (!parse_string("--basis=", cfg.basis_dir) &&
-               !parse_int("--nrad=", cfg.nrad) &&
-               !parse_int("--nang=", cfg.nang) &&
-               !parse_double("--tol=", cfg.screening_tol) &&
-               !parse_int("--box-size=", cfg.max_points_per_box)) {
-      throw std::runtime_error("Unknown argument: " + arg + " (try --help)");
+    } else if (!p.string_opt("--basis=", cfg.basis_dir) &&
+               !p.int_opt("--nrad=", cfg.nrad) &&
+               !p.int_opt("--nang=", cfg.nang) &&
+               !p.double_opt("--tol=", cfg.screening_tol) &&
+               !p.int_opt("--box-size=", cfg.max_points_per_box)) {
+      throw std::runtime_error("Unknown argument: " + p.arg + " (try --help)");
     }
   }
   if (cfg.nrad <= 0 || cfg.nang <= 0)
@@ -103,34 +82,15 @@ Config parse_args(int argc, char *argv[]) {
 // ── Helpers
 // ───────────────────────────────────────────────────────────────────
 
-auto repeat(const std::string &s, int n) {
-  std::string r;
-  for (int i = 0; i < n; ++i)
-    r += s;
-  return r;
-}
-
 void print_config(const Config &cfg) {
-  int width = std::max(cfg.basis_dir.size(), size_t(20));
-  std::string h = repeat("─", width + 2);
-
-  std::cout << "\n";
-  std::cout << "┌───────────────────────" << h << "┐\n";
-  std::cout << "│    SCF Benchmark Configuration" << repeat(" ", width - 6)
-            << "│\n";
-  std::cout << "├───────────────────────" << h << "┤\n";
-  std::cout << "│ Basis directory      │ " << std::setw(width) << cfg.basis_dir
-            << " │\n";
-  std::cout << "│ Radial points        │ " << std::setw(width) << cfg.nrad
-            << " │\n";
-  std::cout << "│ Angular order        │ " << std::setw(width) << cfg.nang
-            << " │\n";
-  std::cout << "│ Screening tolerance  │ " << std::setw(width)
-            << cfg.screening_tol << " │\n";
-  std::cout << "│ Max points per box   │ " << std::setw(width)
-            << cfg.max_points_per_box << " │\n";
-  std::cout << "└──────────────────────┴" << h << "┘\n\n";
-  std::cout << std::flush;
+  print_config_box("SCF Benchmark Configuration",
+                   {
+                       {"Basis directory", cfg.basis_dir},
+                       {"Radial points", cfg_val(cfg.nrad)},
+                       {"Angular order", cfg_val(cfg.nang)},
+                       {"Screening tolerance", cfg_val(cfg.screening_tol)},
+                       {"Max points per box", cfg_val(cfg.max_points_per_box)},
+                   });
 }
 
 struct BenchmarkResult {

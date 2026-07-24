@@ -6,7 +6,7 @@ add_executable(test_grid standards.cxx test_grid.cxx )
 add_executable(test_partition standards.cxx test_partition.cxx )
 add_executable(test_spherical_harmonics test_spherical_harmonics.cxx)
 add_executable(test_molecule test_molecule.cxx)
-add_executable(test_basisset test_basisset.cxx)
+add_executable(test_basisset test_basisset.cxx test_io.cxx)
 add_executable(test_integration test_integration.cxx standards.cxx)
 add_executable(test_hydrogen test_hydrogen.cxx)
 add_executable(test_arborx test_arborx.cxx standards.cxx)
@@ -16,7 +16,7 @@ add_executable(test_density test_density.cxx)
 add_executable(test_libxc test_libxc.cxx)
 add_executable(test_helium test_helium.cxx)
 
-add_executable(convergence_integration convergence_integration.cxx standards.cxx)
+add_executable(convergence_integration convergence_integration.cxx standards.cxx test_io.cxx)
 add_executable(convergence_h2plus convergence_h2plus.cxx)
 add_executable(convergence_coreH convergence_coreH.cxx)
 add_executable(convergence_2d convergence_2d.cxx)
@@ -25,11 +25,11 @@ add_executable(convergence_adaptive convergence_adaptive.cxx standards.cxx)
 add_executable(convergence_pruning convergence_pruning.cxx standards.cxx)
 
 add_executable(benchmark_partition  standards.cxx benchmark_partition.cxx )
-add_executable(benchmark_scf standards.cxx benchmark_scf.cxx )
-add_executable(benchmark_coreH standards.cxx benchmark_coreH.cxx )
-add_executable(benchmark_cutoff standards.cxx benchmark_cutoff.cxx )
+add_executable(benchmark_scf standards.cxx benchmark_scf.cxx test_io.cxx )
+add_executable(benchmark_coreH standards.cxx benchmark_coreH.cxx test_io.cxx )
+add_executable(benchmark_cutoff standards.cxx benchmark_cutoff.cxx test_io.cxx )
 
-add_executable(standalone standards.cxx standalone.cxx)
+add_executable(standalone standards.cxx standalone.cxx test_io.cxx)
 
 add_custom_target(copy_test_inputs 
     COMMAND  ${CMAKE_COMMAND} -E copy_directory

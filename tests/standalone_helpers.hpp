@@ -1,0 +1,288 @@
+/*
+ *    NuKEXC -- Numerical Kokkos Enhanced Exchange Correlation Integrator
+ *    Copyright (C) 2026 Bob Schreiner
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
+// ===========================================================================
+// Helpers specific to the standalone SCF driver: timing infrastructure, the
+// runtime functional-name lookup/dispatch, and Kokkos<->Armadillo conversions.
+//
+// These used to sit at the top of standalone.cxx and made the driver hard to
+// read. They pull in the (non-inline) XC integral kernels, so this header is
+// intended to be included by standalone.cxx only -- keep it out of the shared
+// test_io module so the lighter test drivers don't drag in libxc/armadillo.
+// ===========================================================================
+
+#pragma once
+
+#include <nukexc/nukexc_config.hpp>
+#include <nukexc/xc_integrals.hpp>
+
+#include <Kokkos_Core.hpp>
+#include <armadillo>
+#include <xc.h>
+#include <xc_funcs.h>
+
+#include <cstdint>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+namespace Nukexc {
+
+// ===========================================================================
+// Timing infrastructure
+// ===========================================================================
+struct StackEntry {
+  std::string name;
+  std::unique_ptr<Kokkos::Timer> timer;
+  int depth;
+};
+
+class TimingRegistry {
+public:
+  struct Entry {
+    std::string name;
+    double seconds;
+    int depth;
+  };
+
+  void start(const std::string &name) {
+    stack_.push_back(
+        StackEntry{name, std::make_unique<Kokkos::Timer>(), depth_});
+    ++depth_;
+  }
+
+  // Record a pre-measured duration directly (e.g. a total merged from
+  // another registry) without going through start()/stop().
+  void record(const std::string &name, double seconds) {
+    entries_.push_back(Entry{name, seconds, depth_});
+  }
+
+  void stop() {
+    --depth_;
+    StackEntry top = std::move(stack_.back());
+    stack_.pop_back();
+    entries_.push_back(Entry{top.name, top.timer->seconds(), top.depth});
+  }
+
+  // Total time of all depth-0 (top level) blocks recorded so far.
+  double total_top_level_seconds() const {
+    double total = 0.0;
+    for (const auto &e : entries_)
+      if (e.depth == 0)
+        total += e.seconds;
+    return total;
+  }
+
+  void report(const std::string &title) const {
+    std::cout << "\n"
+              << title << "\n"
+              << std::string(title.size(), '=') << "\n";
+    if (entries_.empty()) {
+      std::cout << "  (no timed sections recorded)\n\n";
+      return;
+    }
+    constexpr int name_col = 42;
+    for (const auto &e : entries_) {
+      std::string indented = std::string(e.depth * 2, ' ') + e.name;
+      std::cout << "  " << std::left << std::setw(name_col) << indented << ": "
+                << std::right << std::fixed << std::setprecision(4)
+                << std::setw(10) << e.seconds << " s\n";
+    }
+    std::cout << "  " << std::string(name_col + 15, '-') << "\n";
+    std::cout << "  " << std::left << std::setw(name_col) << "Total (top level)"
+              << ": " << std::right << std::fixed << std::setprecision(4)
+              << std::setw(10) << total_top_level_seconds() << " s\n\n"
+              << std::flush;
+  }
+
+  void clear() {
+    entries_.clear();
+    stack_.clear();
+    depth_ = 0;
+  }
+
+private:
+  std::vector<StackEntry> stack_;
+  std::vector<Entry> entries_;
+  int depth_ = 0;
+};
+
+// RAII scope: starts a named timer on construction, stops it on destruction.
+struct ScopedTiming {
+  ScopedTiming(TimingRegistry &reg, std::string name) : reg_(reg) {
+    reg_.start(name);
+  }
+  ~ScopedTiming() { reg_.stop(); }
+  ScopedTiming(const ScopedTiming &) = delete;
+  ScopedTiming &operator=(const ScopedTiming &) = delete;
+  TimingRegistry &reg_;
+};
+
+// ===========================================================================
+// Compile-time string hashing so we can "switch" on a runtime std::string.
+// C++ can't switch on std::string directly, but case labels only need to be
+// constant expressions -- so we hash the *literal* case labels at compile
+// time via this constexpr function, and hash the *runtime* input string with
+// the exact same function at runtime, then switch on the resulting uint32_t.
+// ===========================================================================
+constexpr std::uint32_t fnv1a(const char *s, std::uint32_t h = 2166136261u) {
+  return (*s == '\0') ? h
+                      : fnv1a(s + 1, (h ^ static_cast<std::uint32_t>(
+                                              static_cast<unsigned char>(*s))) *
+                                         16777619u);
+}
+inline std::uint32_t fnv1a_rt(const std::string &s) { return fnv1a(s.c_str()); }
+
+// ---------------------------------------------------------------------------
+// Functional family + libxc id, resolved from a runtime name via switch.
+// ---------------------------------------------------------------------------
+enum class XCFamily { LDA, GGA };
+
+struct FunctionalInfo {
+  int xc_id = -1;
+  XCFamily family = XCFamily::LDA;
+  std::string canonical_name;
+};
+
+inline FunctionalInfo lookup_functional(const std::string &name) {
+  switch (fnv1a_rt(name)) {
+  // ---- LDA exchange -----------------------------------------------------
+  case fnv1a("lda_x"):
+    return {XC_LDA_X, XCFamily::LDA, "lda_x"};
+
+  // ---- LDA correlation ---------------------------------------------------
+  case fnv1a("lda_c_pw"):
+    return {XC_LDA_C_PW, XCFamily::LDA, "lda_c_pw"};
+  case fnv1a("lda_c_vwn"):
+    return {XC_LDA_C_VWN, XCFamily::LDA, "lda_c_vwn"};
+
+  // ---- GGA exchange -------------------------------------------------------
+  case fnv1a("gga_x_pbe"):
+    return {XC_GGA_X_PBE, XCFamily::GGA, "gga_x_pbe"};
+  case fnv1a("gga_x_b88"):
+    return {XC_GGA_X_B88, XCFamily::GGA, "gga_x_b88"};
+  case fnv1a("gga_x_pw91"):
+    return {XC_GGA_X_PW91, XCFamily::GGA, "gga_x_pw91"};
+  case fnv1a("gga_xc_b3lyp3"):
+    // 394 is the standard Libxc ID for B3LYP with VWN3
+    return {394, XCFamily::GGA, "gga_xc_b3lyp3"};
+
+  // ---- GGA correlation ------------------------------------------------
+  case fnv1a("gga_c_pbe"):
+    return {XC_GGA_C_PBE, XCFamily::GGA, "gga_c_pbe"};
+  case fnv1a("gga_c_lyp"):
+    return {XC_GGA_C_LYP, XCFamily::GGA, "gga_c_lyp"};
+  case fnv1a("gga_c_pw91"):
+    return {XC_GGA_C_PW91, XCFamily::GGA, "gga_c_pw91"};
+
+  default:
+    throw std::runtime_error(
+        "Unknown functional name: '" + name +
+        "' (see --help or lookup_functional() for supported names)");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Dispatch a single functional (X or C) to the correct polarized evaluator
+// based on its family. Both compute_lsda and compute_gga_lsda must return
+// XC_result_polarized { energy, potential_alpha, potential_beta }.
+// ---------------------------------------------------------------------------
+inline XC_result_polarized evaluate_functional(
+    const FunctionalInfo &info, const xc_func_type &func,
+    const DeviceView2DLeft &basis_collocation,
+    const DeviceView2DLeft &basis_collocation_gx,
+    const DeviceView2DLeft &basis_collocation_gy,
+    const DeviceView2DLeft &basis_collocation_gz, const DeviceView1D &weights,
+    const DeviceView2DLeft &k_C_alpha, const DeviceView1D &k_occ_alpha,
+    const DeviceView2DLeft &k_C_beta, const DeviceView1D &k_occ_beta) {
+  (void)info;
+  switch (func.info->family) {
+  case XC_FAMILY_LDA:
+    return compute_lsda(basis_collocation, weights, k_C_alpha, k_occ_alpha,
+                        k_C_beta, k_occ_beta, func);
+  case XC_FAMILY_HYB_LDA:
+    return compute_lsda(basis_collocation, weights, k_C_alpha, k_occ_alpha,
+                        k_C_beta, k_occ_beta, func);
+  case XC_FAMILY_GGA:
+    return compute_gga_lsda(basis_collocation, basis_collocation_gx,
+                            basis_collocation_gy, basis_collocation_gz, weights,
+                            k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta, func);
+  case XC_FAMILY_HYB_GGA:
+    return compute_gga_lsda(basis_collocation, basis_collocation_gx,
+                            basis_collocation_gy, basis_collocation_gz, weights,
+                            k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta, func);
+  default:
+    throw std::runtime_error("Unhandled XCFamily in evaluate_functional");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helper: Kokkos DeviceView2DLeft → arma::mat (column-major copy)
+// OOO expects arma::mat where columns are MOs; NuKEXC stores mo_coeff(nbf, nmo)
+// ---------------------------------------------------------------------------
+inline arma::mat kokkos_to_arma(const DeviceView2DLeft &v) {
+  auto h = Kokkos::create_mirror_view(v);
+  Kokkos::deep_copy(h, v);
+  arma::mat out(h.extent(0), h.extent(1));
+  for (std::size_t i = 0; i < h.extent(0); ++i)
+    for (std::size_t j = 0; j < h.extent(1); ++j)
+      out(i, j) = h(i, j);
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: arma::mat → Kokkos DeviceView2DLeft
+// ---------------------------------------------------------------------------
+inline DeviceView2DLeft arma_to_kokkos(const arma::mat &m,
+                                       const std::string &label) {
+  DeviceView2DLeft v(label, m.n_rows, m.n_cols);
+  auto h = Kokkos::create_mirror_view(v);
+  for (std::size_t i = 0; i < m.n_rows; ++i)
+    for (std::size_t j = 0; j < m.n_cols; ++j)
+      h(i, j) = m(i, j);
+  Kokkos::deep_copy(v, h);
+  return v;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: arma::vec → Kokkos DeviceView1D
+// ---------------------------------------------------------------------------
+inline DeviceView1D arma_to_kokkos1d(const arma::vec &v,
+                                     const std::string &label) {
+  DeviceView1D kv(label, v.n_elem);
+  auto h = Kokkos::create_mirror_view(kv);
+  for (std::size_t i = 0; i < v.n_elem; ++i)
+    h(i) = v(i);
+  Kokkos::deep_copy(kv, h);
+  return kv;
+}
+
+} // namespace Nukexc
+
+// ---------------------------------------------------------------------------
+// RAII timing scope macro. Kept at global scope (macros ignore namespaces).
+// Usage: { TIME_SCOPE(registry, "Some step"); do_work(); }
+// ---------------------------------------------------------------------------
+#define NUKEXC_CONCAT_(a, b) a##b
+#define NUKEXC_CONCAT(a, b) NUKEXC_CONCAT_(a, b)
+#define TIME_SCOPE(reg, name)                                                  \
+  Nukexc::ScopedTiming NUKEXC_CONCAT(_scoped_timer_, __LINE__)((reg), (name))

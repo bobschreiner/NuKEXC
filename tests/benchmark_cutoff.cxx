@@ -30,6 +30,8 @@
 #include <nukexc/molecule.hpp>
 #include <nukexc/stobasis.hpp>
 
+#include "test_io.hpp"
+
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
@@ -47,31 +49,9 @@ struct Config {
 Config parse_args(int argc, char *argv[]) {
   Config cfg;
   for (int i = 1; i < argc; ++i) {
-    std::string arg = argv[i];
+    ArgParser p{argv[i]};
 
-    auto parse_string = [&](const std::string &prefix, std::string &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = arg.substr(prefix.size());
-        return true;
-      }
-      return false;
-    };
-    auto parse_int = [&](const std::string &prefix, int &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = std::stoi(arg.substr(prefix.size()));
-        return true;
-      }
-      return false;
-    };
-    auto parse_double = [&](const std::string &prefix, double &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = std::stod(arg.substr(prefix.size()));
-        return true;
-      }
-      return false;
-    };
-
-    if (arg == "--help" || arg == "-h") {
+    if (p.arg == "--help" || p.arg == "-h") {
       std::cout << "Usage: " << argv[0] << " [options]\n"
                 << "  --xyz=<file>        XYZ input file          (default: "
                 << cfg.xyz_file << ")\n"
@@ -87,13 +67,13 @@ Config parse_args(int argc, char *argv[]) {
                 << cfg.tol_end << ")\n";
       std::exit(0);
 
-    } else if (!parse_string("--xyz=", cfg.xyz_file) &&
-               !parse_string("--basis=", cfg.basis_dir) &&
-               !parse_int("--nrad=", cfg.nrad) &&
-               !parse_int("--nang=", cfg.nang) &&
-               !parse_double("--tol-start=", cfg.tol_start) &&
-               !parse_double("--tol-end=", cfg.tol_end)) {
-      throw std::runtime_error("Unknown argument: " + arg + " (try --help)");
+    } else if (!p.string_opt("--xyz=", cfg.xyz_file) &&
+               !p.string_opt("--basis=", cfg.basis_dir) &&
+               !p.int_opt("--nrad=", cfg.nrad) &&
+               !p.int_opt("--nang=", cfg.nang) &&
+               !p.double_opt("--tol-start=", cfg.tol_start) &&
+               !p.double_opt("--tol-end=", cfg.tol_end)) {
+      throw std::runtime_error("Unknown argument: " + p.arg + " (try --help)");
     }
   }
 
@@ -126,39 +106,17 @@ int main(int argc, char *argv[]) {
     FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol, cfg.nrad, cfg.nang);
     int G = grid.quad_points.extent(0);
 
-    int width = std::max(cfg.basis_dir.size(), cfg.xyz_file.size());
+    print_config_box("Benchmark Configuration",
+                     {
+                         {"XYZ file", cfg.xyz_file},
+                         {"Basis directory", cfg.basis_dir},
+                         {"Radial points", cfg_val(cfg.nrad)},
+                         {"Angular points", cfg_val(cfg.nang)},
+                         {"Tolerance start", cfg_val(cfg.tol_start)},
+                         {"Tolerance end", cfg_val(cfg.tol_end)},
+                         {"Grid points", cfg_val(G)},
+                     });
 
-    auto repeat = [](const std::string &s, int n) {
-      std::string result;
-      for (int i = 0; i < n; ++i)
-        result += s;
-      return result;
-    };
-    std::string h = repeat("─", width + 2); // padding around value column
-                                            //
-    std::cout << "\n";
-    std::cout << "┌───────────────────────" << h << "┐\n";
-    std::cout << "│           Benchmark Configuration" << repeat(" ", width - 9)
-              << "|\n";
-
-    std::cout << "├───────────────────────" << h << "┤\n";
-    std::cout << "│ XYZ file             │ " << std::setw(width) << cfg.xyz_file
-              << " │\n";
-    std::cout << "│ Basis directory      │ " << std::setw(width)
-              << cfg.basis_dir << " │\n";
-    std::cout << "│ Radial points        │ " << std::setw(width) << cfg.nrad
-              << " │\n";
-    std::cout << "│ Angular points       │ " << std::setw(width) << cfg.nang
-              << " │\n";
-    std::cout << "│ Tolerance start      │ " << std::setw(width)
-              << cfg.tol_start << " │\n";
-    std::cout << "│ Tolerance end        │ " << std::setw(width) << cfg.tol_end
-              << " │\n";
-    std::cout << "│ Grid points          │ " << std::setw(width) << G << " │\n";
-
-    std::cout << "└──────────────────────┴" << h << "┘\n";
-    std::cout << "\n";
-    std::cout << std::flush;
     std::cout << "┌─────────────────┬───────────────┬───────────────┐\n";
     std::cout << "│   Tolerance     │  Basis Fns    │  % Outside    │\n";
     std::cout << "├─────────────────┼───────────────┼───────────────┤\n";

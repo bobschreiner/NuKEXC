@@ -38,6 +38,8 @@
 #include <catch2/catch_assertion_info.hpp>
 #include <vector>
 
+#include "test_io.hpp"
+
 using namespace Nukexc;
 
 struct Config {
@@ -53,31 +55,9 @@ struct Config {
 Config parse_args(int argc, char *argv[]) {
   Config cfg;
   for (int i = 1; i < argc; ++i) {
-    std::string arg = argv[i];
+    ArgParser p{argv[i]};
 
-    auto parse_string = [&](const std::string &prefix, std::string &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = arg.substr(prefix.size());
-        return true;
-      }
-      return false;
-    };
-    auto parse_int = [&](const std::string &prefix, int &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = std::stoi(arg.substr(prefix.size()));
-        return true;
-      }
-      return false;
-    };
-    auto parse_double = [&](const std::string &prefix, double &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = std::stod(arg.substr(prefix.size()));
-        return true;
-      }
-      return false;
-    };
-
-    if (arg == "--help" || arg == "-h") {
+    if (p.arg == "--help" || p.arg == "-h") {
       std::cout
           << "Usage: " << argv[0] << " [options]\n"
           << "  --benchmark=<int> Benchmark? (0=No, 1=Yes) (default: "
@@ -97,14 +77,14 @@ Config parse_args(int argc, char *argv[]) {
           << "  --tile=<int>              Neighbor tile (alg=tiled) (default: "
           << cfg.tile << ")\n";
       std::exit(0);
-    } else if (!parse_int("--benchmark=", cfg.benchmark) &&
-               !parse_string("--alg=", cfg.algorithm) &&
-               !parse_int("--nrad=", cfg.nrad) &&
-               !parse_int("--nang=", cfg.nang) &&
-               !parse_double("--tol=", cfg.screening_tol) &&
-               !parse_int("--box-size=", cfg.max_points_per_box) &&
-               !parse_int("--tile=", cfg.tile)) {
-      throw std::runtime_error("Unknown argument: " + arg + " (try --help)");
+    } else if (!p.int_opt("--benchmark=", cfg.benchmark) &&
+               !p.string_opt("--alg=", cfg.algorithm) &&
+               !p.int_opt("--nrad=", cfg.nrad) &&
+               !p.int_opt("--nang=", cfg.nang) &&
+               !p.double_opt("--tol=", cfg.screening_tol) &&
+               !p.int_opt("--box-size=", cfg.max_points_per_box) &&
+               !p.int_opt("--tile=", cfg.tile)) {
+      throw std::runtime_error("Unknown argument: " + p.arg + " (try --help)");
     }
   }
   if (cfg.nrad <= 0 || cfg.nang <= 0)
@@ -112,36 +92,16 @@ Config parse_args(int argc, char *argv[]) {
   return cfg;
 }
 
-auto repeat(const std::string &s, int n) {
-  std::string r;
-  for (int i = 0; i < n; ++i)
-    r += s;
-  return r;
-}
-
 void print_config(const Config &cfg) {
-  int width = size_t(30);
-  std::string h = repeat("─", width + 2);
-
-  std::cout << "\n";
-  std::cout << "┌───────────────────────" << h << "┐\n";
-  std::cout << "│    SCF Benchmark Configuration" << repeat(" ", width - 6)
-            << "│\n";
-  std::cout << "├───────────────────────" << h << "┤\n";
-  std::cout << "│ Benchmark            │ " << std::setw(width) << cfg.benchmark
-            << " │\n";
-  std::cout << "│ Algorithm            │ " << std::setw(width) << cfg.algorithm
-            << " │\n";
-  std::cout << "│ Radial points        │ " << std::setw(width) << cfg.nrad
-            << " │\n";
-  std::cout << "│ Angular order        │ " << std::setw(width) << cfg.nang
-            << " │\n";
-  std::cout << "│ Screening tolerance  │ " << std::setw(width)
-            << cfg.screening_tol << " │\n";
-  std::cout << "│ Max points per box   │ " << std::setw(width)
-            << cfg.max_points_per_box << " │\n";
-  std::cout << "└──────────────────────┴" << h << "┘\n\n";
-  std::cout << std::flush;
+  print_config_box("SCF Benchmark Configuration",
+                   {
+                       {"Benchmark", cfg_val(cfg.benchmark)},
+                       {"Algorithm", cfg.algorithm},
+                       {"Radial points", cfg_val(cfg.nrad)},
+                       {"Angular order", cfg_val(cfg.nang)},
+                       {"Screening tolerance", cfg_val(cfg.screening_tol)},
+                       {"Max points per box", cfg_val(cfg.max_points_per_box)},
+                   });
 }
 TEST_CASE("H2O_thakkar", "[h20_thakkar]") {
   Molecule mol;

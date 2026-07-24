@@ -38,6 +38,9 @@
 #include <xc.h>
 #include <xc_funcs.h>
 
+#include "standalone_helpers.hpp"
+#include "test_io.hpp"
+
 #include <cmath>
 #include <cstdint>
 #include <memory>
@@ -48,200 +51,6 @@ using namespace Nukexc;
 using bk_type = IntegratorXX::Becke<double, double>;
 using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
-
-// ===========================================================================
-// Timing infrastructure
-// ===========================================================================
-struct StackEntry {
-  std::string name;
-  std::unique_ptr<Kokkos::Timer> timer;
-  int depth;
-};
-
-class TimingRegistry {
-public:
-  struct Entry {
-    std::string name;
-    double seconds;
-    int depth;
-  };
-
-  void start(const std::string &name) {
-    stack_.push_back(
-        StackEntry{name, std::make_unique<Kokkos::Timer>(), depth_});
-    ++depth_;
-  }
-
-  // Record a pre-measured duration directly (e.g. a total merged from
-  // another registry) without going through start()/stop().
-  void record(const std::string &name, double seconds) {
-    entries_.push_back(Entry{name, seconds, depth_});
-  }
-
-  void stop() {
-    --depth_;
-    StackEntry top = std::move(stack_.back());
-    stack_.pop_back();
-    entries_.push_back(Entry{top.name, top.timer->seconds(), top.depth});
-  }
-
-  // Total time of all depth-0 (top level) blocks recorded so far.
-  double total_top_level_seconds() const {
-    double total = 0.0;
-    for (const auto &e : entries_)
-      if (e.depth == 0)
-        total += e.seconds;
-    return total;
-  }
-
-  void report(const std::string &title) const {
-    std::cout << "\n"
-              << title << "\n"
-              << std::string(title.size(), '=') << "\n";
-    if (entries_.empty()) {
-      std::cout << "  (no timed sections recorded)\n\n";
-      return;
-    }
-    constexpr int name_col = 42;
-    for (const auto &e : entries_) {
-      std::string indented = std::string(e.depth * 2, ' ') + e.name;
-      std::cout << "  " << std::left << std::setw(name_col) << indented << ": "
-                << std::right << std::fixed << std::setprecision(4)
-                << std::setw(10) << e.seconds << " s\n";
-    }
-    std::cout << "  " << std::string(name_col + 15, '-') << "\n";
-    std::cout << "  " << std::left << std::setw(name_col) << "Total (top level)"
-              << ": " << std::right << std::fixed << std::setprecision(4)
-              << std::setw(10) << total_top_level_seconds() << " s\n\n"
-              << std::flush;
-  }
-
-  void clear() {
-    entries_.clear();
-    stack_.clear();
-    depth_ = 0;
-  }
-
-private:
-  std::vector<StackEntry> stack_;
-  std::vector<Entry> entries_;
-  int depth_ = 0;
-};
-
-// RAII scope: starts a named timer on construction, stops it on destruction.
-struct ScopedTiming {
-  ScopedTiming(TimingRegistry &reg, std::string name) : reg_(reg) {
-    reg_.start(name);
-  }
-  ~ScopedTiming() { reg_.stop(); }
-  ScopedTiming(const ScopedTiming &) = delete;
-  ScopedTiming &operator=(const ScopedTiming &) = delete;
-  TimingRegistry &reg_;
-};
-
-#define NUKEXC_CONCAT_(a, b) a##b
-#define NUKEXC_CONCAT(a, b) NUKEXC_CONCAT_(a, b)
-// Usage: { TIME_SCOPE(registry, "Some step"); do_work(); }
-#define TIME_SCOPE(reg, name)                                                  \
-  ScopedTiming NUKEXC_CONCAT(_scoped_timer_, __LINE__)((reg), (name))
-
-// ===========================================================================
-// Compile-time string hashing so we can "switch" on a runtime std::string.
-// C++ can't switch on std::string directly, but case labels only need to be
-// constant expressions -- so we hash the *literal* case labels at compile
-// time via this constexpr function, and hash the *runtime* input string with
-// the exact same function at runtime, then switch on the resulting uint32_t.
-// ===========================================================================
-constexpr std::uint32_t fnv1a(const char *s, std::uint32_t h = 2166136261u) {
-  return (*s == '\0') ? h
-                      : fnv1a(s + 1, (h ^ static_cast<std::uint32_t>(
-                                              static_cast<unsigned char>(*s))) *
-                                         16777619u);
-}
-inline std::uint32_t fnv1a_rt(const std::string &s) { return fnv1a(s.c_str()); }
-
-// ---------------------------------------------------------------------------
-// Functional family + libxc id, resolved from a runtime name via switch.
-// ---------------------------------------------------------------------------
-enum class XCFamily { LDA, GGA };
-
-struct FunctionalInfo {
-  int xc_id = -1;
-  XCFamily family = XCFamily::LDA;
-  std::string canonical_name;
-};
-
-FunctionalInfo lookup_functional(const std::string &name) {
-  switch (fnv1a_rt(name)) {
-  // ---- LDA exchange -----------------------------------------------------
-  case fnv1a("lda_x"):
-    return {XC_LDA_X, XCFamily::LDA, "lda_x"};
-
-  // ---- LDA correlation ---------------------------------------------------
-  case fnv1a("lda_c_pw"):
-    return {XC_LDA_C_PW, XCFamily::LDA, "lda_c_pw"};
-  case fnv1a("lda_c_vwn"):
-    return {XC_LDA_C_VWN, XCFamily::LDA, "lda_c_vwn"};
-
-  // ---- GGA exchange -------------------------------------------------------
-  case fnv1a("gga_x_pbe"):
-    return {XC_GGA_X_PBE, XCFamily::GGA, "gga_x_pbe"};
-  case fnv1a("gga_x_b88"):
-    return {XC_GGA_X_B88, XCFamily::GGA, "gga_x_b88"};
-  case fnv1a("gga_x_pw91"):
-    return {XC_GGA_X_PW91, XCFamily::GGA, "gga_x_pw91"};
-  case fnv1a("gga_xc_b3lyp3"):
-    // 394 is the standard Libxc ID for B3LYP with VWN3
-    return {394, XCFamily::GGA, "gga_xc_b3lyp3"};
-
-  // ---- GGA correlation ------------------------------------------------
-  case fnv1a("gga_c_pbe"):
-    return {XC_GGA_C_PBE, XCFamily::GGA, "gga_c_pbe"};
-  case fnv1a("gga_c_lyp"):
-    return {XC_GGA_C_LYP, XCFamily::GGA, "gga_c_lyp"};
-  case fnv1a("gga_c_pw91"):
-    return {XC_GGA_C_PW91, XCFamily::GGA, "gga_c_pw91"};
-
-  default:
-    throw std::runtime_error(
-        "Unknown functional name: '" + name +
-        "' (see --help or lookup_functional() for supported names)");
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Dispatch a single functional (X or C) to the correct polarized evaluator
-// based on its family. Both compute_lsda and compute_gga_lsda must return
-// XC_result_polarized { energy, potential_alpha, potential_beta }.
-// ---------------------------------------------------------------------------
-XC_result_polarized evaluate_functional(
-    const FunctionalInfo &info, const xc_func_type &func,
-    const DeviceView2DLeft &basis_collocation,
-    const DeviceView2DLeft &basis_collocation_gx,
-    const DeviceView2DLeft &basis_collocation_gy,
-    const DeviceView2DLeft &basis_collocation_gz, const DeviceView1D &weights,
-    const DeviceView2DLeft &k_C_alpha, const DeviceView1D &k_occ_alpha,
-    const DeviceView2DLeft &k_C_beta, const DeviceView1D &k_occ_beta) {
-  (void)info;
-  switch (func.info->family) {
-  case XC_FAMILY_LDA:
-    return compute_lsda(basis_collocation, weights, k_C_alpha, k_occ_alpha,
-                        k_C_beta, k_occ_beta, func);
-  case XC_FAMILY_HYB_LDA:
-    return compute_lsda(basis_collocation, weights, k_C_alpha, k_occ_alpha,
-                        k_C_beta, k_occ_beta, func);
-  case XC_FAMILY_GGA:
-    return compute_gga_lsda(basis_collocation, basis_collocation_gx,
-                            basis_collocation_gy, basis_collocation_gz, weights,
-                            k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta, func);
-  case XC_FAMILY_HYB_GGA:
-    return compute_gga_lsda(basis_collocation, basis_collocation_gx,
-                            basis_collocation_gy, basis_collocation_gz, weights,
-                            k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta, func);
-  default:
-    throw std::runtime_error("Unhandled XCFamily in evaluate_functional");
-  }
-}
 
 // ===========================================================================
 // Config
@@ -269,31 +78,9 @@ struct Config {
 Config parse_args(int argc, char *argv[]) {
   Config cfg;
   for (int i = 1; i < argc; ++i) {
-    std::string arg = argv[i];
+    ArgParser p{argv[i]};
 
-    auto parse_string = [&](const std::string &prefix, std::string &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = arg.substr(prefix.size());
-        return true;
-      }
-      return false;
-    };
-    auto parse_int = [&](const std::string &prefix, int &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = std::stoi(arg.substr(prefix.size()));
-        return true;
-      }
-      return false;
-    };
-    auto parse_double = [&](const std::string &prefix, double &out) {
-      if (arg.rfind(prefix, 0) == 0) {
-        out = std::stod(arg.substr(prefix.size()));
-        return true;
-      }
-      return false;
-    };
-
-    if (arg == "--help" || arg == "-h") {
+    if (p.arg == "--help" || p.arg == "-h") {
       std::cout
           << "Usage: " << argv[0] << " [options]\n"
           << "  --xyz=<file>          Molecule XYZ file          (default: "
@@ -337,25 +124,25 @@ Config parse_args(int argc, char *argv[]) {
           << "    GGA exchange:     gga_x_pbe, gga_x_b88, gga_x_pw91\n"
           << "    GGA correlation:  gga_c_pbe, gga_c_lyp, gga_c_pw91\n";
       std::exit(0);
-    } else if (arg == "--nl-histogram") {
+    } else if (p.arg == "--nl-histogram") {
       cfg.nl_histogram = true;
-    } else if (!parse_string("--xyz=", cfg.xyz_file) &&
-               !parse_string("--basis=", cfg.basis_file) &&
-               !parse_string("--method=", cfg.method) &&
-               !parse_string("--alg=", cfg.algorithm) &&
-               !parse_int("--box-size=", cfg.max_points_per_box) &&
-               !parse_int("--tile=", cfg.tile_size) &&
-               !parse_int("--nrad=", cfg.nrad) &&
-               !parse_int("--nang=", cfg.nang) &&
-               !parse_double("--lin-dep=", cfg.lin_dep_threshold) &&
-               !parse_double("--conv-thr=", cfg.conv_thr) &&
-               !parse_int("--charge=", cfg.charge) &&
-               !parse_int("--multiplicity=", cfg.multiplicity) &&
-               !parse_string("--xfunc=", cfg.xfunc) &&
-               !parse_string("--cfunc=", cfg.cfunc) &&
-               !parse_string("--pruning=", cfg.pruning) &&
-               !parse_string("--radial=", cfg.radial)) {
-      throw std::runtime_error("Unknown argument: " + arg + " (try --help)");
+    } else if (!p.string_opt("--xyz=", cfg.xyz_file) &&
+               !p.string_opt("--basis=", cfg.basis_file) &&
+               !p.string_opt("--method=", cfg.method) &&
+               !p.string_opt("--alg=", cfg.algorithm) &&
+               !p.int_opt("--box-size=", cfg.max_points_per_box) &&
+               !p.int_opt("--tile=", cfg.tile_size) &&
+               !p.int_opt("--nrad=", cfg.nrad) &&
+               !p.int_opt("--nang=", cfg.nang) &&
+               !p.double_opt("--lin-dep=", cfg.lin_dep_threshold) &&
+               !p.double_opt("--conv-thr=", cfg.conv_thr) &&
+               !p.int_opt("--charge=", cfg.charge) &&
+               !p.int_opt("--multiplicity=", cfg.multiplicity) &&
+               !p.string_opt("--xfunc=", cfg.xfunc) &&
+               !p.string_opt("--cfunc=", cfg.cfunc) &&
+               !p.string_opt("--pruning=", cfg.pruning) &&
+               !p.string_opt("--radial=", cfg.radial)) {
+      throw std::runtime_error("Unknown argument: " + p.arg + " (try --help)");
     }
   }
   if (cfg.nrad <= 0 || cfg.nang <= 0)
@@ -381,97 +168,30 @@ Config parse_args(int argc, char *argv[]) {
   return cfg;
 }
 
-auto repeat(const std::string &s, int n) {
-  std::string r;
-  for (int i = 0; i < n; ++i)
-    r += s;
-  return r;
-}
-
 void print_config(const Config &cfg) {
-  size_t width =
-      std::max({cfg.xyz_file.size(), cfg.basis_file.size(),
-                cfg.xfunc.size() + cfg.cfunc.size() + 3, size_t(20)});
-  std::string h = repeat("─", static_cast<int>(width) + 2);
-
-  std::cout << "\n";
-  std::cout << "┌───────────────────────" << h << "┐\n";
-  std::cout << "│    " << (cfg.method == "dft" ? "DFT" : "HF")
-            << " Configuration"
-            << repeat(" ", width + (cfg.method == "dft" ? 5 : 6)) << "│\n";
-  std::cout << "├───────────────────────" << h << "┤\n";
-  std::cout << "│ Molecule file        │ " << std::setw(width) << std::left
-            << cfg.xyz_file << " │\n";
-  std::cout << "│ Basis file           │ " << std::setw(width) << std::left
-            << cfg.basis_file << " │\n";
-  std::cout << "│ Method               │ " << std::setw(width) << std::left
-            << cfg.method << " │\n";
-  std::cout << "│ Algorithm            │ " << std::setw(width) << std::left
-            << cfg.algorithm << " │\n";
-  std::cout << "│ Box size (pts/box)   │ " << std::setw(width) << std::left
-            << cfg.max_points_per_box << " │\n";
+  std::vector<std::pair<std::string, std::string>> rows = {
+      {"Molecule file", cfg.xyz_file},
+      {"Basis file", cfg.basis_file},
+      {"Method", cfg.method},
+      {"Algorithm", cfg.algorithm},
+      {"Box size (pts/box)", cfg_val(cfg.max_points_per_box)},
+  };
   if (cfg.algorithm == "tiled")
-    std::cout << "│ Neighbor tile size   │ " << std::setw(width) << std::left
-              << cfg.tile_size << " │\n";
-  std::cout << "│ Radial points        │ " << std::setw(width) << cfg.nrad
-            << " │\n";
-  std::cout << "│ Angular order        │ " << std::setw(width) << cfg.nang
-            << " │\n";
-  std::cout << "│ Lin. dep. threshold  │ " << std::setw(width)
-            << cfg.lin_dep_threshold << " │\n";
-  std::cout << "│ Conv. threshold      │ " << std::setw(width) << cfg.conv_thr
-            << " │\n";
-  std::cout << "│ Charge               │ " << std::setw(width) << cfg.charge
-            << " │\n";
-  std::cout << "│ Multiplicity         │ " << std::setw(width)
-            << cfg.multiplicity << " │\n";
+    rows.push_back({"Neighbor tile size", cfg_val(cfg.tile_size)});
+  rows.push_back({"Radial points", cfg_val(cfg.nrad)});
+  rows.push_back({"Angular order", cfg_val(cfg.nang)});
+  rows.push_back({"Lin. dep. threshold", cfg_val(cfg.lin_dep_threshold)});
+  rows.push_back({"Conv. threshold", cfg_val(cfg.conv_thr)});
+  rows.push_back({"Charge", cfg_val(cfg.charge)});
+  rows.push_back({"Multiplicity", cfg_val(cfg.multiplicity)});
   if (cfg.method == "dft") {
-    std::cout << "│ Exchange functional  │ " << std::setw(width) << std::left
-              << cfg.xfunc << " │\n";
-    std::cout << "│ Correlation function │ " << std::setw(width) << std::left
-              << cfg.cfunc << " │\n";
+    rows.push_back({"Exchange functional", cfg.xfunc});
+    rows.push_back({"Correlation function", cfg.cfunc});
   }
-  std::cout << "└──────────────────────┴" << h << "┘\n\n";
-  std::cout << std::flush;
-}
 
-// ---------------------------------------------------------------------------
-// Helper: Kokkos DeviceView2DLeft → arma::mat (column-major copy)
-// OOO expects arma::mat where columns are MOs; NuKEXC stores mo_coeff(nbf, nmo)
-// ---------------------------------------------------------------------------
-arma::mat kokkos_to_arma(const DeviceView2DLeft &v) {
-  auto h = Kokkos::create_mirror_view(v);
-  Kokkos::deep_copy(h, v);
-  arma::mat out(h.extent(0), h.extent(1));
-  for (std::size_t i = 0; i < h.extent(0); ++i)
-    for (std::size_t j = 0; j < h.extent(1); ++j)
-      out(i, j) = h(i, j);
-  return out;
-}
-
-// ---------------------------------------------------------------------------
-// Helper: arma::mat → Kokkos DeviceView2DLeft
-// ---------------------------------------------------------------------------
-DeviceView2DLeft arma_to_kokkos(const arma::mat &m, const std::string &label) {
-  DeviceView2DLeft v(label, m.n_rows, m.n_cols);
-  auto h = Kokkos::create_mirror_view(v);
-  for (std::size_t i = 0; i < m.n_rows; ++i)
-    for (std::size_t j = 0; j < m.n_cols; ++j)
-      h(i, j) = m(i, j);
-  Kokkos::deep_copy(v, h);
-  return v;
-}
-
-// ---------------------------------------------------------------------------
-// Helper: arma::vec → Kokkos DeviceView1D
-// ---------------------------------------------------------------------------
-DeviceView1D arma_to_kokkos1d(const arma::vec &v, const std::string &label) {
-  DeviceView1D kv(label, v.n_elem);
-  auto h = Kokkos::create_mirror_view(kv);
-  for (std::size_t i = 0; i < v.n_elem; ++i)
-    h(i) = v(i);
-  Kokkos::deep_copy(kv, h);
-  return kv;
+  print_config_box(cfg.method == "dft" ? "DFT Configuration"
+                                       : "HF Configuration",
+                   rows);
 }
 
 int main(int argc, char *argv[]) {
