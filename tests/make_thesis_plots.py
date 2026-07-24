@@ -177,35 +177,47 @@ def plot_2d():
     save(fig, "convergence_2d.pdf")
 
 
-# ── 4. pruning : water, three pruning schemes, accuracy per point ────────────
+# ── one-/two-electron/total decomposition (water SCF studies) ────────────────
+COMPONENTS = [
+    ("err_1e", r"one-electron  $|E_{1e}-E_{1e}^\mathrm{ref}|$  (Ha)"),
+    ("err_2e", r"two-electron  $|E_{2e}-E_{2e}^\mathrm{ref}|$  (Ha)"),
+    ("err_total", r"total  $|E-E^\mathrm{ref}|$  (Ha)"),
+]
+
+
+def plot_components(rows, group_key, order, out_name, legend_title):
+    """Three panels (one-electron / two-electron / total), one curve per group.
+
+    Splitting the SCF energy exposes how the near-nucleus one-electron term and
+    the RI two-electron term converge separately (and can cancel non-monotonely
+    in the total).
+    """
+    fig, axes = plt.subplots(1, 3, figsize=(15.5, 4.5))
+    for ax, (col, ylab) in zip(axes, COMPONENTS):
+        for i, (lab, xs, ys) in enumerate(
+            series(rows, group_key, "npts", order=order, y_key=col)
+        ):
+            ax.loglog(xs, ys, label=lab, **style(i))
+        ax.set_xlabel("total grid points")
+        ax.set_ylabel(ylab)
+        ax.grid(True, which="both")
+    axes[0].legend(title=legend_title)
+    fig.tight_layout()
+    save(fig, out_name)
+
+
+# ── 4. pruning : water, three pruning schemes, 1e/2e/total per point ─────────
 def plot_pruning():
     rows = load(HERE / "convergence_pruning.csv")
-    fig, ax = plt.subplots(figsize=(6.4, 4.3))
-    for i, (lab, xs, ys) in enumerate(
-        series(rows, "scheme", "npts", order=["Unpruned", "Treutler", "Robust"])
-    ):
-        ax.loglog(xs, ys, label=lab, **style(i))
-    ax.set_xlabel("total grid points")
-    ax.set_ylabel(r"$|E - E_\mathrm{ref}|$  (Ha)")
-    ax.grid(True, which="both")
-    ax.legend(title="pruning scheme")
-    save(fig, "convergence_pruning.pdf")
+    plot_components(rows, "scheme", ["Unpruned", "Treutler", "Robust"],
+                    "convergence_pruning.pdf", "pruning scheme")
 
 
-# ── 5. adaptive : water, pruning x radial-sizing, accuracy per point ─────────
+# ── 5. adaptive : water, pruning x radial-sizing, 1e/2e/total per point ──────
 def plot_adaptive():
     rows = load(HERE / "convergence_adaptive.csv")
-    fig, ax = plt.subplots(figsize=(6.6, 4.3))
-    for i, (lab, xs, ys) in enumerate(
-        series(rows, "combo", "npts",
-               order=["uniform", "pruned", "per-element", "both"])
-    ):
-        ax.loglog(xs, ys, label=lab, **style(i))
-    ax.set_xlabel("total grid points")
-    ax.set_ylabel(r"$|E - E_\mathrm{ref}|$  (Ha)")
-    ax.grid(True, which="both")
-    ax.legend(title=r"pruning $\times$ radial sizing")
-    save(fig, "convergence_adaptive.pdf")
+    plot_components(rows, "combo", ["uniform", "pruned", "per-element", "both"],
+                    "convergence_adaptive.pdf", r"pruning $\times$ radial sizing")
 
 
 if __name__ == "__main__":

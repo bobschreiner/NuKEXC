@@ -43,10 +43,22 @@
 
 namespace Nukexc {
 
-// Run a dense UHF SCF on `grid` and return the converged total energy (Ha).
+// Converged UHF energy decomposition (all in Ha): total = nuclear +
+// one_electron + two_electron, with one_electron = Tr[D h_core] (kinetic +
+// nuclear attraction) and two_electron = 1/2 Tr[D J] + E_x (Coulomb + exact
+// exchange). Reporting the two grid-sensitive components separately exposes
+// how they converge -- and cancel -- as the grid is refined.
+struct ScfEnergies {
+  double total = 0.0;
+  double one_electron = 0.0;
+  double two_electron = 0.0;
+  double nuclear = 0.0;
+};
+
+// Run a dense UHF SCF on `grid` and return its converged energy decomposition.
 // `basis` is the primary basis, `basis_aux` the RI fitting basis. Closed- or
 // open-shell is selected via `charge`/`multiplicity` (water: 0 / 1).
-inline double run_uhf_scf_energy(ExecSpace &space, const Molecule &mol,
+inline ScfEnergies run_uhf_scf_energy(ExecSpace &space, const Molecule &mol,
                                  const STOBasisSet &basis,
                                  const STOBasisSet &basis_aux,
                                  const FlatGrid &grid, int charge = 0,
@@ -114,6 +126,11 @@ inline double run_uhf_scf_energy(ExecSpace &space, const Molecule &mol,
                    : 0.5 * K_gwh * (h_core(i, i) + h_core(j, j)) * S_arma(i, j);
   arma::mat F_gwh_orth = X_arma.t() * F_gwh * X_arma;
 
+  // Filled by the last (converged) Fock build so the caller gets the energy
+  // decomposition without a separate re-evaluation.
+  ScfEnergies conv{};
+  conv.nuclear = E_nuc;
+
   // ---- Dense UHF Fock builder (called synchronously by solver.run()) -------
   auto fock_builder =
       [&, space](const OpenOrbitalOptimizer::DensityMatrix<double, double> &dm)
@@ -160,6 +177,10 @@ inline double run_uhf_scf_energy(ExecSpace &space, const Molecule &mol,
     const double E_coulomb = 0.5 * arma::trace(D_tot * J_arma);
     const double Etot = E_nuc + E_core + E_coulomb + E_exchange;
 
+    conv.total = Etot;
+    conv.one_electron = E_core;
+    conv.two_electron = E_coulomb + E_exchange;
+
     arma::mat F_alpha = h_core + J_arma - K_alpha_arma;
     arma::mat F_beta = h_core + J_arma - K_beta_arma;
     std::vector<arma::mat> fock_arma = {X_arma.t() * F_alpha * X_arma,
@@ -176,7 +197,7 @@ inline double run_uhf_scf_energy(ExecSpace &space, const Molecule &mol,
   solver.initialize_with_fock({F_gwh_orth, F_gwh_orth});
   solver.run();
 
-  return solver.get_fock_build().first;
+  return conv;
 }
 
 } // namespace Nukexc

@@ -90,12 +90,13 @@ struct Level {
   size_t nang_order;
 };
 
-// Converged unrestricted-HF total energy on the grid built for the given
-// pruning scheme; also returns the total number of grid points actually used.
-static double scf_energy(ExecSpace &space, const Molecule &mol,
-                         const STOBasisSet &basis, const STOBasisSet &basis_aux,
-                         size_t nrad, size_t nang_order, PruningScheme pruning,
-                         size_t &npts_out) {
+// Converged unrestricted-HF energy decomposition on the grid built for the
+// given pruning scheme; also returns the total number of grid points used.
+static ScfEnergies scf_energy(ExecSpace &space, const Molecule &mol,
+                              const STOBasisSet &basis,
+                              const STOBasisSet &basis_aux, size_t nrad,
+                              size_t nang_order, PruningScheme pruning,
+                              size_t &npts_out) {
   auto grid =
       make_flat_grid<ta_type, ll_type>(mol, nrad, nang_order, WEIGHT_THRESHOLD,
                                        TA_M4, pruning, RadialSizing::Uniform);
@@ -124,7 +125,7 @@ int main() {
 
     // Reference: fine uniform unpruned grid (finer than every swept level).
     size_t npts_ref = 0;
-    const double e_ref =
+    const ScfEnergies e_ref =
         scf_energy(space, mol, basis, basis_aux, nrad_ref, nang_ref,
                    PruningScheme::Unpruned, npts_ref);
     std::cout << std::fixed << std::setprecision(10)
@@ -132,7 +133,9 @@ int main() {
               << "Resolution: " << (hires ? "HI-RES (GPU)" : "prototype (CPU)")
               << "\nReference (UHF, uniform unpruned, nrad=" << nrad_ref
               << ", nang_order=" << nang_ref << ", npts=" << npts_ref
-              << "): E_scf = " << e_ref << " Ha\n";
+              << "):\n  E_1e = " << e_ref.one_electron
+              << " Ha, E_2e = " << e_ref.two_electron
+              << " Ha, E_scf = " << e_ref.total << " Ha\n";
 
     const std::vector<Scheme> schemes = {
         {"Unpruned", PruningScheme::Unpruned},
@@ -144,47 +147,56 @@ int main() {
     std::ofstream csv(csv_path);
     csv << std::setprecision(15);
     csv << "# Angular pruning-scheme comparison on water (unrestricted HF "
-           "total energy)\n";
+           "one- and two-electron energies)\n";
     csv << "# radial scheme: TA-M4 ; angular: Lebedev-Laikov ; basis: QZ4P "
            "(+QZ4P fit) ; radial sizing=Uniform\n";
     csv << "# schemes: Unpruned, Treutler (fixed 7/11), Robust (7 / base-6)\n";
     csv << "# grid levels sweep (nrad, nang_order) together so curves "
            "converge\n";
-    csv << "# observable: converged unrestricted Hartree-Fock total energy "
-           "(Ha)\n";
+    csv << "# observables (converged UHF, Ha): E_1e = Tr[D h_core] (kinetic + "
+           "nuclear attraction) ; E_2e = 1/2 Tr[D J] + E_x (Coulomb + exact "
+           "exchange) ; E_scf = E_nuc + E_1e + E_2e\n";
     csv << "# resolution: " << (hires ? "hi-res (GPU)" : "prototype (CPU)")
         << "\n";
-    csv << "# E_ref = fine uniform unpruned grid (shared self-reference, NOT "
-           "analytic):\n";
+    csv << "# reference = fine uniform unpruned grid (shared self-reference, "
+           "NOT analytic):\n";
     csv << "#   nrad_ref=" << nrad_ref << ", nang_order_ref=" << nang_ref
-        << ", npts_ref=" << npts_ref << ", E_ref=" << e_ref << " Ha\n";
-    csv << "# abs_error = |E_scf - E_ref| ; npts = total grid points used\n";
-    csv << "scheme,nrad,nang_order,npts,E_scf,abs_error\n";
+        << ", npts_ref=" << npts_ref << ", E_1e_ref=" << e_ref.one_electron
+        << ", E_2e_ref=" << e_ref.two_electron << ", E_scf_ref=" << e_ref.total
+        << " Ha\n";
+    csv << "# err_* = |value - reference| ; npts = total grid points used\n";
+    csv << "scheme,nrad,nang_order,npts,E_1e,E_2e,E_scf,err_1e,err_2e,"
+           "err_total\n";
 
     const int w = 14;
     for (const auto &s : schemes) {
       std::cout << "\n=== " << s.label << " ===\n";
       std::cout << std::setw(w) << std::left << "nrad" << std::setw(w)
                 << std::left << "nang" << std::setw(w) << std::right << "npts"
-                << std::setw(20) << std::right << "E_scf (Ha)" << std::setw(w)
-                << std::right << "|error|"
+                << std::setw(14) << std::right << "err_1e" << std::setw(14)
+                << std::right << "err_2e" << std::setw(14) << std::right
+                << "err_total"
                 << "\n";
-      std::cout << std::string(w * 5 + 6, '-') << "\n";
+      std::cout << std::string(w * 3 + 42 + 6, '-') << "\n";
 
       for (const auto &lv : levels) {
         size_t npts = 0;
-        const double e = scf_energy(space, mol, basis, basis_aux, lv.nrad,
-                                    lv.nang_order, s.pruning, npts);
-        const double err = std::abs(e - e_ref);
+        const ScfEnergies e = scf_energy(space, mol, basis, basis_aux, lv.nrad,
+                                         lv.nang_order, s.pruning, npts);
+        const double err_1e = std::abs(e.one_electron - e_ref.one_electron);
+        const double err_2e = std::abs(e.two_electron - e_ref.two_electron);
+        const double err_tot = std::abs(e.total - e_ref.total);
 
         csv << s.label << ',' << lv.nrad << ',' << lv.nang_order << ',' << npts
-            << ',' << e << ',' << err << '\n';
+            << ',' << e.one_electron << ',' << e.two_electron << ',' << e.total
+            << ',' << err_1e << ',' << err_2e << ',' << err_tot << '\n';
 
         std::cout << std::setw(w) << std::left << lv.nrad << std::setw(w)
                   << std::left << lv.nang_order << std::setw(w) << std::right
-                  << npts << std::setw(20) << std::right << std::fixed
-                  << std::setprecision(8) << e << std::setw(w) << std::right
-                  << std::scientific << std::setprecision(3) << err << "\n";
+                  << npts << std::scientific << std::setprecision(3)
+                  << std::setw(14) << std::right << err_1e << std::setw(14)
+                  << std::right << err_2e << std::setw(14) << std::right
+                  << err_tot << "\n";
       }
     }
 

@@ -2,23 +2,18 @@
 """
 Plot the angular pruning-scheme comparison produced by
 tests/convergence_pruning.cxx: Unpruned vs Treutler vs Robust on water
-(core-Hamiltonian occupied-orbital energy sum), with per_element held OFF so
-only the pruning differs.
+(unrestricted Hartree-Fock), with per_element held OFF so only the pruning
+differs.
 
 The CSV starts with '#'-prefixed provenance lines (documenting the reference
-energy E_ref) followed by the columns:
-scheme, nrad, nang_order, npts, band_sum, abs_error.
+energies) followed by the columns:
+scheme, nrad, nang_order, npts, E_1e, E_2e, E_scf, err_1e, err_2e, err_total.
 
-The figure plots |error| vs the TOTAL number of grid points (log-log). Each grid
-"level" grows nrad and the Lebedev order together, so a curve that sits
-lower-and-left reaches a given accuracy with fewer points. A curve that flattens
-above zero has hit a systematic pruning bias that refinement cannot remove.
-
-The point of the plot:
-  * Treutler uses FIXED low/medium angular orders (7, 11) on the inner shells,
-    so it plateaus once the base order passes 11.
-  * Robust's medium order is base-6, i.e. it refines WITH the base order, so it
-    tracks the Unpruned curve while still using fewer points.
+Three panels plot |error| vs the TOTAL number of grid points (log-log) for the
+one-electron energy (kinetic + nuclear attraction), the two-electron energy
+(Coulomb + exact exchange) and the total. Reporting the components separately
+exposes how the near-nucleus one-electron term and the RI two-electron term
+converge -- and can cancel non-monotonely in the total.
 
 Accessibility: curves are distinguished by line style + marker shape (color is
 only a redundant cue), so the plot is readable in grayscale or with color-vision
@@ -50,6 +45,13 @@ STYLE = {
 }
 PLOT_ORDER = ["Unpruned", "Treutler", "Robust"]
 
+# (error column, axis label) for the three energy components.
+COMPONENTS = [
+    ("err_1e", r"one-electron  $|E_{1e}-E_{1e}^{\mathrm{ref}}|$  (Ha)"),
+    ("err_2e", r"two-electron  $|E_{2e}-E_{2e}^{\mathrm{ref}}|$  (Ha)"),
+    ("err_total", r"total  $|E-E^{\mathrm{ref}}|$  (Ha)"),
+]
+
 
 def load(csv_path):
     comment_lines, data_lines = [], []
@@ -63,7 +65,9 @@ def load(csv_path):
             {
                 "scheme": row["scheme"],
                 "npts": int(row["npts"]),
-                "err": max(float(row["abs_error"]), ERR_FLOOR),
+                "err_1e": max(float(row["err_1e"]), ERR_FLOOR),
+                "err_2e": max(float(row["err_2e"]), ERR_FLOOR),
+                "err_total": max(float(row["err_total"]), ERR_FLOOR),
             }
         )
     if not rows:
@@ -75,15 +79,17 @@ def parse_reference(comment_lines):
     text = " ".join(l.lstrip("#").strip() for l in comment_lines)
 
     def num(key):
-        m = re.search(key + r"=(-?\d+\.\d+(?:[eE][-+]?\d+)?)", text)
+        m = re.search(re.escape(key) + r"=(-?\d+\.\d+(?:[eE][-+]?\d+)?)", text)
         return float(m.group(1)) if m else None
 
     def integer(key):
-        m = re.search(key + r"=(\d+)", text)
+        m = re.search(re.escape(key) + r"=(\d+)", text)
         return int(m.group(1)) if m else None
 
     return {
-        "E_ref": num("E_ref"),
+        "E_1e_ref": num("E_1e_ref"),
+        "E_2e_ref": num("E_2e_ref"),
+        "E_scf_ref": num("E_scf_ref"),
         "nrad_ref": integer("nrad_ref"),
         "nang_ref": integer("nang_order_ref"),
         "npts_ref": integer("npts_ref"),
@@ -91,25 +97,27 @@ def parse_reference(comment_lines):
 
 
 def reference_caption(meta):
-    if meta.get("E_ref") is None:
-        return "E_ref provenance not found in CSV header."
     where = ""
     if meta.get("nrad_ref") and meta.get("nang_ref"):
-        where = f" (nrad={meta['nrad_ref']}, nang_order={meta['nang_ref']}"
+        where = f"nrad={meta['nrad_ref']}, nang_order={meta['nang_ref']}"
         if meta.get("npts_ref"):
             where += f", {meta['npts_ref']:,} pts"
-        where += ")"
+    parts = []
+    if meta.get("E_scf_ref") is not None:
+        parts.append(f"E_scf = {meta['E_scf_ref']:.10f} Ha")
+    if meta.get("E_1e_ref") is not None:
+        parts.append(f"E_1e = {meta['E_1e_ref']:.6f}")
+    if meta.get("E_2e_ref") is not None:
+        parts.append(f"E_2e = {meta['E_2e_ref']:.6f}")
     return (
-        f"error = |E - E_ref|.   E_ref = {meta['E_ref']:.10f} Ha on a fine "
-        f"uniform unpruned grid{where}.\n"
-        f"Lower-and-left = better accuracy per point; a flat tail = a residual "
-        f"pruning bias refinement cannot remove."
+        f"error = |E - E_ref| on a fine uniform unpruned reference grid ({where}).   "
+        + ";  ".join(parts) + "."
     )
 
 
-def series(rows, scheme):
+def series(rows, scheme, col):
     pts = sorted((r for r in rows if r["scheme"] == scheme), key=lambda r: r["npts"])
-    return np.array([r["npts"] for r in pts]), np.array([r["err"] for r in pts])
+    return np.array([r["npts"] for r in pts]), np.array([r[col] for r in pts])
 
 
 def main():
@@ -124,30 +132,27 @@ def main():
     rows, meta = load(csv_path)
     schemes = [s for s in PLOT_ORDER if any(r["scheme"] == s for r in rows)]
 
-    fig, ax = plt.subplots(figsize=(9, 6.5))
-    for scheme in schemes:
-        x, y = series(rows, scheme)
-        ax.loglog(x, y, label=scheme, markersize=7, linewidth=1.9, **STYLE[scheme])
-        ax.annotate(
-            scheme, xy=(x[-1], y[-1]), xytext=(x[-1] * 1.06, y[-1]),
-            va="center", fontsize=9, annotation_clip=False,
-        )
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5.5))
+    for ax, (col, ylab) in zip(axes, COMPONENTS):
+        for scheme in schemes:
+            x, y = series(rows, scheme, col)
+            ax.loglog(x, y, label=scheme, markersize=7, linewidth=1.9, **STYLE[scheme])
+        ax.set_xlabel("total grid points")
+        ax.set_ylabel(ylab)
+        ax.grid(True, which="both", ls=":", alpha=0.5)
+    axes[0].legend(title="pruning scheme", fontsize=9, loc="lower left")
 
-    ax.set_xlabel("total grid points")
-    ax.set_ylabel("|E - E_ref|  (Ha)")
-    ax.set_title("Angular pruning schemes on water: accuracy per point\n"
-                 "core-Hamiltonian occupied-orbital energy sum")
-    ax.grid(True, which="both", ls=":", alpha=0.5)
-    ax.legend(title="pruning scheme", fontsize=9, loc="lower left")
-    ax.margins(x=0.12)
-
+    fig.suptitle(
+        "Angular pruning schemes on water: unrestricted Hartree-Fock convergence\n"
+        "one- and two-electron energy components",
+        fontsize=14,
+    )
     fig.text(0.5, 0.01, reference_caption(meta), ha="center", va="bottom", fontsize=9)
-    fig.tight_layout(rect=(0, 0.08, 1, 1))
+    fig.tight_layout(rect=(0, 0.05, 1, 0.93))
 
     out = csv_path.with_suffix(".png")
     fig.savefig(out, dpi=150)
     print(f"Wrote {out}")
-    print("Reference: " + reference_caption(meta).replace("\n", " "))
 
 
 if __name__ == "__main__":
