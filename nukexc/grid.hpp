@@ -36,6 +36,7 @@
 #include "partitioning.hpp"
 #include "stobasis.hpp"
 
+#include <stdexcept>
 #include <type_traits>
 #include <vector>
 
@@ -117,9 +118,9 @@ enum class RadialSizing {
 
 // GauXC/PySCF per-period radial multipliers, normalized so period 1 (H/He) is
 // 1.0. Calibrated to PySCF's default (level-3) grid (50,75,80,90,95,100,105),
-// i.e. the ratios relative to 50. The characteristic shape -- a +50% jump at the
-// first row of heavy atoms, then a slow saturation -- is what distinguishes the
-// standard scheme from a naive linear-in-period increment. Matches GauXC's
+// i.e. the ratios relative to 50. The characteristic shape -- a +50% jump at
+// the first row of heavy atoms, then a slow saturation -- is what distinguishes
+// the standard scheme from a naive linear-in-period increment. Matches GauXC's
 // PySCF* presets and PySCF's RAD_GRIDS table (Treutler-Ahlrichs lineage,
 // JCP 102, 346 (1995)).
 constexpr double PYSCF_RADIAL_RATIO[7] = {1.0, 1.5, 1.6, 1.8, 1.9, 2.0, 2.1};
@@ -153,13 +154,15 @@ struct FlatGrid {
 //                      heavier atoms scale up -- see pyscf_radial_size).
 // The two axes are orthogonal, so all four combinations are selectable.
 template <typename radial_type, typename angular_type>
-FlatGrid make_flat_grid(const Molecule &mol, const size_t nrad = 50,
-                        const size_t nang_order = 30,
-                        const double weight_threshold = 1e-30,
-                        [[maybe_unused]] const double ta_alpha = TA_M4,
-                        const IntegratorXX::PruningScheme pruning =
-                            IntegratorXX::PruningScheme::Unpruned,
-                        const RadialSizing radial_sizing = RadialSizing::Uniform) {
+FlatGrid
+make_flat_grid(const Molecule &mol, const size_t nrad = 50,
+               const size_t nang_order = 30,
+               const double weight_threshold = 1e-30,
+               [[maybe_unused]] const double ta_alpha = TA_M4,
+               const IntegratorXX::PruningScheme pruning =
+                   IntegratorXX::PruningScheme::Unpruned,
+               const RadialSizing radial_sizing = RadialSizing::Uniform,
+               bool verbose = false) {
 
   using namespace IntegratorXX;
   using angular_traits = quadrature_traits<angular_type>;
@@ -200,7 +203,8 @@ FlatGrid make_flat_grid(const Molecule &mol, const size_t nrad = 50,
     // For TA this R is the element-specific xi (JCP 102, 346 (1995), Table 1);
     // for Becke it is half the Bragg-Slater radius (JCP 88, 2547 (1988)).
     constexpr bool is_ta =
-        std::is_same_v<radial_type, IntegratorXX::TreutlerAhlrichs<double, double>>;
+        std::is_same_v<radial_type,
+                       IntegratorXX::TreutlerAhlrichs<double, double>>;
     constexpr bool is_becke =
         std::is_same_v<radial_type, IntegratorXX::Becke<double, double>>;
 
@@ -241,11 +245,13 @@ FlatGrid make_flat_grid(const Molecule &mol, const size_t nrad = 50,
     if (pruning == PruningScheme::Unpruned)
       sph = SphericalGridFactory::generate_grid(unp);
     else
-      sph = SphericalGridFactory::generate_grid(create_pruned_spec(pruning, unp));
+      sph =
+          SphericalGridFactory::generate_grid(create_pruned_spec(pruning, unp));
 
     // sph->npts() is the count for THIS atom -- keep it local so per-atom grid
     // sizes are free to differ.
     const size_t npts_atom = sph->npts();
+    bool detected_negative_weights = false;
     for (size_t j = 0; j < npts_atom; ++j) {
       Point p;
       p[0] = ac_h(i)[0] + sph->points()[j][0];
@@ -253,7 +259,14 @@ FlatGrid make_flat_grid(const Molecule &mol, const size_t nrad = 50,
       p[2] = ac_h(i)[2] + sph->points()[j][2];
       qp_host.push_back(p);
       wt_host.push_back(sph->weights()[j]);
+      if (sph->weights()[j] < 0) {
+        detected_negative_weights = true;
+      }
       owner_host.push_back((int)i);
+    }
+
+    if (detected_negative_weights) {
+      throw std::runtime_error("Detected negative weights aborting");
     }
   }
 
@@ -308,11 +321,12 @@ FlatGrid make_flat_grid(const Molecule &mol, const size_t nrad = 50,
         }
       });
 
-  Kokkos::printf("Reduced weight count from %zu to %d (%f %%) for a weight "
-                 "threshold of %e\n",
-                 total_points, w_counter_h(0),
-                 100 * (1.0 - w_counter_h(0) / double(total_points)),
-                 weight_threshold);
+  if (verbose == true)
+    Kokkos::printf("Reduced weight count from %zu to %d (%f %%) for a weight "
+                   "threshold of %e\n",
+                   total_points, w_counter_h(0),
+                   100 * (1.0 - w_counter_h(0) / double(total_points)),
+                   weight_threshold);
 
   return {qp_1d, wt_1d, ac_dev, Z_dev, owner_1d};
 }

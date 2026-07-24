@@ -28,6 +28,7 @@
 #include <KokkosBlas3_gemm_impl.hpp>
 
 #include <KokkosLapack_svd.hpp>
+#include <stdexcept>
 
 namespace Nukexc {
 
@@ -241,9 +242,10 @@ DeviceView2DLeft compute_half_inverse(const DeviceView2DLeft &overlap_matrix,
   // SVD of S to handle potential singularity
   KokkosLapack::svd("S", "S", A, sigma, Us, VTs);
 
-  // TODO:: Find a way to deal with negative sigma
-  Kokkos::parallel_for(
-      "SwitchSigns", N, KOKKOS_LAMBDA(const int j) {
+  int negative_sigma = 0;
+  Kokkos::parallel_reduce(
+      "SwitchSigns", N,
+      KOKKOS_LAMBDA(const int j, int &local_count) {
         double dot = 0.0;
         for (int k = 0; k < N; ++k) {
           dot += Us(k, j) * VTs(j, k);
@@ -251,8 +253,17 @@ DeviceView2DLeft compute_half_inverse(const DeviceView2DLeft &overlap_matrix,
         if (dot < 0) {
           sigma(j) = -sigma(j);
           Kokkos::printf("Negative sigma %d : %f \n", j, sigma(j));
+
+          local_count += 1;
         }
-      });
+      },
+      negative_sigma);
+
+  // TODO:: Find a way to deal with negative sigma
+  // For now just throw a runtime error for safety
+  if (negative_sigma > 0)
+    throw std::runtime_error(
+        "Negative singluar values in core Hamiltonian detected");
 
   auto sigma_h =
       Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, sigma);

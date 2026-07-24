@@ -60,9 +60,11 @@
 #include <nukexc/partitioning.hpp>
 #include <nukexc/stobasis.hpp> // load_adf_basis
 
-#include "standards.hpp" // make_water
+#include "scf_driver.hpp" // run_uhf_scf_energy
+#include "standards.hpp"  // make_water
 
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -88,57 +90,49 @@ struct Level {
   size_t nang_order;
 };
 
-// Sum of the lowest nocc core-Hamiltonian MO energies for the given pruning
-// scheme; also returns the total number of grid points actually used.
-static double band_sum(const STOBasisSet &basis, const Molecule &mol,
-                       size_t nrad, size_t nang_order, PruningScheme pruning,
-                       int nocc, size_t &npts_out) {
-  auto grid = make_flat_grid<ta_type, ll_type>(mol, nrad, nang_order,
-                                               WEIGHT_THRESHOLD, TA_M4, pruning,
-                                               RadialSizing::Uniform);
+// Converged unrestricted-HF total energy on the grid built for the given
+// pruning scheme; also returns the total number of grid points actually used.
+static double scf_energy(ExecSpace &space, const Molecule &mol,
+                         const STOBasisSet &basis, const STOBasisSet &basis_aux,
+                         size_t nrad, size_t nang_order, PruningScheme pruning,
+                         size_t &npts_out) {
+  auto grid =
+      make_flat_grid<ta_type, ll_type>(mol, nrad, nang_order, WEIGHT_THRESHOLD,
+                                       TA_M4, pruning, RadialSizing::Uniform);
   npts_out = grid.quad_points.extent(0);
-
-  CoreHamiltonianResult coreH = compute_core_hamiltonian(basis, grid);
-
-  Diagonalizer diagonalizer(basis.nbf());
-  auto X = diagonalizer.compute_transformation(coreH.overlap);
-  const int K = X.extent(1);
-
-  DeviceView2DLeft mo_coeff("mo coeff", basis.nbf(), K);
-  DeviceView1D mo_energies("mo energies", K);
-  diagonalizer.solve(coreH.hamiltonian, mo_coeff, mo_energies);
-
-  auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
-  Kokkos::deep_copy(mo_energies_h, mo_energies);
-
-  double s = 0.0;
-  for (int i = 0; i < nocc && i < K; ++i)
-    s += mo_energies_h(i);
-  return s;
+  return run_uhf_scf_energy(space, mol, basis, basis_aux, grid);
 }
 
 int main() {
   Kokkos::initialize();
   int status = 0;
   {
-    const std::vector<Level> levels = {{20, 11}, {30, 15}, {40, 17}, {60, 21},
-                                       {80, 23}, {120, 29}};
-    const size_t nrad_ref = 220;
-    const size_t nang_ref = 35;
+    // Resolution. Default is a coarse, CPU-friendly prototype sweep; set the
+    // environment variable NUKEXC_HIRES=1 for the fine (GPU) production sweep.
+    const bool hires = std::getenv("NUKEXC_HIRES") != nullptr;
+    const std::vector<Level> levels =
+        hires ? std::vector<Level>{{40, 17},  {60, 21},  {90, 28},
+                                   {130, 29}, {200, 35}, {300, 41}}
+              : std::vector<Level>{{30, 15}, {40, 17}, {60, 21}};
+    const size_t nrad_ref = hires ? 600 : 90;
+    const size_t nang_ref = hires ? 47 : 28;
 
+    ExecSpace space;
     auto mol = make_water();
     auto basis = load_adf_basis(mol, "input/zorabasis/QZ4P");
-    const int nocc = mol.Z_total / 2; // neutral closed-shell occupation
+    auto basis_aux = load_adf_basis(mol, "input/zorabasis/QZ4P", 1e-10, true);
 
-    // Reference: fine uniform unpruned grid.
+    // Reference: fine uniform unpruned grid (finer than every swept level).
     size_t npts_ref = 0;
-    const double e_ref = band_sum(basis, mol, nrad_ref, nang_ref,
-                                  PruningScheme::Unpruned, nocc, npts_ref);
+    const double e_ref =
+        scf_energy(space, mol, basis, basis_aux, nrad_ref, nang_ref,
+                   PruningScheme::Unpruned, npts_ref);
     std::cout << std::fixed << std::setprecision(10)
-              << "Molecule: water (Z_total=" << mol.Z_total << ", nocc=" << nocc
-              << ")\nReference (uniform unpruned, nrad=" << nrad_ref
+              << "Molecule: water (Z_total=" << mol.Z_total << ")\n"
+              << "Resolution: " << (hires ? "HI-RES (GPU)" : "prototype (CPU)")
+              << "\nReference (UHF, uniform unpruned, nrad=" << nrad_ref
               << ", nang_order=" << nang_ref << ", npts=" << npts_ref
-              << "): band sum = " << e_ref << " Ha\n";
+              << "): E_scf = " << e_ref << " Ha\n";
 
     const std::vector<Scheme> schemes = {
         {"Unpruned", PruningScheme::Unpruned},
@@ -149,36 +143,38 @@ int main() {
     const std::string csv_path = "convergence_pruning.csv";
     std::ofstream csv(csv_path);
     csv << std::setprecision(15);
-    csv << "# Angular pruning-scheme comparison on water (core-Hamiltonian "
-           "occupied-orbital energy sum)\n";
-    csv << "# radial scheme: TA-M4 ; angular: Lebedev-Laikov ; basis: QZ4P ; "
-           "radial sizing=Uniform\n";
+    csv << "# Angular pruning-scheme comparison on water (unrestricted HF "
+           "total energy)\n";
+    csv << "# radial scheme: TA-M4 ; angular: Lebedev-Laikov ; basis: QZ4P "
+           "(+QZ4P fit) ; radial sizing=Uniform\n";
     csv << "# schemes: Unpruned, Treutler (fixed 7/11), Robust (7 / base-6)\n";
     csv << "# grid levels sweep (nrad, nang_order) together so curves "
            "converge\n";
-    csv << "# observable: sum of lowest nocc=" << nocc
-        << " core-H MO energies\n";
+    csv << "# observable: converged unrestricted Hartree-Fock total energy "
+           "(Ha)\n";
+    csv << "# resolution: " << (hires ? "hi-res (GPU)" : "prototype (CPU)")
+        << "\n";
     csv << "# E_ref = fine uniform unpruned grid (shared self-reference, NOT "
            "analytic):\n";
     csv << "#   nrad_ref=" << nrad_ref << ", nang_order_ref=" << nang_ref
         << ", npts_ref=" << npts_ref << ", E_ref=" << e_ref << " Ha\n";
-    csv << "# abs_error = |band_sum - E_ref| ; npts = total grid points used\n";
-    csv << "scheme,nrad,nang_order,npts,band_sum,abs_error\n";
+    csv << "# abs_error = |E_scf - E_ref| ; npts = total grid points used\n";
+    csv << "scheme,nrad,nang_order,npts,E_scf,abs_error\n";
 
     const int w = 14;
     for (const auto &s : schemes) {
       std::cout << "\n=== " << s.label << " ===\n";
       std::cout << std::setw(w) << std::left << "nrad" << std::setw(w)
                 << std::left << "nang" << std::setw(w) << std::right << "npts"
-                << std::setw(20) << std::right << "band_sum (Ha)" << std::setw(w)
+                << std::setw(20) << std::right << "E_scf (Ha)" << std::setw(w)
                 << std::right << "|error|"
                 << "\n";
       std::cout << std::string(w * 5 + 6, '-') << "\n";
 
       for (const auto &lv : levels) {
         size_t npts = 0;
-        const double e =
-            band_sum(basis, mol, lv.nrad, lv.nang_order, s.pruning, nocc, npts);
+        const double e = scf_energy(space, mol, basis, basis_aux, lv.nrad,
+                                    lv.nang_order, s.pruning, npts);
         const double err = std::abs(e - e_ref);
 
         csv << s.label << ',' << lv.nrad << ',' << lv.nang_order << ',' << npts

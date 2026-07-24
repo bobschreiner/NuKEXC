@@ -58,6 +58,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <vector>
@@ -75,6 +76,11 @@ using ll_type = IntegratorXX::LebedevLaikov<double>;
 // Separation in bohr and the resulting exact S_AB for zeta=1.
 static constexpr double R = 1.0;
 static double S_EXACT = std::exp(-1) * (1. + 1. + 1. / 3.);
+
+// Fixed grid parameters for the two orthogonal sweeps. Kept as globals so the
+// CSV header written once in main() stays in sync with the test cases.
+static constexpr size_t NANG_ORDER_FOR_RADIAL_SWEEP = 59;
+static constexpr size_t NRAD_FOR_ANGULAR_SWEEP = 200;
 
 // H2+ molecule: two H atoms separated by R along x.
 static Molecule make_h2_mol() {
@@ -178,7 +184,8 @@ TEST_CASE("H2+ S_AB radial convergence", "[convergence][radial]") {
   using namespace IntegratorXX;
 
   const std::vector<size_t> nrad_sweep = {10, 20, 30, 50, 75, 120, 200};
-  const size_t nang_order_fixed = 59; // high enough to be negligible
+  const size_t nang_order_fixed =
+      NANG_ORDER_FOR_RADIAL_SWEEP; // high enough to be negligible
 
   auto mol = make_h2_mol();
   auto basis = make_h2_basis();
@@ -199,6 +206,15 @@ TEST_CASE("H2+ S_AB radial convergence", "[convergence][radial]") {
   }
 
   print_convergence_table("nrad", data);
+
+  // ---- CSV (radial sweep; appends; header is written once in main) --------
+  {
+    std::ofstream csv("convergence_h2plus.csv", std::ios::app);
+    csv << std::setprecision(15);
+    for (const auto &p : data)
+      csv << "radial," << p.param << "," << p.npts_actual << "," << p.S_AB
+          << "," << p.abs_error << "\n";
+  }
 
   // ---- (a) Final grid meets tight absolute tolerance ----
   REQUIRE_THAT(data.back().abs_error, Catch::Matchers::WithinAbs(0.0, 1e-8));
@@ -232,7 +248,7 @@ TEST_CASE("H2+ S_AB angular convergence", "[convergence][angular]") {
   // Sweep through Lebedev algebraic orders.  next_algebraic_order ensures
   // we always land on a valid Lebedev grid.
   const std::vector<size_t> nang_order_sweep = {5, 10, 17, 23, 29, 35, 41, 53};
-  const size_t nrad_fixed = 200;
+  const size_t nrad_fixed = NRAD_FOR_ANGULAR_SWEEP;
 
   auto mol = make_h2_mol();
   auto basis = make_h2_basis();
@@ -251,6 +267,15 @@ TEST_CASE("H2+ S_AB angular convergence", "[convergence][angular]") {
   }
 
   print_convergence_table("nang_order", data);
+
+  // ---- CSV (angular sweep; appends to the file opened by the radial test) --
+  {
+    std::ofstream csv("convergence_h2plus.csv", std::ios::app);
+    csv << std::setprecision(15);
+    for (const auto &p : data)
+      csv << "angular," << p.param << "," << p.npts_actual << "," << p.S_AB
+          << "," << p.abs_error << "\n";
+  }
 
   // ---- (a) Final grid meets tight absolute tolerance ----
   REQUIRE_THAT(data.back().abs_error, Catch::Matchers::WithinAbs(0.0, 1e-9));
@@ -325,6 +350,20 @@ TEST_CASE("H2+ diagonal normalization convergence", "[convergence][diagonal]") {
 // ============================================================
 int main() {
   Kokkos::initialize();
+  { // Fresh CSV + header, written once so the sweep-write order is irrelevant.
+    std::ofstream csv("convergence_h2plus.csv");
+    csv << std::setprecision(15);
+    csv << "# H2+ overlap integral S_AB convergence vs the exact analytic "
+           "value\n";
+    csv << "# S_AB(zeta=1,R) = e^{-R}(1 + R + R^2/3);  R=" << R
+        << " bohr, zeta=1\n";
+    csv << "# system: H2+, two 1s STOs (one per atom); radial: "
+           "Treutler-Ahlrichs; angular: Lebedev-Laikov\n";
+    csv << "# radial sweep at fixed nang_order=" << NANG_ORDER_FOR_RADIAL_SWEEP
+        << "; angular sweep at fixed nrad=" << NRAD_FOR_ANGULAR_SWEEP << "\n";
+    csv << "# S_exact=" << S_EXACT << " ; abs_error = |S_AB - S_exact|\n";
+    csv << "sweep,param,npts,S_AB,abs_error\n";
+  }
   int result = Catch::Session().run();
   Kokkos::finalize();
   return result;
