@@ -101,7 +101,7 @@ void sto_potential_collocation(const ExecSpace space, const STOBasisSet &basis,
         const double x = grid.quad_points(g)[0] - basis.O(i)[0];
         const double y = grid.quad_points(g)[1] - basis.O(i)[1];
         const double z = grid.quad_points(g)[2] - basis.O(i)[2];
-        const double r = dist(grid.quad_points(g), basis.O(i)) + epsilon_shift;
+        const double r = dist(grid.quad_points(g), basis.O(i));
         potential_collocation(i, g) = sto_potential(n, l, m, x, y, z, r, zeta);
       });
 }
@@ -125,7 +125,7 @@ void sto_potential_collocation_scaled(const ExecSpace space,
         const double x = grid.quad_points(g)[0] - basis.O(i)[0];
         const double y = grid.quad_points(g)[1] - basis.O(i)[1];
         const double z = grid.quad_points(g)[2] - basis.O(i)[2];
-        const double r = dist(grid.quad_points(g), basis.O(i)) + epsilon_shift;
+        const double r = dist(grid.quad_points(g), basis.O(i));
         potential_collocation(i, g) =
             sto_potential(n, l, m, x, y, z, r, zeta) * grid.weights(g);
       });

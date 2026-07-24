@@ -379,8 +379,7 @@ void basis_eval(const STOBasisSet basis, const int basis_idx, const double x,
     const int n_val = basis.n(basis_idx);
     const double zeta = basis.zeta(basis_idx);
     const double norm = basis.norm(basis_idx);
-    const double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
-                     epsilon_shift; // Avoid pow(0,0)
+    const double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz);
 
     radial_part = norm * int_pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
   }
@@ -411,9 +410,10 @@ ShellParams load_shell(const STOBasisSet &basis, int basis_idx) {
 // monomial temporaries; keeping them in this callee's own frame stops them from
 // widening the live-register set of the pairwise integral loops that call
 // basis_eval_fast. (The generated harmonics header is left untouched.)
-NUKEXC_NOINLINE_FUNCTION double
-eval_solid_harmonic(const int l, const int m, const double x, const double y,
-                    const double z) {
+NUKEXC_NOINLINE_FUNCTION double eval_solid_harmonic(const int l, const int m,
+                                                    const double x,
+                                                    const double y,
+                                                    const double z) {
   double angular_part;
   real_solid_harmonic_cart_precomputed(l, m, x, y, z, angular_part);
   return angular_part;
@@ -427,7 +427,7 @@ double basis_eval_fast(const ShellParams &sh, double x, double y, double z) {
   double radial;
   {
 
-    const double r = Kokkos::sqrt(x * x + y * y + z * z) + epsilon_shift;
+    const double r = Kokkos::sqrt(x * x + y * y + z * z);
     radial = (sh.k == 0)
                  ? sh.norm * Kokkos::exp(-sh.zeta * r)
                  : sh.norm * int_pow(r, sh.k) * Kokkos::exp(-sh.zeta * r);
@@ -450,8 +450,7 @@ void basis_eval_grad(const STOBasisSet basis, const int basis_idx,
   const double dx = x - basis.O(basis_idx)[0];
   const double dy = y - basis.O(basis_idx)[1];
   const double dz = z - basis.O(basis_idx)[2];
-  const double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
-                   epsilon_shift; // Avoid pow(0,0)
+  const double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz);
 
   // Angular part
   double S_val;
@@ -503,9 +502,7 @@ void fill_collocation(
 
         double radial_part;
         {
-          double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
-                     epsilon_shift; // Avoid pow(0,0)
-
+          double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz);
           radial_part =
               norm * int_pow(r, n_val - l_val - 1) * Kokkos::exp(-zeta * r);
         }
@@ -544,8 +541,7 @@ void fill_grad_collocation(ExecSpace &space, const STOBasisSet &basis_set,
         double dx = collocation_points(g)[0] - basis_set.O(i)[0];
         double dy = collocation_points(g)[1] - basis_set.O(i)[1];
         double dz = collocation_points(g)[2] - basis_set.O(i)[2];
-        double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
-                   epsilon_shift; // Avoid pow(0,0)
+        double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz);
 
         // Angular part
         double S_val;
@@ -600,8 +596,7 @@ void basis_eval_with_grad(const ScratchBasisParams &basis, const Point &p,
   double dx = p[0] - origin[0];
   double dy = p[1] - origin[1];
   double dz = p[2] - origin[2];
-  double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz) +
-             epsilon_shift; // Avoid pow(0,0)
+  double r = Kokkos::sqrt(dx * dx + dy * dy + dz * dz);
 
   // Angular part
   double S_val;
