@@ -47,11 +47,14 @@ STYLE = {
 }
 PLOT_ORDER = ["uniform", "pruned", "per-element", "both"]
 
-# (error column, axis label) for the three energy components.
+# (error column, axis label) for the individual energy terms + the total,
+# laid out 2x3: [kinetic, nuclear-attraction, total ; Coulomb, exchange, blank].
 COMPONENTS = [
-    ("err_1e", r"one-electron  $|E_{1e}-E_{1e}^{\mathrm{ref}}|$  (Ha)"),
-    ("err_2e", r"two-electron  $|E_{2e}-E_{2e}^{\mathrm{ref}}|$  (Ha)"),
+    ("err_kin", r"kinetic  $|E_{\mathrm{kin}}-E_{\mathrm{kin}}^{\mathrm{ref}}|$  (Ha)"),
+    ("err_ne", r"nuclear attr.  $|E_{\mathrm{ne}}-E_{\mathrm{ne}}^{\mathrm{ref}}|$  (Ha)"),
     ("err_total", r"total  $|E-E^{\mathrm{ref}}|$  (Ha)"),
+    ("err_J", r"Coulomb  $|E_J-E_J^{\mathrm{ref}}|$  (Ha)"),
+    ("err_K", r"exchange  $|E_K-E_K^{\mathrm{ref}}|$  (Ha)"),
 ]
 
 
@@ -67,8 +70,10 @@ def load(csv_path):
             {
                 "combo": row["combo"],
                 "npts": int(row["npts"]),
-                "err_1e": max(float(row["err_1e"]), ERR_FLOOR),
-                "err_2e": max(float(row["err_2e"]), ERR_FLOOR),
+                "err_kin": max(float(row["err_kin"]), ERR_FLOOR),
+                "err_ne": max(float(row["err_ne"]), ERR_FLOOR),
+                "err_J": max(float(row["err_J"]), ERR_FLOOR),
+                "err_K": max(float(row["err_K"]), ERR_FLOOR),
                 "err_total": max(float(row["err_total"]), ERR_FLOOR),
             }
         )
@@ -89,8 +94,10 @@ def parse_reference(comment_lines):
         return int(m.group(1)) if m else None
 
     return {
-        "E_1e_ref": num("E_1e_ref"),
-        "E_2e_ref": num("E_2e_ref"),
+        "E_kin_ref": num("E_kin_ref"),
+        "E_ne_ref": num("E_ne_ref"),
+        "E_J_ref": num("E_J_ref"),
+        "E_K_ref": num("E_K_ref"),
         "E_scf_ref": num("E_scf_ref"),
         "nrad_ref": integer("nrad_ref"),
         "nang_ref": integer("nang_order_ref"),
@@ -107,10 +114,10 @@ def reference_caption(meta):
     parts = []
     if meta.get("E_scf_ref") is not None:
         parts.append(f"E_scf = {meta['E_scf_ref']:.10f} Ha")
-    if meta.get("E_1e_ref") is not None:
-        parts.append(f"E_1e = {meta['E_1e_ref']:.6f}")
-    if meta.get("E_2e_ref") is not None:
-        parts.append(f"E_2e = {meta['E_2e_ref']:.6f}")
+    for key, lbl in (("E_kin_ref", "E_kin"), ("E_ne_ref", "E_ne"),
+                     ("E_J_ref", "E_J"), ("E_K_ref", "E_K")):
+        if meta.get(key) is not None:
+            parts.append(f"{lbl} = {meta[key]:.6f}")
     return (
         f"error = |E - E_ref| on a fine uniform unpruned reference grid ({where}).   "
         + ";  ".join(parts) + "."
@@ -134,19 +141,21 @@ def main():
     rows, meta = load(csv_path)
     combos = [c for c in PLOT_ORDER if any(r["combo"] == c for r in rows)]
 
-    fig, axes = plt.subplots(1, 3, figsize=(16, 5.5))
-    for ax, (col, ylab) in zip(axes, COMPONENTS):
+    fig, axes = plt.subplots(2, 3, figsize=(16, 9.5))
+    flat = list(axes.flatten())
+    for ax, (col, ylab) in zip(flat, COMPONENTS):
         for combo in combos:
             x, y = series(rows, combo, col)
             ax.loglog(x, y, label=combo, markersize=7, linewidth=1.9, **STYLE[combo])
         ax.set_xlabel("total grid points")
         ax.set_ylabel(ylab)
         ax.grid(True, which="both", ls=":", alpha=0.5)
-    axes[0].legend(title="pruning x radial sizing", fontsize=9, loc="lower left")
+    flat[-1].axis("off")  # leave the 6th slot blank
+    flat[0].legend(title="pruning x radial sizing", fontsize=9, loc="lower left")
 
     fig.suptitle(
         "Adaptive grids on water: unrestricted Hartree-Fock convergence\n"
-        "one- and two-electron energy components",
+        "per-term decomposition (kinetic, nuclear attraction, Coulomb, exchange)",
         fontsize=14,
     )
     fig.text(0.5, 0.01, reference_caption(meta), ha="center", va="bottom", fontsize=9)

@@ -43,16 +43,26 @@
 
 namespace Nukexc {
 
-// Converged UHF energy decomposition (all in Ha): total = nuclear +
-// one_electron + two_electron, with one_electron = Tr[D h_core] (kinetic +
-// nuclear attraction) and two_electron = 1/2 Tr[D J] + E_x (Coulomb + exact
-// exchange). Reporting the two grid-sensitive components separately exposes
-// how they converge -- and cancel -- as the grid is refined.
+// Converged UHF energy decomposition, split into the individual grid-sensitive
+// terms (all in Ha):
+//   kinetic            = Tr[D T]
+//   nuclear_attraction = Tr[D V_ne]
+//   coulomb            = 1/2 Tr[D J]
+//   exchange           = -1/2 (Tr[D_a K_a] + Tr[D_b K_b])
+//   nuclear_repulsion  = E_nuc                       (grid-independent)
+//   total              = sum of the above
+// one_electron() = kinetic + nuclear_attraction; two_electron() = coulomb +
+// exchange. Reporting the terms separately shows which one converges slowest
+// and which cancels non-monotonely in the total as the grid is refined.
 struct ScfEnergies {
   double total = 0.0;
-  double one_electron = 0.0;
-  double two_electron = 0.0;
-  double nuclear = 0.0;
+  double kinetic = 0.0;
+  double nuclear_attraction = 0.0;
+  double coulomb = 0.0;
+  double exchange = 0.0;
+  double nuclear_repulsion = 0.0;
+  double one_electron() const { return kinetic + nuclear_attraction; }
+  double two_electron() const { return coulomb + exchange; }
 };
 
 // Run a dense UHF SCF on `grid` and return its converged energy decomposition.
@@ -101,6 +111,8 @@ inline ScfEnergies run_uhf_scf_energy(ExecSpace &space, const Molecule &mol,
       diag.compute_transformation(hcore.overlap, lin_dep_threshold);
 
   arma::mat h_core = kokkos_to_arma(hcore.hamiltonian);
+  arma::mat T_arma = kokkos_to_arma(hcore.kinetic);  // kinetic
+  arma::mat Vne_arma = kokkos_to_arma(hcore.nuclear); // nuclear attraction
   arma::mat X_arma = kokkos_to_arma(X);
   arma::mat S_arma = kokkos_to_arma(hcore.overlap);
 
@@ -129,7 +141,7 @@ inline ScfEnergies run_uhf_scf_energy(ExecSpace &space, const Molecule &mol,
   // Filled by the last (converged) Fock build so the caller gets the energy
   // decomposition without a separate re-evaluation.
   ScfEnergies conv{};
-  conv.nuclear = E_nuc;
+  conv.nuclear_repulsion = E_nuc;
 
   // ---- Dense UHF Fock builder (called synchronously by solver.run()) -------
   auto fock_builder =
@@ -173,13 +185,17 @@ inline ScfEnergies run_uhf_scf_energy(ExecSpace &space, const Molecule &mol,
 
     const double E_exchange = -0.5 * arma::trace(D_alpha * K_alpha_arma) -
                               0.5 * arma::trace(D_beta * K_beta_arma);
-    const double E_core = arma::trace(D_tot * h_core);
+    const double E_kinetic = arma::trace(D_tot * T_arma);
+    const double E_nuc_attr = arma::trace(D_tot * Vne_arma);
+    const double E_core = E_kinetic + E_nuc_attr; // = Tr[D h_core]
     const double E_coulomb = 0.5 * arma::trace(D_tot * J_arma);
     const double Etot = E_nuc + E_core + E_coulomb + E_exchange;
 
     conv.total = Etot;
-    conv.one_electron = E_core;
-    conv.two_electron = E_coulomb + E_exchange;
+    conv.kinetic = E_kinetic;
+    conv.nuclear_attraction = E_nuc_attr;
+    conv.coulomb = E_coulomb;
+    conv.exchange = E_exchange;
 
     arma::mat F_alpha = h_core + J_arma - K_alpha_arma;
     arma::mat F_beta = h_core + J_arma - K_beta_arma;

@@ -177,23 +177,27 @@ def plot_2d():
     save(fig, "convergence_2d.pdf")
 
 
-# ── one-/two-electron/total decomposition (water SCF studies) ────────────────
+# ── per-term decomposition (water SCF studies), laid out 2x3 ─────────────────
+# top row: the two one-electron terms + the grand total; bottom row: the two
+# two-electron terms (the 6th slot is left blank).
 COMPONENTS = [
-    ("err_1e", r"one-electron  $|E_{1e}-E_{1e}^\mathrm{ref}|$  (Ha)"),
-    ("err_2e", r"two-electron  $|E_{2e}-E_{2e}^\mathrm{ref}|$  (Ha)"),
+    ("err_kin", r"kinetic  $|E_\mathrm{kin}-E_\mathrm{kin}^\mathrm{ref}|$  (Ha)"),
+    ("err_ne", r"nuclear attr.  $|E_\mathrm{ne}-E_\mathrm{ne}^\mathrm{ref}|$  (Ha)"),
     ("err_total", r"total  $|E-E^\mathrm{ref}|$  (Ha)"),
+    ("err_J", r"Coulomb  $|E_J-E_J^\mathrm{ref}|$  (Ha)"),
+    ("err_K", r"exchange  $|E_K-E_K^\mathrm{ref}|$  (Ha)"),
 ]
 
 
 def plot_components(rows, group_key, order, out_name, legend_title):
-    """Three panels (one-electron / two-electron / total), one curve per group.
-
-    Splitting the SCF energy exposes how the near-nucleus one-electron term and
-    the RI two-electron term converge separately (and can cancel non-monotonely
-    in the total).
+    """2x3 panels: the four individual energy terms + the total, one curve per
+    group. Splitting the SCF energy into kinetic / nuclear-attraction / Coulomb
+    / exchange exposes which term converges slowest and which cancel
+    non-monotonely in the total.
     """
-    fig, axes = plt.subplots(1, 3, figsize=(15.5, 4.5))
-    for ax, (col, ylab) in zip(axes, COMPONENTS):
+    fig, axes = plt.subplots(2, 3, figsize=(15.5, 8.5))
+    flat = list(axes.flatten())
+    for ax, (col, ylab) in zip(flat, COMPONENTS):
         for i, (lab, xs, ys) in enumerate(
             series(rows, group_key, "npts", order=order, y_key=col)
         ):
@@ -201,7 +205,8 @@ def plot_components(rows, group_key, order, out_name, legend_title):
         ax.set_xlabel("total grid points")
         ax.set_ylabel(ylab)
         ax.grid(True, which="both")
-    axes[0].legend(title=legend_title)
+    flat[-1].axis("off")  # leave the 6th slot blank
+    flat[0].legend(title=legend_title)
     fig.tight_layout()
     save(fig, out_name)
 

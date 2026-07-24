@@ -110,9 +110,14 @@ int main() {
   {
     // Resolution. Default is a coarse, CPU-friendly prototype sweep; set the
     // environment variable NUKEXC_HIRES=1 for the fine (GPU) production sweep.
+    // Lebedev-Laikov orders 13, 25, 27 have negative weights. For Robust
+    // pruning the middle shell uses order next_algebraic_order(base-6), which
+    // hits the negative-weight order 25 when the base is 31 (i.e. nang=30) and
+    // 13 when the base is 19 (nang~18). Those nang values are therefore avoided
+    // here (nang=30 -> 29): otherwise grid construction aborts on Robust.
     const bool hires = std::getenv("NUKEXC_HIRES") != nullptr;
     const std::vector<Level> levels =
-        hires ? std::vector<Level>{{40, 17},  {60, 21},  {90, 28}, {130, 30},
+        hires ? std::vector<Level>{{40, 17},  {60, 21},  {90, 28}, {130, 29},
                                    {200, 35}, {300, 41}, {600, 45}}
               : std::vector<Level>{{30, 15}, {40, 17}, {60, 21}};
     const size_t nrad_ref = hires ? 1000 : 90;
@@ -133,9 +138,10 @@ int main() {
               << "Resolution: " << (hires ? "HI-RES (GPU)" : "prototype (CPU)")
               << "\nReference (UHF, uniform unpruned, nrad=" << nrad_ref
               << ", nang_order=" << nang_ref << ", npts=" << npts_ref
-              << "):\n  E_1e = " << e_ref.one_electron
-              << " Ha, E_2e = " << e_ref.two_electron
-              << " Ha, E_scf = " << e_ref.total << " Ha\n";
+              << "):\n  E_kin = " << e_ref.kinetic
+              << " Ha, E_ne = " << e_ref.nuclear_attraction
+              << " Ha, E_J = " << e_ref.coulomb << " Ha, E_K = "
+              << e_ref.exchange << " Ha, E_scf = " << e_ref.total << " Ha\n";
 
     const std::vector<Scheme> schemes = {
         {"Unpruned", PruningScheme::Unpruned},
@@ -153,50 +159,58 @@ int main() {
     csv << "# schemes: Unpruned, Treutler (fixed 7/11), Robust (7 / base-6)\n";
     csv << "# grid levels sweep (nrad, nang_order) together so curves "
            "converge\n";
-    csv << "# observables (converged UHF, Ha): E_1e = Tr[D h_core] (kinetic + "
-           "nuclear attraction) ; E_2e = 1/2 Tr[D J] + E_x (Coulomb + exact "
-           "exchange) ; E_scf = E_nuc + E_1e + E_2e\n";
+    csv << "# observables (converged UHF, Ha): E_kin = Tr[D T] ; E_ne = "
+           "Tr[D V_ne] ; E_J = 1/2 Tr[D J] ; E_K = -1/2 Tr[D K] (exact "
+           "exchange) ; E_scf = E_nuc_rep + E_kin + E_ne + E_J + E_K\n";
     csv << "# resolution: " << (hires ? "hi-res (GPU)" : "prototype (CPU)")
         << "\n";
     csv << "# reference = fine uniform unpruned grid (shared self-reference, "
            "NOT analytic):\n";
     csv << "#   nrad_ref=" << nrad_ref << ", nang_order_ref=" << nang_ref
-        << ", npts_ref=" << npts_ref << ", E_1e_ref=" << e_ref.one_electron
-        << ", E_2e_ref=" << e_ref.two_electron << ", E_scf_ref=" << e_ref.total
-        << " Ha\n";
+        << ", npts_ref=" << npts_ref << ", E_kin_ref=" << e_ref.kinetic
+        << ", E_ne_ref=" << e_ref.nuclear_attraction
+        << ", E_J_ref=" << e_ref.coulomb << ", E_K_ref=" << e_ref.exchange
+        << ", E_scf_ref=" << e_ref.total << " Ha\n";
     csv << "# err_* = |value - reference| ; npts = total grid points used\n";
-    csv << "scheme,nrad,nang_order,npts,E_1e,E_2e,E_scf,err_1e,err_2e,"
-           "err_total\n";
+    csv << "scheme,nrad,nang_order,npts,E_kin,E_ne,E_J,E_K,E_scf,err_kin,"
+           "err_ne,err_J,err_K,err_total\n";
 
     const int w = 14;
     for (const auto &s : schemes) {
       std::cout << "\n=== " << s.label << " ===\n";
       std::cout << std::setw(w) << std::left << "nrad" << std::setw(w)
-                << std::left << "nang" << std::setw(w) << std::right << "npts"
-                << std::setw(14) << std::right << "err_1e" << std::setw(14)
-                << std::right << "err_2e" << std::setw(14) << std::right
-                << "err_total"
+                << std::left << "nang" << std::setw(11) << std::right << "npts"
+                << std::setw(12) << std::right << "err_kin" << std::setw(12)
+                << std::right << "err_ne" << std::setw(12) << std::right
+                << "err_J" << std::setw(12) << std::right << "err_K"
+                << std::setw(12) << std::right << "err_total"
                 << "\n";
-      std::cout << std::string(w * 3 + 42 + 6, '-') << "\n";
+      std::cout << std::string(2 * w + 11 + 5 * 12, '-') << "\n";
 
       for (const auto &lv : levels) {
         size_t npts = 0;
         const ScfEnergies e = scf_energy(space, mol, basis, basis_aux, lv.nrad,
                                          lv.nang_order, s.pruning, npts);
-        const double err_1e = std::abs(e.one_electron - e_ref.one_electron);
-        const double err_2e = std::abs(e.two_electron - e_ref.two_electron);
+        const double err_kin = std::abs(e.kinetic - e_ref.kinetic);
+        const double err_ne =
+            std::abs(e.nuclear_attraction - e_ref.nuclear_attraction);
+        const double err_J = std::abs(e.coulomb - e_ref.coulomb);
+        const double err_K = std::abs(e.exchange - e_ref.exchange);
         const double err_tot = std::abs(e.total - e_ref.total);
 
         csv << s.label << ',' << lv.nrad << ',' << lv.nang_order << ',' << npts
-            << ',' << e.one_electron << ',' << e.two_electron << ',' << e.total
-            << ',' << err_1e << ',' << err_2e << ',' << err_tot << '\n';
+            << ',' << e.kinetic << ',' << e.nuclear_attraction << ','
+            << e.coulomb << ',' << e.exchange << ',' << e.total << ','
+            << err_kin << ',' << err_ne << ',' << err_J << ',' << err_K << ','
+            << err_tot << '\n';
 
         std::cout << std::setw(w) << std::left << lv.nrad << std::setw(w)
-                  << std::left << lv.nang_order << std::setw(w) << std::right
+                  << std::left << lv.nang_order << std::setw(11) << std::right
                   << npts << std::scientific << std::setprecision(3)
-                  << std::setw(14) << std::right << err_1e << std::setw(14)
-                  << std::right << err_2e << std::setw(14) << std::right
-                  << err_tot << "\n";
+                  << std::setw(12) << std::right << err_kin << std::setw(12)
+                  << std::right << err_ne << std::setw(12) << std::right
+                  << err_J << std::setw(12) << std::right << err_K
+                  << std::setw(12) << std::right << err_tot << "\n";
       }
     }
 
