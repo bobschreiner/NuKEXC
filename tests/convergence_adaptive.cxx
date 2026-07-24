@@ -28,10 +28,9 @@
  *                      atoms (here O) more radial points than light ones (H),
  *                      following the GauXC/PySCF per-period pattern.
  * That gives four combinations, swept here over grid levels that grow the
- * radial count and Lebedev order together (a fixed angular order would cap every
- * curve at the same angular floor and hide the differences):
- *   uniform      (Unpruned, radial=Uniform)
- *   pruned       (Robust,   radial=Uniform)
+ * radial count and Lebedev order together (a fixed angular order would cap
+ * every curve at the same angular floor and hide the differences): uniform
+ * (Unpruned, radial=Uniform) pruned       (Robust,   radial=Uniform)
  *   per-element  (Unpruned, radial=PySCF)
  *   both         (Robust,   radial=PySCF)
  *
@@ -41,12 +40,12 @@
  *
  * For each combination and base nrad we record the TOTAL number of grid points
  * actually used and the error of the observable. Plotting error vs total points
- * (tests/plot_adaptive.py) shows accuracy-per-point: the adaptive schemes aim to
- * reach a given accuracy with fewer points than the uniform grid.
+ * (tests/plot_adaptive.py) shows accuracy-per-point: the adaptive schemes aim
+ * to reach a given accuracy with fewer points than the uniform grid.
  *
  * Observable: sum of the lowest nocc = Z_total/2 core-Hamiltonian MO energies
- * (a grid-sensitive scalar spanning the O 1s core -- radial-stressing -- and the
- * valence orbitals -- angular-stressing).
+ * (a grid-sensitive scalar spanning the O 1s core -- radial-stressing -- and
+ * the valence orbitals -- angular-stressing).
  *
  * Reference: a fine UNIFORM UNPRUNED grid (nrad_ref, nang_ref) larger than any
  * swept grid; all four schemes converge to it, so error = |E - E_ref| is a fair
@@ -59,6 +58,7 @@
 #include <integratorxx/generators/radial_factory.hpp>
 #include <integratorxx/generators/spherical_factory.hpp>
 #include <integratorxx/quadratures/radial.hpp>
+#include <integratorxx/quadratures/radial/becke.hpp>
 #include <integratorxx/quadratures/radial/treutlerahlrichs.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
@@ -84,6 +84,7 @@
 using namespace Nukexc;
 
 using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
+using bk_type = IntegratorXX::Becke<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 using PruningScheme = IntegratorXX::PruningScheme;
 
@@ -110,9 +111,8 @@ static ScfEnergies scf_energy(ExecSpace &space, const Molecule &mol,
                               const STOBasisSet &basis_aux, size_t nrad,
                               size_t nang_order, PruningScheme pruning,
                               RadialSizing radial_sizing, size_t &npts_out) {
-  auto grid = make_flat_grid<ta_type, ll_type>(mol, nrad, nang_order,
-                                               WEIGHT_THRESHOLD, TA_M4, pruning,
-                                               radial_sizing);
+  auto grid = make_flat_grid<bk_type, ll_type>(
+      mol, nrad, nang_order, WEIGHT_THRESHOLD, TA_M4, pruning, radial_sizing);
   npts_out = grid.quad_points.extent(0);
   return run_uhf_scf_energy(space, mol, basis, basis_aux, grid);
 }
@@ -151,8 +151,9 @@ int main() {
               << ", nang_order=" << nang_ref << ", npts=" << npts_ref
               << "):\n  E_kin = " << e_ref.kinetic
               << " Ha, E_ne = " << e_ref.nuclear_attraction
-              << " Ha, E_J = " << e_ref.coulomb << " Ha, E_K = "
-              << e_ref.exchange << " Ha, E_scf = " << e_ref.total << " Ha\n";
+              << " Ha, E_J = " << e_ref.coulomb
+              << " Ha, E_K = " << e_ref.exchange
+              << " Ha, E_scf = " << e_ref.total << " Ha\n";
 
     const std::vector<Combo> combos = {
         {"uniform", PruningScheme::Unpruned, RadialSizing::Uniform},
@@ -170,7 +171,8 @@ int main() {
            "(+QZ4P fit)\n";
     csv << "# knobs: pruning (Unpruned/Robust) x radial sizing "
            "(Uniform/PySCF per-period)\n";
-    csv << "# grid levels sweep (nrad, nang_order) together so curves converge\n";
+    csv << "# grid levels sweep (nrad, nang_order) together so curves "
+           "converge\n";
     csv << "# observables (converged UHF, Ha): E_kin = Tr[D T] ; E_ne = "
            "Tr[D V_ne] ; E_J = 1/2 Tr[D J] ; E_K = -1/2 Tr[D K] (exact "
            "exchange) ; E_scf = E_nuc_rep + E_kin + E_ne + E_J + E_K\n";
@@ -234,8 +236,8 @@ int main() {
     }
 
     csv.close();
-    std::cout << "\nWrote " << (combos.size() * levels.size())
-              << " rows to " << std::filesystem::absolute(csv_path).string()
+    std::cout << "\nWrote " << (combos.size() * levels.size()) << " rows to "
+              << std::filesystem::absolute(csv_path).string()
               << "\nPlot with: python tests/plot_adaptive.py "
               << std::filesystem::absolute(csv_path).string() << "\n";
   }

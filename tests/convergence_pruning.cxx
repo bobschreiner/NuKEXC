@@ -74,6 +74,7 @@
 using namespace Nukexc;
 
 using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
+using bk_type = IntegratorXX::Becke<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 using PruningScheme = IntegratorXX::PruningScheme;
 
@@ -98,7 +99,7 @@ static ScfEnergies scf_energy(ExecSpace &space, const Molecule &mol,
                               size_t nang_order, PruningScheme pruning,
                               size_t &npts_out) {
   auto grid =
-      make_flat_grid<ta_type, ll_type>(mol, nrad, nang_order, WEIGHT_THRESHOLD,
+      make_flat_grid<bk_type, ll_type>(mol, nrad, nang_order, WEIGHT_THRESHOLD,
                                        TA_M4, pruning, RadialSizing::Uniform);
   npts_out = grid.quad_points.extent(0);
   return run_uhf_scf_energy(space, mol, basis, basis_aux, grid);
@@ -140,8 +141,9 @@ int main() {
               << ", nang_order=" << nang_ref << ", npts=" << npts_ref
               << "):\n  E_kin = " << e_ref.kinetic
               << " Ha, E_ne = " << e_ref.nuclear_attraction
-              << " Ha, E_J = " << e_ref.coulomb << " Ha, E_K = "
-              << e_ref.exchange << " Ha, E_scf = " << e_ref.total << " Ha\n";
+              << " Ha, E_J = " << e_ref.coulomb
+              << " Ha, E_K = " << e_ref.exchange
+              << " Ha, E_scf = " << e_ref.total << " Ha\n";
 
     const std::vector<Scheme> schemes = {
         {"Unpruned", PruningScheme::Unpruned},
