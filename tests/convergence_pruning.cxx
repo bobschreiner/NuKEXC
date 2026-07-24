@@ -111,11 +111,11 @@ int main() {
     // environment variable NUKEXC_HIRES=1 for the fine (GPU) production sweep.
     const bool hires = std::getenv("NUKEXC_HIRES") != nullptr;
     const std::vector<Level> levels =
-        hires ? std::vector<Level>{{40, 17},  {60, 21},  {90, 28},
-                                   {130, 29}, {200, 35}, {300, 41}}
+        hires ? std::vector<Level>{{40, 17},  {60, 21},  {90, 28}, {130, 30},
+                                   {200, 35}, {300, 41}, {600, 45}}
               : std::vector<Level>{{30, 15}, {40, 17}, {60, 21}};
-    const size_t nrad_ref = hires ? 600 : 90;
-    const size_t nang_ref = hires ? 47 : 28;
+    const size_t nrad_ref = hires ? 1000 : 90;
+    const size_t nang_ref = hires ? 50 : 28;
 
     ExecSpace space;
     auto mol = make_water();
