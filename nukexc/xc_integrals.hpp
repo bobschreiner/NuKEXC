@@ -22,6 +22,7 @@
 
 #include "density.hpp"
 #include "grid.hpp"
+#include "nukexc/octree.hpp"
 #include "nukexc/partitioning.hpp"
 #include "nukexc_config.hpp"
 #include "nukexc_utils.hpp"
@@ -244,6 +245,163 @@ compute_lsda(const DeviceView2DLeft collocation_values,
   return XC_result_polarized{xc_energy, V_alpha, V_beta};
 }
 
+XC_result_polarized
+compute_lsda_sparse(const STOBasisSet basis, const FlatGrid grid,
+                    const NeighborList nl, const DeviceView2DLeft mo_alpha,
+                    const DeviceView1D occ_alpha,
+                    const DeviceView2DLeft mo_beta, const DeviceView1D occ_beta,
+                    const xc_func_type func) {
+  ExecSpace space;
+
+  if (func.info->family != XC_FAMILY_LDA)
+    throw std::runtime_error(
+        "Provided functional is not part of the LDA family");
+  if (func.nspin != XC_POLARIZED)
+    throw std::runtime_error(
+        "compute_lsda requires a functional initialized with XC_POLARIZED");
+
+  const int N_quad = grid.weights.extent(0);
+  const int N_bf = basis.nbf();
+
+  const int max_points_per_box = nl.max_points_per_box;
+  const int num_boxes = nl.offsets.extent(0) - 1;
+
+  DeviceView1D rho_a = compute_density(basis, grid, mo_alpha, occ_alpha);
+  DeviceView1D rho_b = compute_density(basis, grid, mo_beta, occ_beta);
+  auto rho_a_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, rho_a);
+  auto rho_b_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, rho_b);
+
+  // libxc polarized layout: rho/vrho interleaved (up, down) per point.
+  Kokkos::View<double *, HostSpace> rho_pol_h("rho_pol_h", 2 * N_quad);
+  Kokkos::View<double *, HostSpace> vrho_pol_h("vrho_pol_h", 2 * N_quad);
+  Kokkos::View<double *, HostSpace> exc_h("exc_h", N_quad);
+
+  for (int g = 0; g < N_quad; ++g) {
+    rho_pol_h(2 * g) = rho_a_h(g);
+    rho_pol_h(2 * g + 1) = rho_b_h(g);
+  }
+  Kokkos::deep_copy(vrho_pol_h, 0.0);
+  Kokkos::deep_copy(exc_h, 0.0);
+
+  // ONE joint call: exc(g) and vrho_up/down(g) all come from the same
+  // evaluation at the same (rho_up(g), rho_down(g)) pair.
+  xc_lda_exc_vxc(&func, N_quad, rho_pol_h.data(), exc_h.data(),
+                 vrho_pol_h.data());
+
+  DeviceView1D exc("Exc", N_quad), vrho_up("VRho up", N_quad),
+      vrho_down("VRho down", N_quad);
+  auto exc_hv = Kokkos::create_mirror_view(exc);
+  auto vu_hv = Kokkos::create_mirror_view(vrho_up);
+  auto vd_hv = Kokkos::create_mirror_view(vrho_down);
+  for (int g = 0; g < N_quad; ++g) {
+    exc_hv(g) = exc_h(g);
+    vu_hv(g) = vrho_pol_h(2 * g);
+    vd_hv(g) = vrho_pol_h(2 * g + 1);
+  }
+  Kokkos::deep_copy(exc, exc_hv);
+  Kokkos::deep_copy(vrho_up, vu_hv);
+  Kokkos::deep_copy(vrho_down, vd_hv);
+
+  auto build_potential = [&](const DeviceView1D &vrho_spin) {
+    DeviceView2DLeft Z("Z LSDA", N_bf, N_quad);
+    DeviceView2DLeft V("V LSDA", N_bf, N_bf);
+    DeviceView2DLeft V_result("V LSDA Result", N_bf, N_bf);
+
+    Kokkos::TeamPolicy<ExecSpace> policy_boxes(space, num_boxes,
+                                               Kokkos::AUTO());
+
+    using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
+    typedef ExecSpace::scratch_memory_space ScratchSpace;
+
+    typedef Kokkos::View<double *, ScratchSpace,
+                         Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+        shared_view_double;
+    typedef Kokkos::View<Point *, ScratchSpace,
+                         Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+        shared_view_points;
+
+    const int scratch_team =
+        shared_view_double::shmem_size(max_points_per_box) + // weights
+        shared_view_points::shmem_size(max_points_per_box) + // points
+        shared_view_double::shmem_size(max_points_per_box);  // rho
+
+    policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_team));
+
+    Kokkos::parallel_for(
+        "Compute Z_mu(r)", policy_boxes,
+        KOKKOS_LAMBDA(const member_type &team_member) {
+          const int box_idx = team_member.league_rank();
+          const int start_points = box_idx * max_points_per_box;
+          const int end_points =
+              Kokkos::min(start_points + max_points_per_box, N_quad);
+          const int num_points = end_points - start_points;
+
+          const int start_neighbors = nl.offsets(box_idx);
+          const int num_neighbors = nl.offsets(box_idx + 1) - start_neighbors;
+
+          shared_view_double weights_scratch(team_member.team_scratch(0),
+                                             num_points);
+          shared_view_points points_scratch(team_member.team_scratch(0),
+                                            num_points);
+          shared_view_double vrho_cache(team_member.team_scratch(0),
+                                        num_points);
+
+          Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
+                               [=](const int local_g) {
+                                 const int global_g = start_points + local_g;
+                                 weights_scratch(local_g) =
+                                     grid.weights(global_g);
+                                 points_scratch(local_g) =
+                                     grid.quad_points(global_g);
+                                 vrho_cache(local_g) = vrho_spin(global_g);
+                               });
+          team_member.team_barrier();
+
+          Kokkos::parallel_for(
+              Kokkos::TeamThreadMDRange(team_member, num_neighbors,
+                                        num_neighbors),
+              [=](const int local_i, const int local_j) {
+                const int global_i = nl.neighbors(start_neighbors + local_i);
+                const int global_j = nl.neighbors(start_neighbors + local_j);
+                const ShellParams sh_i = load_shell(basis, global_i);
+                const ShellParams sh_j = load_shell(basis, global_j);
+                double V_local = 0;
+                for (int local_g = 0; local_g < num_points; ++local_g) {
+                  const double phi_i = basis_eval_fast(
+                      sh_i, points_scratch(local_g)[0],
+                      points_scratch(local_g)[1], points_scratch(local_g)[2]);
+                  const double phi_j = basis_eval_fast(
+                      sh_j, points_scratch(local_g)[0],
+                      points_scratch(local_g)[1], points_scratch(local_g)[2]);
+
+                  V_local += weights_scratch(local_g) *
+                             (0.5 * phi_j * phi_i * vrho_cache(local_g));
+                }
+                Kokkos::atomic_add(&V(global_i, global_j), V_local);
+              });
+        });
+    Kokkos::parallel_for(
+        "Symmetrize Result",
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf, N_bf}),
+        KOKKOS_LAMBDA(const int i, const int j) {
+          V_result(i, j) = V(i, j) + V(j, i);
+        });
+    return V_result;
+  };
+  DeviceView2DLeft V_alpha = build_potential(vrho_up);
+  DeviceView2DLeft V_beta = build_potential(vrho_down);
+
+  double xc_energy = 0.0;
+  Kokkos::parallel_reduce(
+      "Compute xc energy", N_quad,
+      KOKKOS_LAMBDA(const int g, double &acc) {
+        acc += grid.weights(g) * (rho_a(g) + rho_b(g)) * exc(g);
+      },
+      xc_energy);
+
+  return XC_result_polarized{xc_energy, V_alpha, V_beta};
+}
+
 XC_result compute_gga(const DeviceView2DLeft collocation_values,
                       const DeviceView2DLeft collocation_gx,
                       const DeviceView2DLeft collocation_gy,
@@ -251,7 +409,6 @@ XC_result compute_gga(const DeviceView2DLeft collocation_values,
                       const DeviceView1D weights,
                       const DeviceView2DLeft mo_orbitals,
                       const DeviceView1D mo_coeff, const xc_func_type func) {
-
   ExecSpace space;
 
   // Make sure that the porovided xc functional is a GGA
@@ -372,7 +529,6 @@ compute_gga_lsda(const DeviceView2DLeft collocation_values,
                  const DeviceView1D weights, const DeviceView2DLeft mo_alpha,
                  const DeviceView1D occ_alpha, const DeviceView2DLeft mo_beta,
                  const DeviceView1D occ_beta, const xc_func_type func) {
-
   ExecSpace space;
 
   // Make sure that the porovided xc functional is a GGA
@@ -383,14 +539,15 @@ compute_gga_lsda(const DeviceView2DLeft collocation_values,
   }
 
   if (func.nspin != XC_POLARIZED)
-    throw std::runtime_error(
-        "compute_gga_lsda requires a functional initialized with XC_POLARIZED; "
-        "use compute_gga for XC_UNPOLARIZED");
+    throw std::runtime_error("compute_gga_lsda requires a functional "
+                             "initialized with XC_POLARIZED; "
+                             "use compute_gga for XC_UNPOLARIZED");
 
   const int N_quad = weights.extent(0);
   const int N_bf = collocation_values.extent(0);
 
-  // ---- Per-spin densities, gradients, same-spin sigma (sigma_aa/sigma_bb) --
+  // ---- Per-spin densities, gradients, same-spin sigma (sigma_aa/sigma_bb)
+  // --
   DeviceView1D rho_a("rho_a", N_quad), gxa("gxa", N_quad), gya("gya", N_quad),
       gza("gza", N_quad), sigma_aa("sigma_aa", N_quad);
   DeviceView1D rho_b("rho_b", N_quad), gxb("gxb", N_quad), gyb("gyb", N_quad),
@@ -403,14 +560,16 @@ compute_gga_lsda(const DeviceView2DLeft collocation_values,
                             collocation_gz, mo_beta, occ_beta, rho_b, gxb, gyb,
                             gzb, sigma_bb);
 
-  // ---- Cross term sigma_ud = grad(rho_a) . grad(rho_b) ---------------------
+  // ---- Cross term sigma_ud = grad(rho_a) . grad(rho_b)
+  // ---------------------
   DeviceView1D sigma_ud("sigma_ud", N_quad);
   Kokkos::parallel_for(
       "Compute sigma_ud", N_quad, KOKKOS_LAMBDA(const int g) {
         sigma_ud(g) = gxa(g) * gxb(g) + gya(g) * gyb(g) + gza(g) * gzb(g);
       });
 
-  // ---- Copy to host, interleave into libxc's polarized layout ---------------
+  // ---- Copy to host, interleave into libxc's polarized layout
+  // ---------------
   auto rho_a_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, rho_a);
   auto rho_b_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, rho_b);
   auto s_uu_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, sigma_aa);
@@ -434,7 +593,8 @@ compute_gga_lsda(const DeviceView2DLeft collocation_values,
   Kokkos::deep_copy(vsigma_pol_h, 0.0);
   Kokkos::deep_copy(exc_h, 0.0);
 
-  // ---- One joint libxc call gives exc, vrho_up/down, vsigma_uu/ud/dd -------
+  // ---- One joint libxc call gives exc, vrho_up/down, vsigma_uu/ud/dd
+  // -------
   xc_gga_exc_vxc(&func, N_quad, rho_pol_h.data(), sigma_pol_h.data(),
                  exc_h.data(), vrho_pol_h.data(), vsigma_pol_h.data());
 
@@ -466,7 +626,9 @@ compute_gga_lsda(const DeviceView2DLeft collocation_values,
   Kokkos::deep_copy(vsigma_ud, vud_hv);
   Kokkos::deep_copy(vsigma_dd, vdd_hv);
 
-  // ---- vec_up = 2*vsigma_uu*grad(rho_a) + vsigma_ud*grad(rho_b), and mirror -
+  // ---- vec_up = 2*vsigma_uu*grad(rho_a) + vsigma_ud*grad(rho_b), and
+  // mirror
+  // -
   DeviceView1D vecx_up("vecx_up", N_quad), vecy_up("vecy_up", N_quad),
       vecz_up("vecz_up", N_quad);
   DeviceView1D vecx_dn("vecx_dn", N_quad), vecy_dn("vecy_dn", N_quad),
@@ -482,7 +644,8 @@ compute_gga_lsda(const DeviceView2DLeft collocation_values,
         vecz_dn(g) = 2.0 * dd * gzb(g) + ud * gza(g);
       });
 
-  // ---- Build Fock contribution for one spin channel -------------------------
+  // ---- Build Fock contribution for one spin channel
+  // -------------------------
   auto build_potential = [&](const DeviceView1D &vrho_spin,
                              const DeviceView1D &vecx, const DeviceView1D &vecy,
                              const DeviceView1D &vecz) {
@@ -530,7 +693,8 @@ compute_gga_lsda(const DeviceView2DLeft collocation_values,
   DeviceView2DLeft V_beta =
       build_potential(vrho_down, vecx_dn, vecy_dn, vecz_dn);
 
-  // ---- Energy: integrate against total density ------------------------------
+  // ---- Energy: integrate against total density
+  // ------------------------------
   double xc_energy = 0.0;
   Kokkos::parallel_reduce(
       "Compute xc energy", N_quad,
@@ -542,14 +706,10 @@ compute_gga_lsda(const DeviceView2DLeft collocation_values,
   return XC_result_polarized{xc_energy, V_alpha, V_beta};
 }
 
+// TODO:: This function has not been tesed and probably contains bugs
 XC_result compute_mgga(const STOBasisSet basis, const FlatGrid grid,
                        const DeviceView2DLeft mo_orbitals,
                        const DeviceView1D mo_coeff, const xc_func_type func) {
-
-  // TODO:: Actually compute lapalcian and compute contribution to V
-  // Right now we assume the the mgga funcitonal is indepdentant of the
-  // laplacian
-
   ExecSpace space;
   // Make sure that the porovided xc functional is a GGA
   if (func.info->family != XC_FAMILY_MGGA) {
@@ -703,5 +863,4 @@ XC_result compute_mgga(const STOBasisSet basis, const FlatGrid grid,
 
   return XC_result{xc_energy, V_result};
 }
-
 } // namespace Nukexc

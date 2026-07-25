@@ -29,6 +29,7 @@
 
 #pragma once
 
+#include "nukexc/octree.hpp"
 #include <nukexc/nukexc_config.hpp>
 #include <nukexc/xc_integrals.hpp>
 
@@ -230,6 +231,39 @@ inline XC_result_polarized evaluate_functional(
     return compute_gga_lsda(basis_collocation, basis_collocation_gx,
                             basis_collocation_gy, basis_collocation_gz, weights,
                             k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta, func);
+  default:
+    throw std::runtime_error("Unhandled XCFamily in evaluate_functional");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Dispatch a single functional (X or C) to the correct polarized evaluator
+// based on its family. Both compute_lsda and compute_gga_lsda must return
+// XC_result_polarized { energy, potential_alpha, potential_beta }.
+// ---------------------------------------------------------------------------
+inline XC_result_polarized evaluate_functional_sparse(
+    const FunctionalInfo &info, const xc_func_type &func,
+    const STOBasisSet &basis, const FlatGrid &grid, const NeighborList &nl,
+    const DeviceView2DLeft &k_C_alpha, const DeviceView1D &k_occ_alpha,
+    const DeviceView2DLeft &k_C_beta, const DeviceView1D &k_occ_beta) {
+  (void)info;
+  switch (func.info->family) {
+  case XC_FAMILY_LDA:
+    return compute_lsda_sparse(basis, grid, nl, k_C_alpha, k_occ_alpha,
+                               k_C_beta, k_occ_beta, func);
+  case XC_FAMILY_HYB_LDA:
+    return compute_lsda_sparse(basis, grid, nl, k_C_alpha, k_occ_alpha,
+                               k_C_beta, k_occ_beta, func);
+#if 0
+  case XC_FAMILY_GGA:
+    return compute_gga_lsda(basis_collocation, basis_collocation_gx,
+                            basis_collocation_gy, basis_collocation_gz, weights,
+                            k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta, func);
+  case XC_FAMILY_HYB_GGA:
+    return compute_gga_lsda(basis_collocation, basis_collocation_gx,
+                            basis_collocation_gy, basis_collocation_gz, weights,
+                            k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta, func);
+#endif
   default:
     throw std::runtime_error("Unhandled XCFamily in evaluate_functional");
   }

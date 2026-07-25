@@ -191,6 +191,7 @@ void compute_density_and_sigma(const DeviceView2DLeft collocation_values,
       });
 };
 
+// TODO: This function has not been tested and probably contains bugs
 void compute_density_and_sigma_and_tau(
     const DeviceView2DLeft collocation_values,
     const DeviceView2DLeft collocation_gx,

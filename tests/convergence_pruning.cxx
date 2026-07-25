@@ -99,7 +99,7 @@ static ScfEnergies scf_energy(ExecSpace &space, const Molecule &mol,
                               size_t nang_order, PruningScheme pruning,
                               size_t &npts_out) {
   auto grid =
-      make_flat_grid<bk_type, ll_type>(mol, nrad, nang_order, WEIGHT_THRESHOLD,
+      make_flat_grid<ta_type, ll_type>(mol, nrad, nang_order, WEIGHT_THRESHOLD,
                                        TA_M4, pruning, RadialSizing::Uniform);
   npts_out = grid.quad_points.extent(0);
   return run_uhf_scf_energy(space, mol, basis, basis_aux, grid);
@@ -156,7 +156,7 @@ int main() {
     csv << std::setprecision(15);
     csv << "# Angular pruning-scheme comparison on water (unrestricted HF "
            "one- and two-electron energies)\n";
-    csv << "# radial scheme: TA-M4 ; angular: Lebedev-Laikov ; basis: QZ4P "
+    csv << "# radial scheme: Becke ; angular: Lebedev-Laikov ; basis: QZ4P "
            "(+QZ4P fit) ; radial sizing=Uniform\n";
     csv << "# schemes: Unpruned, Treutler (fixed 7/11), Robust (7 / base-6)\n";
     csv << "# grid levels sweep (nrad, nang_order) together so curves "

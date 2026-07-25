@@ -111,7 +111,7 @@ static ScfEnergies scf_energy(ExecSpace &space, const Molecule &mol,
                               const STOBasisSet &basis_aux, size_t nrad,
                               size_t nang_order, PruningScheme pruning,
                               RadialSizing radial_sizing, size_t &npts_out) {
-  auto grid = make_flat_grid<bk_type, ll_type>(
+  auto grid = make_flat_grid<ta_type, ll_type>(
       mol, nrad, nang_order, WEIGHT_THRESHOLD, TA_M4, pruning, radial_sizing);
   npts_out = grid.quad_points.extent(0);
   return run_uhf_scf_energy(space, mol, basis, basis_aux, grid);
@@ -167,7 +167,7 @@ int main() {
     csv << std::setprecision(15);
     csv << "# Adaptive-grid accuracy-per-point study on water (unrestricted HF "
            "one- and two-electron energies)\n";
-    csv << "# radial scheme: TA-M4 ; angular: Lebedev-Laikov ; basis: QZ4P "
+    csv << "# radial scheme: Becke ; angular: Lebedev-Laikov ; basis: QZ4P "
            "(+QZ4P fit)\n";
     csv << "# knobs: pruning (Unpruned/Robust) x radial sizing "
            "(Uniform/PySCF per-period)\n";

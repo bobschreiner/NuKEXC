@@ -189,9 +189,8 @@ void print_config(const Config &cfg) {
     rows.push_back({"Correlation function", cfg.cfunc});
   }
 
-  print_config_box(cfg.method == "dft" ? "DFT Configuration"
-                                       : "HF Configuration",
-                   rows);
+  print_config_box(
+      cfg.method == "dft" ? "DFT Configuration" : "HF Configuration", rows);
 }
 
 int main(int argc, char *argv[]) {
@@ -606,25 +605,46 @@ int main(int argc, char *argv[]) {
       } else {
         // ---- DFT exchange-correlation quadrature -------------------------
         {
-          TIME_SCOPE(fock_timing, "Exchange functional (Vx)");
-          XC_result_polarized E_x = evaluate_functional(
-              x_info, func_x, basis_collocation, basis_collocation_gx,
-              basis_collocation_gy, basis_collocation_gz, grid.weights,
-              k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta);
-          E_exchange = E_x.energy; // holds total E_xc if combined functional
-          Vx_alpha = kokkos_to_arma(E_x.potential_alpha);
-          Vx_beta = kokkos_to_arma(E_x.potential_beta);
-        }
+          if (is_tiled || is_sparse) {
+            TIME_SCOPE(fock_timing, "Exchange functional (Vx)");
+            XC_result_polarized E_x = evaluate_functional_sparse(
+                x_info, func_x, basis, grid, nl, k_C_alpha, k_occ_alpha,
+                k_C_beta, k_occ_beta);
+            E_exchange = E_x.energy; // holds total E_xc if combined functional
+            Vx_alpha = kokkos_to_arma(E_x.potential_alpha);
+            Vx_beta = kokkos_to_arma(E_x.potential_beta);
 
-        if (has_separate_c) {
-          TIME_SCOPE(fock_timing, "Correlation functional (Vc)");
-          XC_result_polarized E_c = evaluate_functional(
-              c_info, func_c, basis_collocation, basis_collocation_gx,
-              basis_collocation_gy, basis_collocation_gz, grid.weights,
-              k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta);
-          E_correlation = E_c.energy;
-          Vc_alpha = kokkos_to_arma(E_c.potential_alpha);
-          Vc_beta = kokkos_to_arma(E_c.potential_beta);
+            if (has_separate_c) {
+              TIME_SCOPE(fock_timing, "Correlation functional (Vc)");
+              XC_result_polarized E_c = evaluate_functional_sparse(
+                  c_info, func_c, basis, grid, nl, k_C_alpha, k_occ_alpha,
+                  k_C_beta, k_occ_beta);
+              E_correlation = E_c.energy;
+              Vc_alpha = kokkos_to_arma(E_c.potential_alpha);
+              Vc_beta = kokkos_to_arma(E_c.potential_beta);
+            }
+
+          } else {
+            TIME_SCOPE(fock_timing, "Exchange functional (Vx)");
+            XC_result_polarized E_x = evaluate_functional(
+                x_info, func_x, basis_collocation, basis_collocation_gx,
+                basis_collocation_gy, basis_collocation_gz, grid.weights,
+                k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta);
+            E_exchange = E_x.energy; // holds total E_xc if combined functional
+            Vx_alpha = kokkos_to_arma(E_x.potential_alpha);
+            Vx_beta = kokkos_to_arma(E_x.potential_beta);
+
+            if (has_separate_c) {
+              TIME_SCOPE(fock_timing, "Correlation functional (Vc)");
+              XC_result_polarized E_c = evaluate_functional(
+                  c_info, func_c, basis_collocation, basis_collocation_gx,
+                  basis_collocation_gy, basis_collocation_gz, grid.weights,
+                  k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta);
+              E_correlation = E_c.energy;
+              Vc_alpha = kokkos_to_arma(E_c.potential_alpha);
+              Vc_beta = kokkos_to_arma(E_c.potential_beta);
+            }
+          }
         }
 
         if (a_exx > 0) {

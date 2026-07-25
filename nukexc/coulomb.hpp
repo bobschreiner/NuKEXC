@@ -829,6 +829,7 @@ DeviceView2DLeft coulomb_overlap_integral_tiled(const ExecSpace space,
   using Bounds = Kokkos::LaunchBounds<128, NUKEXC_TILED_MIN_BLOCKS>;
   Kokkos::TeamPolicy<ExecSpace, Bounds> policy_boxes(space, num_boxes,
                                                      Kokkos::AUTO());
+
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
   typedef ExecSpace::scratch_memory_space ScratchSpace;
   typedef Kokkos::View<double *, ScratchSpace,
@@ -839,10 +840,11 @@ DeviceView2DLeft coulomb_overlap_integral_tiled(const ExecSpace space,
       shared_view_points;
 
   const int scratch_team =
-      shared_view_double::shmem_size(max_points_per_box) +            // weights
-      shared_view_points::shmem_size(max_points_per_box) +            // points
-      shared_view_double::shmem_size(tile_size * max_points_per_box) + // phi tile
-      shared_view_double::shmem_size(max_points_per_box); // potential (team)
+      shared_view_double::shmem_size(max_points_per_box) + // weights
+      shared_view_points::shmem_size(max_points_per_box) + // points
+      shared_view_double::shmem_size(tile_size *
+                                     max_points_per_box) + // phi tile
+      shared_view_double::shmem_size(max_points_per_box);  // potential (team)
 
   policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_team));
 
@@ -861,7 +863,7 @@ DeviceView2DLeft coulomb_overlap_integral_tiled(const ExecSpace space,
         shared_view_double weights_scratch(team_member.team_scratch(0),
                                            num_points);
         shared_view_points points_scratch(team_member.team_scratch(0),
-                                           num_points);
+                                          num_points);
         shared_view_double phi_cache(team_member.team_scratch(0),
                                      tile_size * num_points);
         shared_view_double potential_scratch_scaled(team_member.team_scratch(0),
@@ -870,7 +872,8 @@ DeviceView2DLeft coulomb_overlap_integral_tiled(const ExecSpace space,
         Kokkos::parallel_for(Kokkos::TeamVectorRange(team_member, num_points),
                              [=](const int local_g) {
                                const int global_g = start_points + local_g;
-                               weights_scratch(local_g) = grid.weights(global_g);
+                               weights_scratch(local_g) =
+                                   grid.weights(global_g);
                                points_scratch(local_g) =
                                    grid.quad_points(global_g);
                              });
@@ -888,9 +891,9 @@ DeviceView2DLeft coulomb_overlap_integral_tiled(const ExecSpace space,
                 const ShellParams shell = load_shell(basis_aux, gi);
                 const int base = lj * num_points;
                 for (int g = 0; g < num_points; ++g)
-                  phi_cache(base + g) =
-                      basis_eval_fast(shell, points_scratch(g)[0],
-                                      points_scratch(g)[1], points_scratch(g)[2]);
+                  phi_cache(base + g) = basis_eval_fast(
+                      shell, points_scratch(g)[0], points_scratch(g)[1],
+                      points_scratch(g)[2]);
               });
           team_member.team_barrier();
 
