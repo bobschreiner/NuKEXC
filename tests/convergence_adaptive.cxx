@@ -167,7 +167,8 @@ int main() {
     csv << std::setprecision(15);
     csv << "# Adaptive-grid accuracy-per-point study on water (unrestricted HF "
            "one- and two-electron energies)\n";
-    csv << "# radial scheme: Becke ; angular: Lebedev-Laikov ; basis: QZ4P "
+    csv << "# radial scheme: Treutler M4 ; angular: Lebedev-Laikov ; basis: "
+           "QZ4P "
            "(+QZ4P fit)\n";
     csv << "# knobs: pruning (Unpruned/Robust) x radial sizing "
            "(Uniform/PySCF per-period)\n";

@@ -18,9 +18,11 @@
  */
 
 #pragma once
+#include <cctype>
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -62,8 +64,20 @@ inline unsigned get_atomic_number(const std::string &symbol) {
       {"AU", 79}, {"HG", 80}, {"TL", 81}, {"PB", 82}, {"BI", 83}, {"PO", 84},
       {"AT", 85}, {"RN", 86}, {"FR", 87}, {"RA", 88}, {"AC", 89}, {"TH", 90},
       {"PA", 91}, {"U", 92},  {"NP", 93}, {"PU", 94}, {"AM", 95}, {"CM", 96}};
-  auto it = pt.find(symbol);
-  return (it != pt.end()) ? it->second : 0;
+  // The table is keyed on upper case, so normalise first: standard element
+  // capitalisation ("Cl", "Si", "Be") must resolve just like "CL"/"cl". Without
+  // this, every two-letter symbol missed the table and silently returned Z=0,
+  // i.e. a ghost atom with no nuclear charge. Single-letter symbols ("H", "C")
+  // happened to work, which is why plain water inputs never exposed it.
+  std::string key = symbol;
+  for (char &c : key)
+    c = std::toupper(static_cast<unsigned char>(c));
+
+  auto it = pt.find(key);
+  if (it == pt.end())
+    throw std::runtime_error("Unknown element symbol in geometry: '" + symbol +
+                             "'");
+  return it->second;
 }
 } // namespace detail
 } // namespace Nukexc

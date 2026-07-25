@@ -176,7 +176,7 @@ int main() {
               << "Reference grid (nrad=" << nrad_ref
               << ", nang_order=" << nang_ref << "):\n"
               << "  E_Becke = " << e_ref_bk << " Ha\n"
-              << "  E_TA    = " << e_ref_ta << " Ha\n"
+              << "  E_M4    = " << e_ref_ta << " Ha\n"
               << "  |diff|  = " << std::scientific << ref_diff << " Ha\n"
               << "  E_ref   = " << std::fixed << ref_energy
               << " Ha  (mean, shared by both schemes)\n";
@@ -189,7 +189,7 @@ int main() {
     std::ofstream csv(csv_path);
     csv << std::setprecision(15);
     csv << "# H2+ core-Hamiltonian ground-state (lowest MO) energy vs grid\n";
-    csv << "# comparing radial schemes: Becke vs Treutler-Ahlrichs (TA)\n";
+    csv << "# comparing radial schemes: Becke vs Treutler-Ahlrichs (M4)\n";
     csv << "# molecule: H2+, two H atoms at x=0 and x=" << R << " bohr\n";
     csv << "# basis: QZ4P (ADF Slater-type, input/zorabasis/QZ4P)\n";
     csv << "# angular quadrature (both schemes): Lebedev-Laikov\n";
@@ -197,7 +197,7 @@ int main() {
            "(shared, unbiased self-reference; NOT analytic):\n";
     csv << "#   nrad_ref=" << nrad_ref << ", nang_order_ref=" << nang_ref
         << "\n";
-    csv << "#   E_ref_Becke=" << e_ref_bk << ", E_ref_TA=" << e_ref_ta
+    csv << "#   E_ref_Becke=" << e_ref_bk << ", E_ref_M4=" << e_ref_ta
         << ", |diff|=" << ref_diff << "\n";
     csv << "#   E_ref=" << ref_energy << " Ha\n";
     csv << "# abs_error = |gs_energy - E_ref|\n";
@@ -206,7 +206,7 @@ int main() {
     // ---- Sweeps ------------------------------------------------------------
     run_sweep<bk_type>("Becke", basis, mol, nrad_sweep, nang_sweep, ref_energy,
                        csv);
-    run_sweep<ta_type>("TA", basis, mol, nrad_sweep, nang_sweep, ref_energy,
+    run_sweep<ta_type>("M4", basis, mol, nrad_sweep, nang_sweep, ref_energy,
                        csv);
 
     csv.close();

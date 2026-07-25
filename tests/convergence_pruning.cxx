@@ -156,7 +156,8 @@ int main() {
     csv << std::setprecision(15);
     csv << "# Angular pruning-scheme comparison on water (unrestricted HF "
            "one- and two-electron energies)\n";
-    csv << "# radial scheme: Becke ; angular: Lebedev-Laikov ; basis: QZ4P "
+    csv << "# radial scheme: Treutler M4 ; angular: Lebedev-Laikov ; basis: "
+           "QZ4P "
            "(+QZ4P fit) ; radial sizing=Uniform\n";
     csv << "# schemes: Unpruned, Treutler (fixed 7/11), Robust (7 / base-6)\n";
     csv << "# grid levels sweep (nrad, nang_order) together so curves "
