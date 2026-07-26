@@ -70,6 +70,7 @@ struct Config {
   int tile_size = 32; // neighbor tile (--tile=, only used by --alg=tiled)
   std::string xfunc = "lda_x";
   std::string cfunc = "lda_c_pw";
+  double dens_thr = 1e-10; // libxc density threshold (runtime --dens-thr=)
   std::string pruning = "none";   // grid angular pruning: none/robust/treutler
   std::string radial = "uniform"; // per-element radial sizing: uniform/pyscf
   bool nl_histogram = false;      // runtime via --nl-histogram
@@ -111,6 +112,8 @@ Config parse_args(int argc, char *argv[]) {
           << cfg.xfunc << ")\n"
           << "  --cfunc=<name>        Correlation functional(dft)(default: "
           << cfg.cfunc << ")\n"
+          << "  --dens-thr=<float>    Libxc density threshold     (default: "
+          << cfg.dens_thr << ")  [below this the functional is zeroed]\n"
           << "  --pruning=<name>      Angular pruning none/robust/treutler "
           << "(default: " << cfg.pruning << ")\n"
           << "  --radial=<name>       Radial sizing uniform/pyscf   (default: "
@@ -140,6 +143,7 @@ Config parse_args(int argc, char *argv[]) {
                !p.int_opt("--multiplicity=", cfg.multiplicity) &&
                !p.string_opt("--xfunc=", cfg.xfunc) &&
                !p.string_opt("--cfunc=", cfg.cfunc) &&
+               !p.double_opt("--dens-thr=", cfg.dens_thr) &&
                !p.string_opt("--pruning=", cfg.pruning) &&
                !p.string_opt("--radial=", cfg.radial)) {
       throw std::runtime_error("Unknown argument: " + p.arg + " (try --help)");
@@ -187,6 +191,7 @@ void print_config(const Config &cfg) {
   if (cfg.method == "dft") {
     rows.push_back({"Exchange functional", cfg.xfunc});
     rows.push_back({"Correlation function", cfg.cfunc});
+    rows.push_back({"Libxc density thresh.", cfg_val(cfg.dens_thr)});
   }
 
   print_config_box(
@@ -274,6 +279,14 @@ int main(int argc, char *argv[]) {
             "Failed to initialize Libxc exchange functional '" +
             x_info.canonical_name + "'");
       }
+      // Libxc's own default (1e-15) is far looser than production codes use,
+      // and leaves the GGA potentials enormous where the density has decayed
+      // to roundoff: B3LYP at rho=1e-11 with a stale gradient returns
+      // e_xc ~ -3e7. Multiplied by the r^2-growing radial weights of the
+      // outer shells that injects large spurious contributions into the Fock
+      // matrix, which is what stalls spin-polarized SCF. 1e-10 zeroes those
+      // points and leaves physically populated regions untouched.
+      xc_func_set_dens_threshold(&func_x, cfg.dens_thr);
 
       // Libxc defines: XC_EXCHANGE=0, XC_CORRELATION=1,
       // XC_EXCHANGE_CORRELATION=2
@@ -291,6 +304,7 @@ int main(int argc, char *argv[]) {
               "Failed to initialize Libxc correlation functional '" +
               c_info.canonical_name + "'");
         }
+        xc_func_set_dens_threshold(&func_c, cfg.dens_thr);
         has_separate_c = true;
       }
 

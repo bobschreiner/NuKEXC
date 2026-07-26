@@ -367,6 +367,7 @@ compute_lsda_sparse(const STOBasisSet basis, const FlatGrid grid,
                 const ShellParams sh_j = load_shell(basis, global_j);
                 double V_local = 0;
                 for (int local_g = 0; local_g < num_points; ++local_g) {
+
                   const double phi_i = basis_eval_fast(
                       sh_i, points_scratch(local_g)[0],
                       points_scratch(local_g)[1], points_scratch(local_g)[2]);
