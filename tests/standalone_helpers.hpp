@@ -254,16 +254,12 @@ inline XC_result_polarized evaluate_functional_sparse(
   case XC_FAMILY_HYB_LDA:
     return compute_lsda_sparse(basis, grid, nl, k_C_alpha, k_occ_alpha,
                                k_C_beta, k_occ_beta, func);
-#if 0
   case XC_FAMILY_GGA:
-    return compute_gga_lsda(basis_collocation, basis_collocation_gx,
-                            basis_collocation_gy, basis_collocation_gz, weights,
-                            k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta, func);
+    return compute_gga_lsda_sparse(basis, grid, nl, k_C_alpha, k_occ_alpha,
+                                   k_C_beta, k_occ_beta, func);
   case XC_FAMILY_HYB_GGA:
-    return compute_gga_lsda(basis_collocation, basis_collocation_gx,
-                            basis_collocation_gy, basis_collocation_gz, weights,
-                            k_C_alpha, k_occ_alpha, k_C_beta, k_occ_beta, func);
-#endif
+    return compute_gga_lsda_sparse(basis, grid, nl, k_C_alpha, k_occ_alpha,
+                                   k_C_beta, k_occ_beta, func);
   default:
     throw std::runtime_error("Unhandled XCFamily in evaluate_functional");
   }
