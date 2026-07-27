@@ -87,9 +87,7 @@ def parse_res(res_path):
                 "ref_kcal": float(tok[wi + 1]),
                 # A readable label: the species carrying the negative coefficient
                 # is the molecule being atomized.
-                "name": next(
-                    (s for s, c in zip(species, coeffs) if c < 0), species[0]
-                ),
+                "name": next((s for s, c in zip(species, coeffs) if c < 0), species[0]),
             }
         )
     return reactions
@@ -220,8 +218,10 @@ def run_one(binary, xyz, basis_dir, charge, mult, conv_thr, args):
         return {"error": "timeout", "cmd": " ".join(cmd)}, ""
     if proc.returncode != 0:
         tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-5:]
-        return {"error": "exit %d: %s" % (proc.returncode, " | ".join(tail)),
-                "cmd": " ".join(cmd)}, proc.stdout
+        return {
+            "error": "exit %d: %s" % (proc.returncode, " | ".join(tail)),
+            "cmd": " ".join(cmd),
+        }, proc.stdout
     parsed = parse_run(proc.stdout)
     parsed["cmd"] = " ".join(cmd)
     if parsed.get("energy") is None:
@@ -231,37 +231,51 @@ def run_one(binary, xyz, basis_dir, charge, mult, conv_thr, args):
         # energy is never a converged answer -- it is the linear-dependence
         # blow-up described in the module docstring. Fail loudly instead of
         # letting it through as a merely "unconverged" number.
-        parsed["error"] = ("positive total energy %.4f Ha -- raise --lin-dep"
-                           % parsed["energy"])
+        parsed["error"] = (
+            "positive total energy %.4f Ha -- raise --lin-dep" % parsed["energy"]
+        )
     return parsed, proc.stdout
 
 
 def main():
     repo = Path(__file__).resolve().parent.parent
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--bin", default=str(repo / "build/tests/standalone"))
     ap.add_argument("--w411-dir", default=str(repo / "input/W4-11"))
     ap.add_argument("--basis-root", default=str(repo / "input/zorabasis_cholesky"))
     ap.add_argument("--bases", nargs="+", default=["DZ", "TZP", "TZ2P", "QZ4P"])
-    ap.add_argument("--species", nargs="+", default=None,
-                    help="restrict to these species (default: all in .res)")
+    ap.add_argument(
+        "--species",
+        nargs="+",
+        default=None,
+        help="restrict to these species (default: all in .res)",
+    )
     ap.add_argument("--xfunc", default="gga_xc_b3lyp3")
-    ap.add_argument("--nrad", type=int, default=75)
-    ap.add_argument("--nang", type=int, default=29)
+    ap.add_argument("--nrad", type=int, default=100)
+    ap.add_argument("--nang", type=int, default=35)
     ap.add_argument("--conv-thr", default="1e-7")
-    ap.add_argument("--open-conv-thr", default="1e-6",
-                    help="looser threshold for open-shell species (DIIS plateau)")
-    ap.add_argument("--lin-dep", default="1e-4",
-                    help="linear-dependence threshold; the standalone default "
-                         "of 1e-6 is too tight for QZ4P (see module docstring)")
+    ap.add_argument("--pruning", default="robust")
+    ap.add_argument(
+        "--open-conv-thr",
+        default="1e-6",
+        help="looser threshold for open-shell species (DIIS plateau)",
+    )
+    ap.add_argument(
+        "--lin-dep",
+        default="1e-4",
+        help="linear-dependence threshold; the standalone default "
+        "of 1e-6 is too tight for QZ4P (see module docstring)",
+    )
     ap.add_argument("--timeout", type=float, default=7200)
     ap.add_argument("--jobs", type=int, default=1)
     ap.add_argument("--cache", default=str(repo / "w411_cache"))
     ap.add_argument("--out", default="benchmark_w411")
     ap.add_argument("--workdir", default=str(repo))
-    ap.add_argument("--keep-stdout", action="store_true",
-                    help="also cache raw stdout for each run")
+    ap.add_argument(
+        "--keep-stdout", action="store_true", help="also cache raw stdout for each run"
+    )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -281,9 +295,10 @@ def main():
     if missing:
         sys.exit("Missing struc.xyz for: %s" % ", ".join(missing))
 
-    print("%d reactions, %d species, %d bases -> %d runs"
-          % (len(reactions), len(needed), len(args.bases),
-             len(needed) * len(args.bases)))
+    print(
+        "%d reactions, %d species, %d bases -> %d runs"
+        % (len(reactions), len(needed), len(args.bases), len(needed) * len(args.bases))
+    )
     if args.dry_run:
         return
 
@@ -314,8 +329,15 @@ def main():
         parsed, stdout = run_one(
             binary, w411 / name / "struc.xyz", basis_dir, charge, mult, thr, args
         )
-        parsed.update({"basis": basis, "species": name, "charge": charge,
-                       "multiplicity": mult, "conv_thr": thr})
+        parsed.update(
+            {
+                "basis": basis,
+                "species": name,
+                "charge": charge,
+                "multiplicity": mult,
+                "conv_thr": thr,
+            }
+        )
         jf.write_text(json.dumps(parsed, indent=1))
         if args.keep_stdout and stdout:
             (cache / ("%s__%s.log" % (basis, name))).write_text(stdout)
@@ -324,17 +346,20 @@ def main():
     results = {}
     total = len(tasks)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        for i, (basis, name, parsed, cached) in enumerate(
-            pool.map(execute, tasks), 1
-        ):
+        for i, (basis, name, parsed, cached) in enumerate(pool.map(execute, tasks), 1):
             results[(basis, name)] = parsed
             flag = "cached" if cached else "ran"
             err = parsed.get("error")
-            status = "ERROR: %s" % err if err else "E=%.6f%s" % (
-                parsed["energy"], "" if parsed.get("converged") else " (unconv)"
+            status = (
+                "ERROR: %s" % err
+                if err
+                else "E=%.6f%s"
+                % (parsed["energy"], "" if parsed.get("converged") else " (unconv)")
             )
-            print("[%4d/%4d] %-5s %-12s %-6s %s"
-                  % (i, total, basis, name, flag, status), flush=True)
+            print(
+                "[%4d/%4d] %-5s %-12s %-6s %s" % (i, total, basis, name, flag, status),
+                flush=True,
+            )
 
     # ---- species CSV -------------------------------------------------------
     startup_keys, fock_keys = set(), set()
@@ -346,26 +371,58 @@ def main():
 
     sp_path = Path("%s_species.csv" % args.out)
     with sp_path.open("w") as f:
-        f.write("# NuKEXC W4-11 sweep: B3LYP (%s), dense algorithm, "
-                "nrad=%d nang=%d\n" % (args.xfunc, args.nrad, args.nang))
-        f.write("# Startup/Fock timing columns are seconds, summed over the "
-                "whole run (all Fock builds).\n")
-        cols = (["basis", "species", "charge", "multiplicity", "converged",
-                 "nbf", "nbf_aux", "nquad", "nelec", "energy", "n_fock",
-                 "t_startup", "t_fock", "t_scf", "t_total"]
-                + ["startup:%s" % k for k in startup_keys]
-                + ["fock:%s" % k for k in fock_keys])
+        f.write(
+            "# NuKEXC W4-11 sweep: B3LYP (%s), dense algorithm, "
+            "nrad=%d nang=%d\n" % (args.xfunc, args.nrad, args.nang)
+        )
+        f.write(
+            "# Startup/Fock timing columns are seconds, summed over the "
+            "whole run (all Fock builds).\n"
+        )
+        cols = (
+            [
+                "basis",
+                "species",
+                "charge",
+                "multiplicity",
+                "converged",
+                "nbf",
+                "nbf_aux",
+                "nquad",
+                "nelec",
+                "energy",
+                "n_fock",
+                "t_startup",
+                "t_fock",
+                "t_scf",
+                "t_total",
+            ]
+            + ["startup:%s" % k for k in startup_keys]
+            + ["fock:%s" % k for k in fock_keys]
+        )
         f.write(",".join(cols) + "\n")
-        for (basis, name) in sorted(results):
+        for basis, name in sorted(results):
             r = results[(basis, name)]
             if r.get("error"):
                 continue
             sp, fp = r.get("startup_parts") or {}, r.get("fock_parts") or {}
-            row = [basis, name, r["charge"], r["multiplicity"], r["converged"],
-                   r["nbf"], r["nbf_aux"], r["nquad"], r["nelec"],
-                   "%.10f" % r["energy"], r["n_fock"],
-                   "%.4f" % r["t_startup"], "%.4f" % r["t_fock"],
-                   "%.4f" % (r["t_scf"] or 0.0), "%.4f" % (r["t_total"] or 0.0)]
+            row = [
+                basis,
+                name,
+                r["charge"],
+                r["multiplicity"],
+                r["converged"],
+                r["nbf"],
+                r["nbf_aux"],
+                r["nquad"],
+                r["nelec"],
+                "%.10f" % r["energy"],
+                r["n_fock"],
+                "%.4f" % r["t_startup"],
+                "%.4f" % r["t_fock"],
+                "%.4f" % (r["t_scf"] or 0.0),
+                "%.4f" % (r["t_total"] or 0.0),
+            ]
             row += ["%.4f" % sp.get(k, 0.0) for k in startup_keys]
             row += ["%.4f" % fp.get(k, 0.0) for k in fock_keys]
             f.write(",".join(str(c) for c in row) + "\n")
@@ -374,10 +431,14 @@ def main():
     rx_path = Path("%s_reactions.csv" % args.out)
     n_ok = 0
     with rx_path.open("w") as f:
-        f.write("# W4-11 total atomization energies (kcal/mol). Reference: "
-                "zero-point-exclusive, non-relativistic, clamped-nuclei\n")
-        f.write("# TAEs from Karton, Daon & Martin, Chem. Phys. Lett. 510, "
-                "165-178 (2011).\n")
+        f.write(
+            "# W4-11 total atomization energies (kcal/mol). Reference: "
+            "zero-point-exclusive, non-relativistic, clamped-nuclei\n"
+        )
+        f.write(
+            "# TAEs from Karton, Daon & Martin, Chem. Phys. Lett. 510, "
+            "165-178 (2011).\n"
+        )
         f.write("basis,reaction,tae_calc,tae_ref,error,all_converged\n")
         for basis in args.bases:
             for rx in reactions:
@@ -392,19 +453,34 @@ def main():
                 if not ok:
                     continue
                 tae = sum(energies) * HARTREE_TO_KCAL
-                f.write("%s,%s,%.4f,%.4f,%.4f,%d\n"
-                        % (basis, rx["name"], tae, rx["ref_kcal"],
-                           tae - rx["ref_kcal"], int(allconv)))
+                f.write(
+                    "%s,%s,%.4f,%.4f,%.4f,%d\n"
+                    % (
+                        basis,
+                        rx["name"],
+                        tae,
+                        rx["ref_kcal"],
+                        tae - rx["ref_kcal"],
+                        int(allconv),
+                    )
+                )
                 n_ok += 1
 
     failed = [(b, s) for (b, s), r in results.items() if r.get("error")]
-    unconv = [(b, s) for (b, s), r in results.items()
-              if not r.get("error") and not r.get("converged")]
-    print("\nWrote %s (%d species rows) and %s (%d reaction rows)"
-          % (sp_path, len(results) - len(failed), rx_path, n_ok))
+    unconv = [
+        (b, s)
+        for (b, s), r in results.items()
+        if not r.get("error") and not r.get("converged")
+    ]
+    print(
+        "\nWrote %s (%d species rows) and %s (%d reaction rows)"
+        % (sp_path, len(results) - len(failed), rx_path, n_ok)
+    )
     if unconv:
-        print("SCF not converged (%d): %s" % (len(unconv), ", ".join(
-            "%s/%s" % t for t in sorted(unconv)[:20])))
+        print(
+            "SCF not converged (%d): %s"
+            % (len(unconv), ", ".join("%s/%s" % t for t in sorted(unconv)[:20]))
+        )
     if failed:
         print("Failed runs (%d):" % len(failed))
         for b, s in sorted(failed):
