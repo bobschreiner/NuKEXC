@@ -923,7 +923,6 @@ compute_gga_lsda_sparse(const STOBasisSet basis, const FlatGrid grid,
                                           points_scratch(local_g)[2]);
 
                   basis_eval_grad(basis, global_i, x, y, z, gx_i, gy_i, gz_i);
-                  basis_eval_grad(basis, global_i, x, y, z, gx_i, gy_i, gz_i);
 
                   const double grad_dot = vx_cache(local_g) * gx_i +
                                           vy_cache(local_g) * gy_i +

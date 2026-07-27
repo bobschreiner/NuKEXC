@@ -221,9 +221,16 @@ int main(int argc, char *argv[]) {
     // differ only in which integral kernels are invoked.
     const bool use_neighbor_path = is_sparse || is_tiled;
     const int tile = cfg.tile_size;
+    // The neighbor-list path evaluates the basis on the fly inside every
+    // kernel it uses -- (A|B), J, K and, since the sparse XC quadrature
+    // landed, the LSDA/GGA functionals too. Nothing on that path reads a
+    // collocation matrix any more, so none of the four N_bf x N_quad tables
+    // get allocated or filled for --alg=sparse/tiled.
     const bool need_dense_aux_colloc = !use_neighbor_path; // dense (A|B) + J/K
-    const bool need_basis_colloc = !use_neighbor_path || is_dft;
-    const bool need_grad_colloc = is_dft; // needed for GGA quadrature
+    const bool need_basis_colloc = !use_neighbor_path;
+    // Only the dense GGA quadrature consumes the gradient collocation;
+    // compute_gga_lsda_sparse differentiates the basis pointwise instead.
+    const bool need_grad_colloc = is_dft && !use_neighbor_path;
 
     Molecule mol;
     {
