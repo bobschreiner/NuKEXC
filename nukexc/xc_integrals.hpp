@@ -903,8 +903,7 @@ compute_gga_lsda_sparse(const STOBasisSet basis, const FlatGrid grid,
               [=](const int local_i, const int local_j) {
                 const int global_i = nl.neighbors(start_neighbors + local_i);
                 const int global_j = nl.neighbors(start_neighbors + local_j);
-                double phi_i, gx_i, gy_i, gz_i;
-                double phi_j, gx_j, gy_j, gz_j;
+                double phi_i, phi_j, gx_i, gy_i, gz_i;
                 double x, y, z;
                 const ShellParams sh_i = load_shell(basis, global_i);
                 const ShellParams sh_j = load_shell(basis, global_j);
