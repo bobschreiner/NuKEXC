@@ -71,6 +71,10 @@ struct Config {
   std::string xfunc = "lda_x";
   std::string cfunc = "lda_c_pw";
   double dens_thr = 1e-10; // libxc density threshold (runtime --dens-thr=)
+  // Two-phase SCF for occupation-oscillating radicals (--freeze-occ=):
+  // converge with free (Aufbau) occupations to this loose DIIS threshold,
+  // then freeze the occupations and continue to --conv-thr. 0 disables.
+  double freeze_occ_thr = 0.0;
   std::string pruning = "none";   // grid angular pruning: none/robust/treutler
   std::string radial = "uniform"; // per-element radial sizing: uniform/pyscf
   bool nl_histogram = false;      // runtime via --nl-histogram
@@ -114,6 +118,14 @@ Config parse_args(int argc, char *argv[]) {
           << cfg.cfunc << ")\n"
           << "  --dens-thr=<float>    Libxc density threshold     (default: "
           << cfg.dens_thr << ")  [below this the functional is zeroed]\n"
+          << "  --freeze-occ=<float>  Two-phase SCF: converge free to this "
+          << "loose threshold,\n"
+          << "                        then freeze occupations and finish to "
+          << "--conv-thr.\n"
+          << "                        For open-shell radicals whose SCF "
+          << "stalls (try 1e-3).\n"
+          << "                        (default: " << cfg.freeze_occ_thr
+          << " = disabled)\n"
           << "  --pruning=<name>      Angular pruning none/robust/treutler "
           << "(default: " << cfg.pruning << ")\n"
           << "  --radial=<name>       Radial sizing uniform/pyscf   (default: "
@@ -144,6 +156,7 @@ Config parse_args(int argc, char *argv[]) {
                !p.string_opt("--xfunc=", cfg.xfunc) &&
                !p.string_opt("--cfunc=", cfg.cfunc) &&
                !p.double_opt("--dens-thr=", cfg.dens_thr) &&
+               !p.double_opt("--freeze-occ=", cfg.freeze_occ_thr) &&
                !p.string_opt("--pruning=", cfg.pruning) &&
                !p.string_opt("--radial=", cfg.radial)) {
       throw std::runtime_error("Unknown argument: " + p.arg + " (try --help)");
@@ -783,12 +796,29 @@ int main(int argc, char *argv[]) {
         blocks_per_type, max_occupations, number_of_particles, fock_builder,
         block_descriptions);
 
-    solver.convergence_threshold(cfg.conv_thr);
     solver.verbosity(5);
     solver.initialize_with_fock({F_gwh_orth, F_gwh_orth});
 
     Kokkos::Timer scf_timer;
-    solver.run();
+    if (cfg.freeze_occ_thr > 0.0) {
+      // Two-phase SCF for occupation-oscillating open-shell systems (e.g.
+      // pi radicals with near-degenerate frontier orbitals, where Aufbau
+      // reassignment near convergence makes DIIS chase a moving target).
+      // Phase 1: free occupations down to the loose threshold, which finds
+      // the right configuration. Phase 2: freeze the occupations so the
+      // configuration can no longer change, and converge tightly.
+      const double loose = std::max(cfg.conv_thr, cfg.freeze_occ_thr);
+      std::cout << "Two-phase SCF: free occupations to DIIS error < " << loose
+                << ", then frozen to " << cfg.conv_thr << "\n";
+      solver.convergence_threshold(loose);
+      solver.run();
+      solver.frozen_occupations(true);
+      solver.convergence_threshold(cfg.conv_thr);
+      solver.run();
+    } else {
+      solver.convergence_threshold(cfg.conv_thr);
+      solver.run();
+    }
     const double scf_seconds = scf_timer.seconds();
 
     if (is_dft) {
