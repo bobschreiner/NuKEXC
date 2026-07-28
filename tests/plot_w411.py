@@ -157,17 +157,9 @@ def plot_violin(reactions, out):
                     ha="center", va="top", fontsize=8.5,
                     color=BASIS_STYLE[b]["color"])
 
-    # Name the largest outliers per basis so the reader can see which chemistry
-    # is hard, rather than just how wide the distribution is.
-    for i, b in enumerate(present, start=1):
-        rows = [r for r in reactions if r["basis"] == b]
-        for r in sorted(rows, key=lambda r: -abs(fnum(r, "error")))[:2]:
-            ax.annotate(r["reaction"], xy=(i + 0.11, fnum(r, "error")),
-                        xytext=(4, 0), textcoords="offset points",
-                        fontsize=8, color=BASIS_STYLE[b]["color"], va="center")
-
     ax.set_xticks(range(1, len(present) + 1))
-    ax.set_xticklabels(present)
+    ax.set_xticklabels(["%s\n($n$=%d)" % (b, len(v))
+                        for b, v in zip(present, data)])
     ax.set_xlabel("Slater-type basis set")
     ax.set_ylabel(r"TAE error  $\mathrm{TAE}_{\mathrm{calc}}-"
                   r"\mathrm{TAE}_{\mathrm{ref}}$  (kcal/mol)")
@@ -365,6 +357,20 @@ def main():
     species = load_csv("%s_species.csv" % args.csv_prefix)
     if not reactions or not species:
         raise SystemExit("Empty input CSVs -- run tests/benchmark_w411.py first")
+
+    # Keep only fully converged data. Unconverged rows carry the solver's
+    # best-so-far (or, in older CSVs, a rejected trial step) -- either way not
+    # a variational energy, and one bad atom would poison every reaction it
+    # appears in. Coverage per basis is annotated on the violin.
+    rx_all, sp_all = reactions, species
+    reactions = [r for r in reactions if r.get("all_converged") == "1"]
+    species = [r for r in species if r.get("converged") == "1"]
+    for b in BASIS_ORDER:
+        dropped = [r["reaction"] for r in rx_all
+                   if r["basis"] == b and r.get("all_converged") != "1"]
+        if dropped:
+            print("%-5s dropped %d unconverged reactions: %s"
+                  % (b, len(dropped), " ".join(sorted(dropped))))
 
     plot_violin(reactions, out)
     plot_scaling(species, out)
