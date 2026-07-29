@@ -14,6 +14,14 @@ CMakeUserPresets.json
 build*/
 src/kokkos_config.hpp
 
+# Byte-compiled plotting/benchmark scripts
+__pycache__/
+*.py[cod]
+
+# W4-11 sweep artefacts (resumable run cache + emitted CSVs)
+w411_cache/
+benchmark_w411_*.csv
+
 spack.lock
 spack/cpu/.spack*/
 

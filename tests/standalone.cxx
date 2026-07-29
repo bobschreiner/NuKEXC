@@ -337,7 +337,7 @@ int main(int argc, char *argv[]) {
     const int N_quad = grid.quad_points.extent(0);
 
     // Emitted in a fixed, greppable form so batch drivers (e.g.
-    // tests/benchmark_w411.py) can recover the problem size for scaling plots.
+    // benchmarking/benchmark_w411.py) can recover the problem size for scaling plots.
     std::cout << "Basis functions (primary): " << N_bf << "\n";
     std::cout << "Basis functions (aux)    : " << N_bf_aux << "\n";
     std::cout << "Quadrature points        : " << N_quad << "\n";

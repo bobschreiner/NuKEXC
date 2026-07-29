@@ -1,0 +1,25 @@
+# NuKEXC W4-11 sweep
+# param alg = dense
+# param conv_thr = 1e-7
+# param dens_thr = (binary default)
+# param lin_dep = 1e-4
+# param method = dft
+# param nang = 35
+# param nrad = 100
+# param open_conv_thr = 1e-6
+# param open_freeze_occ = 1e-3
+# param pruning = robust
+# param radial = (binary default)
+# param xfunc = gga_xc_b3lyp3
+# param bases = DZ TZP
+# params_hash = cdcf2c5370
+# binary = /Users/bobschreiner/NuKEXC/build/tests/standalone
+# dataset = /Users/bobschreiner/NuKEXC/input/W4-11
+# basis_root = /Users/bobschreiner/NuKEXC/input/zorabasis_cholesky
+# date_utc = 2026-07-29T19:03:43Z
+# cmdline = benchmark_w411.py --species oh --bases DZ TZP --out other
+# conv_thr/freeze_occ columns are the per-species values actually used (open-shell species differ).
+# Startup/Fock timing columns are seconds, summed over the whole run (all Fock builds).
+basis,species,charge,multiplicity,conv_thr,freeze_occ,converged,nbf,nbf_aux,nquad,nelec,energy,n_fock,t_startup,t_fock,t_scf,t_total,startup:Auxiliary Coulomb overlap (dense GEMM),startup:Build molecular grid,startup:Copy core matrices to host (arma),startup:Core Hamiltonian (T + V_ne + S),startup:Fill auxiliary basis collocation + potential,startup:Fill primary basis collocation,startup:Fill primary basis gradient collocation,startup:GWH initial guess,startup:Half-inverse of auxiliary overlap,startup:Load basis sets,startup:Nuclear repulsion energy,startup:Orthogonalization matrix X = S^-1/2,startup:Read XYZ,startup:Resolve/init XC functionals,fock:Build density matrices,fock:Coulomb (J) build,fock:Energy assembly,fock:Exact exchange (hybrid) build,fock:Exchange functional (Vx),fock:Fock assembly + orthogonalization,fock:Host->device transfer of orbitals
+DZ,oh,0,2,1e-6,1e-3,1,12,45,58634,9,-75.6912360453,9,0.0937,0.7538,0.6620,0.8540,0.0018,0.0172,0.0000,0.0138,0.0382,0.0024,0.0158,0.0013,0.0005,0.0002,0.0001,0.0002,0.0006,0.0016,0.0000,0.0421,0.0000,0.4286,0.2831,0.0000,0.0000
+TZP,oh,0,2,1e-6,1e-3,1,25,118,58634,9,-75.7337777179,10,0.1826,1.9679,1.7845,2.1742,0.0056,0.0152,0.0000,0.0267,0.0978,0.0037,0.0303,0.0001,0.0021,0.0004,0.0001,0.0003,0.0002,0.0001,0.0000,0.1051,0.0000,1.4351,0.4277,0.0000,0.0000

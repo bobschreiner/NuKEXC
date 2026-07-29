@@ -1,6 +1,6 @@
-include (nukexc-catch2)
-include (nukexc-armadillo)
-include (nukexc-openorbitaloptimizer)  
+# Dependencies (Catch2, Armadillo, OpenOrbitalOptimizer) and the shared
+# NUKEXC_TEST_SUPPORT_DIR are set up once by the top-level CMakeLists, since
+# benchmarking/ and convergence_studies/ need them too.
 
 add_executable(test_grid standards.cxx test_grid.cxx )
 add_executable(test_partition standards.cxx test_partition.cxx )
@@ -16,35 +16,22 @@ add_executable(test_density test_density.cxx)
 add_executable(test_libxc test_libxc.cxx)
 add_executable(test_helium test_helium.cxx)
 
-add_executable(convergence_integration convergence_integration.cxx standards.cxx test_io.cxx)
-add_executable(convergence_h2plus convergence_h2plus.cxx)
-add_executable(convergence_coreH convergence_coreH.cxx)
-add_executable(convergence_2d convergence_2d.cxx)
-add_executable(convergence_radial_h convergence_radial_h.cxx)
-add_executable(convergence_adaptive convergence_adaptive.cxx standards.cxx)
-add_executable(convergence_pruning convergence_pruning.cxx standards.cxx)
-
-add_executable(benchmark_partition  standards.cxx benchmark_partition.cxx )
-add_executable(benchmark_scf standards.cxx benchmark_scf.cxx test_io.cxx )
-add_executable(benchmark_coreH standards.cxx benchmark_coreH.cxx test_io.cxx )
-add_executable(benchmark_cutoff standards.cxx benchmark_cutoff.cxx test_io.cxx )
-
 add_executable(standalone standards.cxx standalone.cxx test_io.cxx)
 
-add_custom_target(copy_test_inputs 
+add_custom_target(copy_test_inputs
     COMMAND  ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_SOURCE_DIR}/input" "${CMAKE_CURRENT_BINARY_DIR}/input"
     COMMENT "Ensuring input directory is available in the build folder"
     )
 
 # Create a list of all your test targets
-set(ALL_TEST_TARGETS 
-    test_grid 
-    test_partition 
-    test_spherical_harmonics 
-    test_molecule 
-    test_basisset 
-    test_integration 
+set(ALL_TEST_TARGETS
+    test_grid
+    test_partition
+    test_spherical_harmonics
+    test_molecule
+    test_basisset
+    test_integration
     test_hydrogen
     test_arborx
     test_neighborlist
@@ -52,19 +39,6 @@ set(ALL_TEST_TARGETS
     test_density
     test_libxc
     test_helium
-
-    convergence_integration
-    convergence_h2plus
-    convergence_coreH
-    convergence_2d
-    convergence_radial_h
-    convergence_adaptive
-    convergence_pruning
-
-    benchmark_partition
-    benchmark_scf
-    benchmark_coreH
-    benchmark_cutoff
 
     standalone
 
@@ -77,25 +51,7 @@ foreach(tgt IN LISTS ALL_TEST_TARGETS)
     add_dependencies(${tgt} copy_test_inputs)
 endforeach()
 
-# Opt-in: make ptxas print per-kernel register / shared-memory usage at compile
-# time (CUDA / nvcc_wrapper only). Configure with -DNUKEXC_PTXAS_VERBOSE=ON.
-# Applied per-target (not via CMAKE_CXX_FLAGS) so it never touches CMake's
-# compiler-detection test program.
-option(NUKEXC_PTXAS_VERBOSE
-       "Print ptxas per-kernel register/smem usage (CUDA nvcc_wrapper builds)"
-       OFF)
-if(NUKEXC_PTXAS_VERBOSE)
-    if(Kokkos_ENABLE_CUDA)
-        foreach(tgt IN LISTS ALL_TEST_TARGETS)
-            target_compile_options(${tgt} PRIVATE -Xptxas=-v)
-        endforeach()
-        message(STATUS "NUKEXC_PTXAS_VERBOSE: ptxas -v enabled on test targets")
-    else()
-        message(WARNING
-            "NUKEXC_PTXAS_VERBOSE requested but Kokkos_ENABLE_CUDA is OFF; "
-            "-Xptxas=-v only works with the nvcc_wrapper CXX compiler.")
-    endif()
-endif()
+nukexc_ptxas_verbose(${ALL_TEST_TARGETS})
 
 add_test( NAME GRID_TEST COMMAND $<TARGET_FILE:test_grid> )
 add_test( NAME PARTITION_TEST COMMAND $<TARGET_FILE:test_partition> )
@@ -105,10 +61,7 @@ add_test( NAME BASISSET_TEST COMMAND $<TARGET_FILE:test_basisset> )
 add_test( NAME INTEGRATION_TEST COMMAND $<TARGET_FILE:test_integration> )
 add_test( NAME HYDROGEN_TEST COMMAND $<TARGET_FILE:test_hydrogen> )
 add_test( NAME NEIGHBORLIST_TEST COMMAND $<TARGET_FILE:test_neighborlist> )
-add_test( NAME H2PLUS_CONVERGENCE_TEST COMMAND $<TARGET_FILE:convergence_h2plus> )
-add_test( NAME COREH_CONVERGENCE_TEST COMMAND $<TARGET_FILE:convergence_coreH> )
 add_test( NAME POTENTIAL_TEST COMMAND $<TARGET_FILE:test_potential> )
 add_test( NAME DENSITY_TEST COMMAND $<TARGET_FILE:test_density> )
 add_test( NAME LIBXC_TEST COMMAND $<TARGET_FILE:test_libxc> )
 add_test( NAME HELIUM_TEST COMMAND $<TARGET_FILE:test_helium> )
-

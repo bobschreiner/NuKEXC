@@ -22,6 +22,7 @@ Usage:
     python benchmarking/plot_w411.py [--csv-prefix benchmark_w411] [--out DIR]
 """
 
+import matplotlib.pyplot as plt
 import argparse
 import csv
 from pathlib import Path
@@ -30,7 +31,6 @@ import numpy as np
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 plt.rcParams.update(
     {
@@ -69,38 +69,72 @@ BASIS_STYLE = {
 # Order fixes the stacking order (startup first, then the SCF work).
 CATEGORIES = [
     ("Grid construction", OI["sky"], ["startup:Build molecular grid"]),
-    ("Basis / setup", OI["grey"], [
-        "startup:Load basis sets", "startup:Read XYZ",
-        "startup:Resolve/init XC functionals", "startup:Nuclear repulsion energy",
-        "startup:GWH initial guess", "startup:Copy core matrices to host (arma)",
-    ]),
-    ("Collocation fill", OI["yellow"], [
-        "startup:Fill primary basis collocation",
-        "startup:Fill primary basis gradient collocation",
-        "startup:Fill auxiliary basis collocation + potential",
-    ]),
-    ("Core Hamiltonian", OI["purple"], [
-        "startup:Core Hamiltonian (T + V_ne + S)",
-        "startup:Orthogonalization matrix X = S^-1/2",
-    ]),
-    ("RI aux. overlap", OI["orange"], [
-        "startup:Auxiliary Coulomb overlap (dense GEMM)",
-        "startup:Auxiliary Coulomb overlap (sparse)",
-        "startup:Auxiliary Coulomb overlap (tiled)",
-        "startup:Half-inverse of auxiliary overlap",
-    ]),
+    (
+        "Basis / setup",
+        OI["grey"],
+        [
+            "startup:Load basis sets",
+            "startup:Read XYZ",
+            "startup:Resolve/init XC functionals",
+            "startup:Nuclear repulsion energy",
+            "startup:GWH initial guess",
+            "startup:Copy core matrices to host (arma)",
+        ],
+    ),
+    (
+        "Collocation fill",
+        OI["yellow"],
+        [
+            "startup:Fill primary basis collocation",
+            "startup:Fill primary basis gradient collocation",
+            "startup:Fill auxiliary basis collocation + potential",
+        ],
+    ),
+    (
+        "Core Hamiltonian",
+        OI["purple"],
+        [
+            "startup:Core Hamiltonian (T + V_ne + S)",
+            "startup:Orthogonalization matrix X = S^-1/2",
+        ],
+    ),
+    (
+        "RI aux. overlap",
+        OI["orange"],
+        [
+            "startup:Auxiliary Coulomb overlap (dense GEMM)",
+            "startup:Auxiliary Coulomb overlap (sparse)",
+            "startup:Auxiliary Coulomb overlap (tiled)",
+            "startup:Half-inverse of auxiliary overlap",
+        ],
+    ),
     ("SCF: Coulomb $J$", OI["blue"], ["fock:Coulomb (J) build"]),
-    ("SCF: XC functional", OI["green"], [
-        "fock:Exchange functional (Vx)", "fock:Correlation functional (Vc)",
-    ]),
-    ("SCF: exact exchange $K$", OI["vermillion"], [
-        "fock:Exact exchange (hybrid) build", "fock:Exact exchange (K) build",
-    ]),
-    ("SCF: assembly", OI["black"], [
-        "fock:Build density matrices", "fock:Energy assembly",
-        "fock:Fock assembly + orthogonalization",
-        "fock:Host->device transfer of orbitals",
-    ]),
+    (
+        "SCF: XC functional",
+        OI["green"],
+        [
+            "fock:Exchange functional (Vx)",
+            "fock:Correlation functional (Vc)",
+        ],
+    ),
+    (
+        "SCF: exact exchange $K$",
+        OI["vermillion"],
+        [
+            "fock:Exact exchange (hybrid) build",
+            "fock:Exact exchange (K) build",
+        ],
+    ),
+    (
+        "SCF: assembly",
+        OI["black"],
+        [
+            "fock:Build density matrices",
+            "fock:Energy assembly",
+            "fock:Fock assembly + orthogonalization",
+            "fock:Host->device transfer of orbitals",
+        ],
+    ),
 ]
 
 
@@ -120,16 +154,12 @@ def fnum(row, key, default=0.0):
 
 def plot_violin(reactions, out):
     """Error distribution of the 140 TAEs, one violin per basis set."""
-    present = [b for b in BASIS_ORDER
-               if any(r["basis"] == b for r in reactions)]
-    data = [[fnum(r, "error") for r in reactions if r["basis"] == b]
-            for b in present]
+    present = [b for b in BASIS_ORDER if any(r["basis"] == b for r in reactions)]
+    data = [[fnum(r, "error") for r in reactions if r["basis"] == b] for b in present]
 
     fig, ax = plt.subplots(figsize=(7.4, 5.2))
     ax.axhline(0.0, color=OI["black"], lw=1.2, zorder=1)
     # +/-1 kcal/mol is the conventional "chemical accuracy" band.
-    ax.axhspan(-1.0, 1.0, color=OI["green"], alpha=0.13, zorder=0,
-               label="chemical accuracy ($\\pm$1 kcal/mol)")
 
     parts = ax.violinplot(data, showextrema=False, widths=0.78)
     for body, b in zip(parts["bodies"], present):
@@ -142,31 +172,49 @@ def plot_violin(reactions, out):
     for i, (b, vals) in enumerate(zip(present, data), start=1):
         v = np.asarray(vals)
         jitter = rng.uniform(-0.10, 0.10, size=v.size)
-        ax.plot(i + jitter, v, linestyle="none", marker=".", markersize=4.5,
-                color=BASIS_STYLE[b]["color"], alpha=0.75, zorder=3)
+        ax.plot(
+            i + jitter,
+            v,
+            linestyle="none",
+            marker=".",
+            markersize=4.5,
+            color=BASIS_STYLE[b]["color"],
+            alpha=0.75,
+            zorder=3,
+        )
         med = float(np.median(v))
-        ax.plot([i - 0.29, i + 0.29], [med, med], color=BASIS_STYLE[b]["color"],
-                lw=2.0, zorder=4)
+        ax.plot(
+            [i - 0.29, i + 0.29],
+            [med, med],
+            color=BASIS_STYLE[b]["color"],
+            lw=2.0,
+            zorder=4,
+        )
 
     # Summary statistics go above the violins, where nothing else competes for
     # space (the distributions all hang below zero).
     for i, (b, vals) in enumerate(zip(present, data), start=1):
         v = np.asarray(vals)
-        ax.annotate("MSD %.1f\nMAD %.1f" % (v.mean(), np.abs(v).mean()),
-                    xy=(i, 0.985), xycoords=("data", "axes fraction"),
-                    ha="center", va="top", fontsize=8.5,
-                    color=BASIS_STYLE[b]["color"])
+        ax.annotate(
+            "MSD %.1f\nMAD %.1f" % (v.mean(), np.abs(v).mean()),
+            xy=(i, 0.985),
+            xycoords=("data", "axes fraction"),
+            ha="center",
+            va="top",
+            fontsize=8.5,
+            color=BASIS_STYLE[b]["color"],
+        )
 
     ax.set_xticks(range(1, len(present) + 1))
-    ax.set_xticklabels(["%s\n($n$=%d)" % (b, len(v))
-                        for b, v in zip(present, data)])
+    ax.set_xticklabels(["%s\n($n$=%d)" % (b, len(v)) for b, v in zip(present, data)])
     ax.set_xlabel("Slater-type basis set")
-    ax.set_ylabel(r"TAE error  $\mathrm{TAE}_{\mathrm{calc}}-"
-                  r"\mathrm{TAE}_{\mathrm{ref}}$  (kcal/mol)")
+    ax.set_ylabel(
+        r"TAE error  $\mathrm{TAE}_{\mathrm{calc}}-"
+        r"\mathrm{TAE}_{\mathrm{ref}}$  (kcal/mol)"
+    )
     # Headroom for the MSD/MAD row above the violins.
     lo, hi = ax.get_ylim()
     ax.set_ylim(lo, hi + 0.22 * (hi - lo))
-    ax.legend(loc="lower left", framealpha=0.92)
     fig.tight_layout()
     fig.savefig(out / "benchmark_w411_violin.pdf")
     plt.close(fig)
@@ -175,9 +223,17 @@ def plot_violin(reactions, out):
     print("  %-6s %5s %8s %8s %8s %8s" % ("basis", "n", "MSD", "MAD", "RMSD", "max"))
     for b, vals in zip(present, data):
         v = np.asarray(vals)
-        print("  %-6s %5d %8.2f %8.2f %8.2f %8.2f"
-              % (b, v.size, v.mean(), np.abs(v).mean(),
-                 np.sqrt((v ** 2).mean()), np.abs(v).max()))
+        print(
+            "  %-6s %5d %8.2f %8.2f %8.2f %8.2f"
+            % (
+                b,
+                v.size,
+                v.mean(),
+                np.abs(v).mean(),
+                np.sqrt((v**2).mean()),
+                np.abs(v).max(),
+            )
+        )
 
 
 def plot_scaling(species, out):
@@ -194,10 +250,15 @@ def plot_scaling(species, out):
     fig, axes = plt.subplots(1, 2, figsize=(11.4, 4.9))
     panels = (
         (axes[0], lambda r: fnum(r, "t_total"), "total wall time (s)"),
-        (axes[1],
-         lambda r: (fnum(r, "t_fock") / fnum(r, "n_fock", 1.0)
-                    if fnum(r, "n_fock") > 0 else 0.0),
-         "wall time per Fock build (s)"),
+        (
+            axes[1],
+            lambda r: (
+                fnum(r, "t_fock") / fnum(r, "n_fock", 1.0)
+                if fnum(r, "n_fock") > 0
+                else 0.0
+            ),
+            "wall time per Fock build (s)",
+        ),
     )
     for ax, ykey, ylabel in panels:
         allx, ally = [], []
@@ -217,8 +278,16 @@ def plot_scaling(species, out):
             if x.size > 2 and np.ptp(np.log10(x)) > 0.15:
                 p = np.polyfit(np.log10(x), np.log10(y), 1)[0]
                 label = "%s  ($p=%.1f$)" % (b, p)
-            ax.plot(x, y, linestyle="none", marker=st["marker"],
-                    color=st["color"], alpha=0.75, markersize=5, label=label)
+            ax.plot(
+                x,
+                y,
+                linestyle="none",
+                marker=st["marker"],
+                color=st["color"],
+                alpha=0.75,
+                markersize=5,
+                label=label,
+            )
             allx.append(x)
             ally.append(y)
         # Reference slopes anchored at the cloud's centre, as a visual guide for
@@ -227,12 +296,23 @@ def plot_scaling(species, out):
             xs, ys = np.concatenate(allx), np.concatenate(ally)
             gx = np.array([xs.min(), xs.max()])
             x0, y0 = np.median(xs), np.median(ys)
-            for expo, style in ((2, (0, (6, 3))), (3, (0, (3, 2))),
-                                (4, (0, (1, 2)))):
-                ax.plot(gx, y0 * (gx / x0) ** expo, color=OI["grey"],
-                        linestyle=style, lw=1.1, zorder=0)
-                ax.annotate("$N^%d$" % expo, xy=(gx[-1], y0 * (gx[-1] / x0) ** expo),
-                            fontsize=8, color=OI["grey"], ha="right", va="bottom")
+            for expo, style in ((2, (0, (6, 3))), (3, (0, (3, 2))), (4, (0, (1, 2)))):
+                ax.plot(
+                    gx,
+                    y0 * (gx / x0) ** expo,
+                    color=OI["grey"],
+                    linestyle=style,
+                    lw=1.1,
+                    zorder=0,
+                )
+                ax.annotate(
+                    "$N^%d$" % expo,
+                    xy=(gx[-1], y0 * (gx[-1] / x0) ** expo),
+                    fontsize=8,
+                    color=OI["grey"],
+                    ha="right",
+                    va="bottom",
+                )
             ax.set_ylim(0.5 * ys.min(), 20 * ys.max())
         ax.set_xscale("log")
         ax.set_yscale("log")
@@ -267,9 +347,16 @@ def plot_breakdown(species, out):
             if normalise:
                 totals = np.array([sum(means[b]) for b in present])
                 vals = 100.0 * vals / np.where(totals > 0, totals, 1.0)
-            ax.bar(xs, vals, bottom=bottoms, width=0.62, color=colour,
-                   edgecolor="white", linewidth=0.6,
-                   label=label if not normalise else None)
+            ax.bar(
+                xs,
+                vals,
+                bottom=bottoms,
+                width=0.62,
+                color=colour,
+                edgecolor="white",
+                linewidth=0.6,
+                label=label if not normalise else None,
+            )
             bottoms += vals
         ax.set_xticks(xs)
         ax.set_xticklabels(present)
@@ -281,17 +368,24 @@ def plot_breakdown(species, out):
             # inside it -- that one segment dominates and is the whole point.
             for xi, b in zip(xs, present):
                 total = sum(means[b])
-                ax.annotate("%.1f s" % total, xy=(xi, total),
-                            xytext=(0, 3), textcoords="offset points",
-                            ha="center", va="bottom", fontsize=9)
+                ax.annotate(
+                    "%.1f s" % total,
+                    xy=(xi, total),
+                    xytext=(0, 3),
+                    textcoords="offset points",
+                    ha="center",
+                    va="bottom",
+                    fontsize=9,
+                )
     axes[0].set_ylabel("mean wall time per molecule (s)")
     axes[0].set_ylim(0, 1.13 * max(sum(means[b]) for b in present))
     axes[1].set_ylabel("share of accounted time (%)")
     axes[1].set_ylim(0, 100)
     handles, labels = axes[0].get_legend_handles_labels()
     # Legend outside the axes: nine categories will not fit inside a bar chart.
-    fig.legend(handles[::-1], labels[::-1], loc="center right",
-               framealpha=0.92, fontsize=9)
+    fig.legend(
+        handles[::-1], labels[::-1], loc="center right", framealpha=0.92, fontsize=9
+    )
     fig.tight_layout(rect=(0, 0, 0.78, 1))
     fig.savefig(out / "benchmark_w411_breakdown.pdf")
     plt.close(fig)
@@ -301,10 +395,14 @@ def plot_breakdown(species, out):
     print(hdr % tuple(["category"] + present))
     for ci, (label, _, _) in enumerate(CATEGORIES):
         plain = label.replace("$", "").replace("\\", "")
-        print(("  %-26s" + "%10.3f" * len(present))
-              % tuple([plain] + [means[b][ci] for b in present]))
-    print(("  %-26s" + "%10.3f" * len(present))
-          % tuple(["TOTAL (accounted)"] + [sum(means[b]) for b in present]))
+        print(
+            ("  %-26s" + "%10.3f" * len(present))
+            % tuple([plain] + [means[b][ci] for b in present])
+        )
+    print(
+        ("  %-26s" + "%10.3f" * len(present))
+        % tuple(["TOTAL (accounted)"] + [sum(means[b]) for b in present])
+    )
 
 
 def write_table(reactions, species, path):
@@ -315,8 +413,7 @@ def write_table(reactions, species, path):
     convergence fragments in latex/Data/tables/ each carry their own float;
     nesting one of those inside a table environment would be an error.)
     """
-    present = [b for b in BASIS_ORDER
-               if any(r["basis"] == b for r in reactions)]
+    present = [b for b in BASIS_ORDER if any(r["basis"] == b for r in reactions)]
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         r"\small",
@@ -335,8 +432,16 @@ def write_table(reactions, species, path):
         tmean = np.mean([fnum(r, "t_total") for r in srows]) if srows else 0.0
         lines.append(
             "  %s & %d & %.0f & %.2f & %.2f & %.2f & %.2f & %.1f \\\\"
-            % (b, v.size, nbf, v.mean(), np.abs(v).mean(),
-               np.sqrt((v ** 2).mean()), np.abs(v).max(), tmean)
+            % (
+                b,
+                v.size,
+                nbf,
+                v.mean(),
+                np.abs(v).mean(),
+                np.sqrt((v**2).mean()),
+                np.abs(v).max(),
+                tmean,
+            )
         )
     lines += [r"  \bottomrule", r"\end{tabular}", ""]
     path.write_text("\n".join(lines))
@@ -366,11 +471,16 @@ def main():
     reactions = [r for r in reactions if r.get("all_converged") == "1"]
     species = [r for r in species if r.get("converged") == "1"]
     for b in BASIS_ORDER:
-        dropped = [r["reaction"] for r in rx_all
-                   if r["basis"] == b and r.get("all_converged") != "1"]
+        dropped = [
+            r["reaction"]
+            for r in rx_all
+            if r["basis"] == b and r.get("all_converged") != "1"
+        ]
         if dropped:
-            print("%-5s dropped %d unconverged reactions: %s"
-                  % (b, len(dropped), " ".join(sorted(dropped))))
+            print(
+                "%-5s dropped %d unconverged reactions: %s"
+                % (b, len(dropped), " ".join(sorted(dropped)))
+            )
 
     plot_violin(reactions, out)
     plot_scaling(species, out)

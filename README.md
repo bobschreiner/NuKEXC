@@ -162,17 +162,28 @@ cd build
 ctest --output-on-failure
 ```
 
+The build tree mirrors the three source directories:
+
+| Source | Build output | What lives there |
+|---|---|---|
+| `tests/` | `build/tests/` | Correctness tests (run by `ctest`) and the `standalone` SCF driver |
+| `benchmarking/` | `build/benchmarking/` | Performance benchmarks and the W4-11 accuracy/timing sweep |
+| `convergence_studies/` | `build/convergence_studies/` | Grid-convergence sweeps and the scripts that plot them |
+
+Each of the two latter directories has its own README describing how to
+reproduce the figures it feeds.
+
 To run the SCF benchmark specifically:
 
 ```bash
-./tests/benchmark_scf
+./benchmarking/benchmark_scf
 ```
 
 Profiling with the Kokkos simple kernel timer:
 
 ```bash
 export KOKKOS_TOOLS_LIBS=/path/to/kokkos-tools/build/profiling/simple-kernel-timer/libkp_kernel_timer.so
-./tests/benchmark_scf
+./benchmarking/benchmark_scf
 kp_reader *.dat
 ```
 

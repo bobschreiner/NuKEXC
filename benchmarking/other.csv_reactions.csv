@@ -1,0 +1,23 @@
+# NuKEXC W4-11 sweep
+# param alg = dense
+# param conv_thr = 1e-7
+# param dens_thr = (binary default)
+# param lin_dep = 1e-4
+# param method = dft
+# param nang = 35
+# param nrad = 100
+# param open_conv_thr = 1e-6
+# param open_freeze_occ = 1e-3
+# param pruning = robust
+# param radial = (binary default)
+# param xfunc = gga_xc_b3lyp3
+# param bases = DZ TZP
+# params_hash = cdcf2c5370
+# binary = /Users/bobschreiner/NuKEXC/build/tests/standalone
+# dataset = /Users/bobschreiner/NuKEXC/input/W4-11
+# basis_root = /Users/bobschreiner/NuKEXC/input/zorabasis_cholesky
+# date_utc = 2026-07-29T19:03:31Z
+# cmdline = benchmark_w411.py --species oh --bases DZ TZP --out other.csv
+# W4-11 total atomization energies (kcal/mol). Reference: zero-point-exclusive, non-relativistic, clamped-nuclei
+# TAEs from Karton, Daon & Martin, Chem. Phys. Lett. 510, 165-178 (2011).
+basis,reaction,tae_calc,tae_ref,error,all_converged
