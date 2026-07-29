@@ -217,9 +217,7 @@ def run_one(binary, xyz, basis_dir, charge, mult, conv_thr, freeze_occ, args):
         f"--xyz={xyz}",
         f"--basis={basis_dir}",
         "--method=dft",
-        # B3LYP is a hybrid GGA; only the dense path implements GGA quadrature
-        # (GGA is #if 0'd out of evaluate_functional_sparse), so force dense.
-        "--alg=dense",
+        f"--alg={args.alg}",
         f"--xfunc={args.xfunc}",
         f"--nrad={args.nrad}",
         f"--nang={args.nang}",
@@ -283,6 +281,8 @@ def main():
         default=None,
         help="restrict to these species (default: all in .res)",
     )
+
+    ap.add_argument("--alg", default="dense")
     ap.add_argument("--xfunc", default="gga_xc_b3lyp3")
     ap.add_argument("--nrad", type=int, default=100)
     ap.add_argument("--nang", type=int, default=35)
@@ -361,7 +361,7 @@ def main():
     # parameter change can never silently reuse stale cached results.
     run_params = {
         "method": "dft",
-        "alg": "dense",
+        "alg": args.alg,
         "xfunc": args.xfunc,
         "nrad": args.nrad,
         "nang": args.nang,
@@ -397,8 +397,14 @@ def main():
             except json.JSONDecodeError:
                 pass  # corrupt cache entry -> recompute
         parsed, stdout = run_one(
-            binary, w411 / name / "struc.xyz", basis_dir, charge, mult, thr,
-            freeze, args
+            binary,
+            w411 / name / "struc.xyz",
+            basis_dir,
+            charge,
+            mult,
+            thr,
+            freeze,
+            args,
         )
         parsed.update(
             {
@@ -413,9 +419,7 @@ def main():
         )
         jf.write_text(json.dumps(parsed, indent=1))
         if args.keep_stdout and stdout:
-            (cache / ("%s__%s__%s.log" % (basis, name, params_hash))).write_text(
-                stdout
-            )
+            (cache / ("%s__%s__%s.log" % (basis, name, params_hash))).write_text(stdout)
         return basis, name, parsed, False
 
     results = {}
