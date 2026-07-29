@@ -1,35 +1,35 @@
 \babel@toc {english}{}\relax 
-\contentsline {section}{\numberline {1}Introduction}{1}{section.1}%
-\contentsline {section}{\numberline {2}Theory}{2}{section.2}%
+\contentsline {section}{\numberline {1}Introduction}{2}{section.1}%
+\contentsline {section}{\numberline {2}Theory}{3}{section.2}%
 \contentsline {subsection}{\numberline {2.1}Hartree-Fock Theory}{3}{subsection.2.1}%
 \contentsline {subsection}{\numberline {2.2}Density Functional Theory}{4}{subsection.2.2}%
-\contentsline {subsection}{\numberline {2.3}Basis Sets}{4}{subsection.2.3}%
-\contentsline {subsubsection}{\numberline {2.3.1}Slater Type Orbitals}{4}{subsubsection.2.3.1}%
-\contentsline {subsubsection}{\numberline {2.3.2}Gaussian Type Orbitals}{5}{subsubsection.2.3.2}%
-\contentsline {subsubsection}{\numberline {2.3.3}Numerical Atom-Centered Orbitals}{5}{subsubsection.2.3.3}%
+\contentsline {subsection}{\numberline {2.3}Basis Sets}{5}{subsection.2.3}%
+\contentsline {subsubsection}{\numberline {2.3.1}Slater-Type Orbitals}{5}{subsubsection.2.3.1}%
+\contentsline {subsubsection}{\numberline {2.3.2}Gaussian-Type Orbitals}{5}{subsubsection.2.3.2}%
+\contentsline {subsubsection}{\numberline {2.3.3}Numerical Atom-Centered Orbitals}{6}{subsubsection.2.3.3}%
 \contentsline {section}{\numberline {3}Computational Methods}{6}{section.3}%
 \contentsline {subsection}{\numberline {3.1}Quadratures}{6}{subsection.3.1}%
-\contentsline {subsubsection}{\numberline {3.1.1}Becke's molecular partitioning scheme}{6}{subsubsection.3.1.1}%
-\contentsline {subsubsection}{\numberline {3.1.2}Quadrature grids}{8}{subsubsection.3.1.2}%
+\contentsline {subsubsection}{\numberline {3.1.1}Becke's Molecular Partitioning Scheme}{6}{subsubsection.3.1.1}%
+\contentsline {subsubsection}{\numberline {3.1.2}Quadrature Grids}{8}{subsubsection.3.1.2}%
 \contentsline {subsection}{\numberline {3.2}Density Fitting \& Resolution of the Identity}{9}{subsection.3.2}%
 \contentsline {section}{\numberline {4}Implementation Details}{10}{section.4}%
 \contentsline {subsection}{\numberline {4.1}Kokkos}{11}{subsection.4.1}%
-\contentsline {subsection}{\numberline {4.2}Grid construction}{11}{subsection.4.2}%
-\contentsline {subsection}{\numberline {4.3}Integral Routines}{12}{subsection.4.3}%
-\contentsline {subsubsection}{\numberline {4.3.1}Dense Linear Algebra}{12}{subsubsection.4.3.1}%
-\contentsline {subsubsection}{\numberline {4.3.2}Locally Dense Linear Algebra}{16}{subsubsection.4.3.2}%
-\contentsline {section}{\numberline {5}Results}{18}{section.5}%
-\contentsline {subsection}{\numberline {5.1}Convergence}{18}{subsection.5.1}%
-\contentsline {subsubsection}{\numberline {5.1.1}The Hydrogen Atom}{19}{subsubsection.5.1.1}%
-\contentsline {subsubsection}{\numberline {5.1.2}The Dihydrogen cation H$_2^+$}{19}{subsubsection.5.1.2}%
-\contentsline {subsubsection}{\numberline {5.1.3}Self-Consistent Field calculations}{20}{subsubsection.5.1.3}%
-\contentsline {subsection}{\numberline {5.2}Benchmarks}{22}{subsection.5.2}%
-\contentsline {subsubsection}{\numberline {5.2.1}Energetic accuracy}{23}{subsubsection.5.2.1}%
-\contentsline {subsubsection}{\numberline {5.2.2}Cost and time distribution}{24}{subsubsection.5.2.2}%
-\contentsline {section}{\numberline {6}Conclusion}{25}{section.6}%
-\contentsline {section}{\numberline {7}Further Research}{26}{section.7}%
-\contentsline {section}{\numberline {A}Convergence Data}{27}{appendix.A}%
-\contentsline {subsection}{\numberline {A.1}Hydrogen atom: radial schemes}{27}{subsection.A.1}%
-\contentsline {subsection}{\numberline {A.2}H$_2^+$: overlap integral}{28}{subsection.A.2}%
-\contentsline {subsection}{\numberline {A.3}H$_2^+$: radial $\times $ angular sweep}{28}{subsection.A.3}%
-\contentsline {subsection}{\numberline {A.4}Water: angular pruning schemes}{29}{subsection.A.4}%
+\contentsline {subsection}{\numberline {4.2}Grid Construction}{11}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Integral Routines}{13}{subsection.4.3}%
+\contentsline {subsubsection}{\numberline {4.3.1}Dense Linear Algebra}{14}{subsubsection.4.3.1}%
+\contentsline {subsubsection}{\numberline {4.3.2}Locally Dense Linear Algebra}{17}{subsubsection.4.3.2}%
+\contentsline {section}{\numberline {5}Results}{21}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Convergence}{21}{subsection.5.1}%
+\contentsline {subsubsection}{\numberline {5.1.1}The Hydrogen Atom}{21}{subsubsection.5.1.1}%
+\contentsline {subsubsection}{\numberline {5.1.2}The Dihydrogen Cation H$_2^+$}{22}{subsubsection.5.1.2}%
+\contentsline {subsubsection}{\numberline {5.1.3}Self-Consistent Field Calculations}{23}{subsubsection.5.1.3}%
+\contentsline {subsection}{\numberline {5.2}Benchmarks}{23}{subsection.5.2}%
+\contentsline {subsubsection}{\numberline {5.2.1}Energetic Accuracy}{25}{subsubsection.5.2.1}%
+\contentsline {subsubsection}{\numberline {5.2.2}Cost and Time Distribution}{26}{subsubsection.5.2.2}%
+\contentsline {section}{\numberline {6}Conclusion}{27}{section.6}%
+\contentsline {section}{\numberline {7}Further Research}{29}{section.7}%
+\contentsline {section}{\numberline {A}Convergence Data}{30}{appendix.A}%
+\contentsline {subsection}{\numberline {A.1}Hydrogen Atom: Radial Schemes}{30}{subsection.A.1}%
+\contentsline {subsection}{\numberline {A.2}H$_2^+$: Overlap Integral}{30}{subsection.A.2}%
+\contentsline {subsection}{\numberline {A.3}H$_2^+$: Radial $\times $ Angular Sweep}{31}{subsection.A.3}%
+\contentsline {subsection}{\numberline {A.4}Water: Angular Pruning Schemes}{32}{subsection.A.4}%

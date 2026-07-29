@@ -56,10 +56,12 @@
   \Huge Electronic structure with general atomic orbitals on GPGPUs \\
   \horrule{2pt} \\[0.5cm] % Thick bottom horizontal rule
 
-  \Large{Master thesis \\ \textit{submitted by}}
+  \Large{Master thesis in Computational Sciences and Engineering
+  \\ \textit{submitted by}}
   \vspace*{1\baselineskip}
 
   \LARGE \textbf{Bob Schreiner} \\
+  Student number: 20-944-450
   \vspace*{1\baselineskip}
 
   \Large{\textit{supervised by:} \\ Prof. Dr. Markus Reiher \\}
@@ -71,6 +73,33 @@
 \newpage
 
 \begin{abstract}
+
+  Atomic orbitals have formed the backbone of computational
+  quantum chemistry programs for the past century. While most
+  programs rely on Gaussian-type orbitals (GTOs), arguments have been
+  made for more general atomic orbital basis sets. The main
+  drawback is that numerical quadrature is necessary for the
+  integration of basis sets that do not allow for factorization.
+  Due to the lack of computational resources, the exploration of
+  basis sets has been limited almost exclusively to GTOs.
+  The shift of the computational landscape
+  towards ever more high-performance computing clusters, and
+  the recent popularity of using general-purpose graphics processing
+  units (GPGPUs) for scientific computations, have reopened the
+  discussion of general atomic orbitals. With this work we provide
+  the foundation for a reusable library, capable of harnessing the
+  computational power of GPGPUs through the Kokkos ecosystem. The
+  library assembles Fock and Kohn-Sham matrices for general atomic
+  orbitals. The two-electron terms are evaluated via density fitting,
+  and the exchange-correlation terms of the local density
+  approximation (LDA) and the generalized gradient approximation (GGA)
+  by quadrature on grids built with Becke's fuzzy Voronoi partitioning
+  scheme. We show that our quadrature schemes deliver SCF energies
+  converged to the \(\mu\)Ha level, and we benchmark the library on
+  the W4-11 test set using Slater-type orbitals: the mean absolute
+  deviation of the B3LYP atomization energies improves systematically
+  with basis size and settles at the intrinsic accuracy of the
+  functional. We also lay out a roadmap towards larger systems.
 
 \end{abstract}
 \tableofcontents
@@ -96,7 +125,7 @@ poured into their efficient evaluation.
 
 The Hohenberg-Kohn theorems were published in
 1964~\cite{Hohenberg1964}, followed shortly by Kohn-Sham density
-functional theory (DFT).~\cite{Kohn1965} The assembly of the Kohn-Sham
+functional theory (DFT).\cite{Kohn1965} The assembly of the Kohn-Sham
 matrix requires the integration of a non-linear functional based on
 the electron density. Given the
 complexity of the integrand the computational chemistry community was
@@ -113,23 +142,23 @@ Curiously, Becke's scheme not only allowed for the efficient
 integration of exchange-correlation functionals, but in combination
 with a technique called density-fitting it also
 delivered a new method, based on quadratures, to evaluate the
-two-electron terms in the Fock assembly.~\cite{Cohen2002, Watson2003}
+two-electron terms in the Fock assembly.\cite{Cohen2002, Watson2003}
 While programs that did not use GTOs as their underlying basis set,
 such as ADF~\cite{VanLenthe2003, Franchini2013}, adapted Becke's
 partitioning scheme to
 evaluate the two-electron terms, the vast majority of programs used
 far more efficient recurrence relations to evaluate those integrals
-with GTOs.~\cite{Obara1986, Ahlrichs2006}
+with GTOs.\cite{Obara1986, Ahlrichs2006}
 
 In recent years the computational landscape has started to
 change. Scientific computation has shifted away from personal
 computers and towards high-performance computing
-clusters.~\cite{Gavini2023} With the
-recent rise of general purpose graphical processing units (GPGPU) and
+clusters.\cite{Gavini2023} With the
+recent rise of general-purpose graphics processing units (GPGPU) and
 the advent of the exascale computing era, computational codes that
 were once regarded as state-of-the-art are dwarfed by other programs that can
 harness the computational power of
-GPGPUs.~\cite{GalvezVallejo2023, Stocks_2025, WilliamsYoung2021} In
+GPGPUs.\cite{GalvezVallejo2023, Stocks_2025, WilliamsYoung2021} In
 light of this paradigm
 shift, computations that were unthinkable thirty years ago are now
 within reach.
@@ -181,9 +210,9 @@ equation governs the dynamics of the system. A system consists of
 $N_{\text{nuc}}$ nuclei, each of which has a charge $Z_I$, and
 $N_{\text{el}}$ electrons, each of which has charge $-1$.
 Furthermore, we apply the Born-Oppenheimer approximation, which lets
-us separate  the Schrödinger equation into an electronic and a
+us separate the Schrödinger equation into an electronic and a
 nuclear part. In the remainder we will focus only on the electronic
-Schrödinger equation and assume that the nuclei are point like
+Schrödinger equation and assume that the nuclei are point-like
 particles, fixed in space. Their coordinates are given by the set
 $\{\mathbf R_1, \cdots ,\mathbf{R}_{N_{\text{nuc}}}\}$.
 
@@ -217,7 +246,7 @@ one-electron functions $\varphi$, called molecular orbitals (MO)
 \end{equation}
 
 We further approximate the molecular orbitals of spin $\sigma \in
-\{\alpha , \beta\}$ by a linear combination of atomic orbitals $\chi$
+\{\uparrow , \downarrow  \}$ by a linear combination of atomic orbitals $\chi$
 \begin{equation}
   \varphi_i^\sigma(\mathbf r) = \sum_{\mu = 1}^{N_{\text{bf}}}
   C^\sigma_{\mu i}\chi_\mu(\mathbf r),
@@ -227,12 +256,21 @@ We further approximate the molecular orbitals of spin $\sigma \in
 and obtain a Generalized Eigenvalue Problem for each value of $\sigma$
 \begin{equation}
   \mathbf F^\sigma  \mathbf C^\sigma =\mathbf S \mathbf
-  C^\sigma  \mathbf \epsilon^\sigma,
+  C^\sigma \mathbf \epsilon^\sigma,
   \label{eq:GenEig}
 \end{equation}
 where $\mathbf{F}$ is the Fock matrix, $\mathbf{C}$ holds the MO
 coefficients, $\mathbf{S}$ is the overlap matrix and
 $\mathbf{\epsilon}$ is a diagonal matrix holding the orbital energies.
+Since \( \mathbf F^\sigma \) depends on \( \mathbf C^\sigma \) the
+Generalized Eigenvalue problem is non-linear and does not allow for a
+closed form solution. The
+standard practice of solving this equation is through an
+iterative solver, updating the matrix \( \mathbf C^\sigma  \) until
+self-consistency is reached. The design of
+self-consistent field (SCF) solvers is an ongoing research topic,
+which is outside of the scope of this work, since we rely on
+available reusable implementations.
 
 The Fock matrix can be decomposed into one and two-electron components
 \begin{equation}
@@ -251,10 +289,10 @@ where
 
 \begin{equation}
   V^{\text{nuc}}_{\mu\nu} = -\bra{\mu}
-  \sum_{A=1}^{N_{\text{nuc}}} \frac{Z_A}{|\mathbf{r}-\mathbf
-  R_A|} \ket{\nu} =\sum_{A=1}^{N_{\text{nuc}}}  -Z_A\int
+  \sum_{I=1}^{N_{\text{nuc}}} \frac{Z_I}{|\mathbf{r}-\mathbf
+  R_I|} \ket{\nu} =\sum_{I=1}^{N_{\text{nuc}}}  -Z_I\int
   \frac{\chi_\mu(\mathbf r) \chi_\nu (\mathbf r)}{|\mathbf r -
-  \mathbf R_A|}d\mathbf r
+  \mathbf R_I|}d\mathbf r
   \label{eq:nuc}
 \end{equation}
 are the one-electron contributions and
@@ -289,7 +327,8 @@ density matrix and is defined as
   \label{eq:density_matrix}
 \end{equation}
 where $f_i$ is the occupation number, with $0 \leq f_i \leq 1$, and
-$D^\text{tot}_{\lambda\tau} = D^\alpha_{\lambda\tau} + D^\beta_{\lambda\tau}$.
+$D^\text{tot}_{\lambda\tau} = D^\uparrow_{\lambda\tau} +
+D^\downarrow_{\lambda\tau}$.
 
 \begin{equation}
   S_{\mu\nu} =  \braket{\mu | \nu} = \int \chi_\mu(\mathbf r)
@@ -360,8 +399,8 @@ but rather a whole zoo of atomic orbital basis set expansions. In each
 of the following subsections we will give an overview of one family
 of atomic basis set expansions.
 
-\subsubsection{Slater Type Orbitals}\label{subsubsec:sto}
-Normalized Slater Type Orbitals (STO) can be defined as
+\subsubsection{Slater-Type Orbitals}\label{subsubsec:sto}
+Normalized Slater-type orbitals (STOs) can be defined as
 \begin{equation}
   \mathcal S_\mu (\mathbf r ) = \mathcal S(\zeta,
   n,l,m;r,\theta,\phi) =
@@ -389,7 +428,7 @@ functions.\cite{Cohen2002,Chong2004, Chong*2005}
 
 STOs are arguably the most straightforward guess for a basis set
 when doing molecular calculations in the LCAO framework, because STOs
-are modeled after the analytical solutions to the Hydrogen
+are modeled after the analytical solutions to the hydrogen
 atom.\cite{Slater1930} It is only when being faced with the
 challenges of computing the two-electron integrals \eqref{eq:coulomb}
 and \eqref{eq:exchange}, that STOs prove problematic. Since
@@ -399,8 +438,8 @@ STOs,~\cite{Weniger2009, FernandezRico1998} researchers have
 focused their attention on other basis sets that are not plagued by
 the same inefficiencies, namely Gaussian Type Orbitals.\cite{Hill2012, Boys1950}
 
-\subsubsection{Gaussian Type Orbitals}\label{subsubsec:gto}
-Normalized Gaussian Type Orbitals (GTO) can be defined as
+\subsubsection{Gaussian-Type Orbitals}\label{subsubsec:gto}
+Normalized Gaussian-type orbitals (GTOs) can be defined as
 \begin{equation}
   \mathcal G_\mu(\mathbf r ) = \mathcal G(\alpha, l,m;r,\theta,\phi)
   = \sqrt{\frac{2^{l+2} (2\alpha)^{l+\frac{3}{2}}}{(2l+1)!! \sqrt{\pi}}}
@@ -418,7 +457,7 @@ computational quantum chemistry community,\cite{Hill2012} mainly
 because of the Gaussian product theorem.\cite{Boys1950} The Gaussian
 product theorem states that the product of two Gaussian functions is
 also a Gaussian function, and therefore allows for the analytical
-integration of the two-electron integrals   \eqref{eq:coulomb} and
+integration of the two-electron integrals \eqref{eq:coulomb} and
 \eqref{eq:exchange}. The Gaussian product theorem, combined with
 efficient recursive evaluation strategies, such as the Obara-Saika
 scheme, has made the evaluation of the two-electron integrals
@@ -426,25 +465,25 @@ scheme, has made the evaluation of the two-electron integrals
 efficient.\cite{Obara1986, Ahlrichs2006}
 
 GTOs come with their own set of drawbacks though. GTOs lack certain
-properties that one would expect the "true" underlying basis set
+properties that one would expect the ``true'' underlying basis set
 should fulfill. For example, one would expect the basis functions to
 exhibit a cusp at the nucleus; this condition is known as the
 Kato-cusp condition.\cite{Kato1957} The radial decay of Gaussian
 functions, which is much faster than that of STOs, is another typical
 drawback, which makes long-range interactions harder to capture in
-molecular calculations. \cite{Hill2012}
+molecular calculations.\cite{Hill2012}
 
 The drawbacks of GTOs have not gone unnoticed and the literature is
 rich in basis sets that have been developed to lessen the side
 effects of GTOs. The usual compromise that is made when using a GTO
-basis set is the one of adding more GTOs to the original basis set,
+basis set is to add more GTOs to the original basis set,
 usually doubling or even tripling the original number of basis
 functions.\cite{Ditchfield1971, Dunning1989} The speedup gained from
 using analytical integration over numerical quadrature has outweighed
 the need for more basis functions in the past.
 
 \subsubsection{Numerical Atom-Centered Orbitals}\label{subsubsec:nao}
-Numerical Atom-Centered Orbitals (NAO) can be defined as
+Numerical atom-centered orbitals (NAOs) can be defined as
 \begin{equation}
   \mathcal N_\mu(\mathbf r)= \mathcal N (n,l,m;r,\theta,\phi) =
   \frac{B_{n}(r)}{r}Y_{lm}(\theta,\phi),
@@ -471,14 +510,10 @@ combination of Lagrange Interpolating Polynomials
 Polynomials (HIP), which can be tabulated and passed on to an
 integral evaluation routine.\cite{Lehtola2023b}
 
-In the following sections we will have a closer look at the
-computational methods, which allow us to evaluate integrals when
-choosing NAOs as our basis set.
-
 \section{Computational Methods} \label{sec:comp_methods}
 In this section we will cover the theory of the computational methods
 we used to compute the Fock/KS matrices. The actual implementations
-are explained in section \ref{sec:Implementation}.
+are explained in Section~\ref{sec:Implementation}.
 
 \subsection{Quadratures}\label{subsec:quadratures}
 Quadrature schemes are a tool to approximate integrals over a domain
@@ -503,9 +538,9 @@ domain $\Omega$ or both.
 We chose to implement Becke's quadrature scheme in our integral
 evaluation library, since it has stood the test of time and is the
 standard integral evaluation tool in most molecular quantum chemistry
-programs today. \cite{Becke_1988, Franchini2013}
+programs today.\cite{Becke_1988, Franchini2013}
 
-\subsubsection{Becke's molecular partitioning scheme}
+\subsubsection{Becke's Molecular Partitioning Scheme}
 Becke's molecular partitioning scheme,\cite{Becke_1988} also known as
 fuzzy Voronoi partitioning, is a method in which the integral we want
 to compute is split into a weighted sum of sub-integrals. Each
@@ -548,7 +583,7 @@ the nuclei in the system
 where
 
 \begin{equation}
-  I_n = \int F_n(\mathbf r)d^3\mathbf r.
+  I_n = \int F_n(\mathbf r)d\mathbf r.
   \label{eq:partial-integral_definition}
 \end{equation}
 
@@ -617,8 +652,8 @@ so that our final integral evaluation reads
 \end{equation}
 
 The construction of the relative weight functions is not unique
-though and improvements have been made over Becke's original proposal
-of the construction of the relative weight functions.
+though and improvements have been made over Becke's original
+proposal.
 Laqua et al. introduced a construction that is very close to the
 original proposal of Becke, but yields more robust results and has
 better screening properties.\cite{Laqua2018}
@@ -641,7 +676,7 @@ and $\mu_{ij}^{\text{mod,cutoff}}$ is used in all subsequent
 computations instead of $\mu_{ij}$. $R_{\text{cutoff}} = 5$ bohr
 provided optimal results in their tests.
 
-\subsubsection{Quadrature grids}
+\subsubsection{Quadrature Grids}
 Now that we know how to generate the partitioning weights $p_n$ from
 a set of quadrature grids $\{\{(\mathbf r_{nq},
 w_{nq})\}_{q=1}^{n_{\text{quad}}}\}_{n=1}^{N_{\text{nuc}}}$, we
@@ -691,7 +726,7 @@ interval $x\in [-1,1]$ and use the radial transformation
 \end{equation}
 
 where $\xi_n$ stands for half of the Bragg-Slater radius of the
-respective nucleus, except for Hydrogen, where Becke did not apply
+respective nucleus, except for hydrogen, where Becke did not apply
 the factor $1/2$.
 
 Treutler and Ahlrichs later reviewed Becke's approach to the
@@ -720,29 +755,28 @@ kind, $x\in[-1 ,1]$ .
 They also published a table for optimized values of $\xi$ for the
 case of the (M4) grid, but it should be noted that their
 optimizations were conducted using a Gaussian basis set
-(Section \ref{subsubsec:gto}).
+(Section~\ref{subsubsec:gto}).
 
-It cannot be overstated that the generation of quadrature grids is an
+Note that the generation of quadrature grids is an
 ongoing research topic and that the literature is rich in different
 approaches.\cite{Becke_1988, Gill1993, Murray_1993, Goursot1994,
   Johnson1994, Treutler1995, Mura_1996,
   adaptivenumericalintegratorformolecularintegrals1998, Gill2003,
-Efficient2004}. The stability of the quadrature grids has been
+Efficient2004} The stability of the quadrature grids has been
 heavily debated in the past and the consensus in the literature is
 that quadrature grids need to be well converged, i.e. have enough
 quadrature points, in order to yield meaningful results, especially
-when computing energy gradients. \cite{Johnson_1993, Baker1994, Papas2006}
+when computing energy gradients.\cite{Johnson_1993, Baker1994, Papas2006}
 
 \subsection{Density Fitting \& Resolution of the
 Identity}\label{subsec:density_fitting}
-\label{subsec:DF_RI}
 
 The one-electron integrals fit the form of
 \eqref{eq:global_quadrature} perfectly. For example, if we wish to
 compute $T_{\mu\nu}$ from \eqref{eq:kinetic}, we replace $F(\mathbf
 r)$ by $\nabla \chi_\mu (\mathbf r) \cdot \nabla \chi_\nu(\mathbf r)$
 and provide a set of quadrature grids. The procedure explained in
-section  \ref{subsec:quadratures} then gives us the corresponding approximation.
+Section~\ref{subsec:quadratures} then gives us the corresponding approximation.
 
 In order to compute the Fock matrix though, we need to find a procedure
 that lets us approximate the two-electron integrals defined in
@@ -751,10 +785,10 @@ goal we employ density fitting, also known as the resolution
 of the identity, to reduce the two-electron integrals to one-electron
 integrals of the form \eqref{eq:global_quadrature}. We closely follow
 the procedures described by Cohen and Handy \cite{Cohen2002} for the
-Coulomb integral  and Watson et al.  \cite{Watson2003}  for the
+Coulomb integral and Watson et al.  \cite{Watson2003}  for the
 exchange integral.
 
-Density fitting  approximates the density $\rho(\mathbf r)$ as a
+Density fitting approximates the density $\rho(\mathbf r)$ as a
 linear combination of the auxiliary basis $\tilde \chi_\alpha(\mathbf
 r)$ to give the fitted density $\tilde \rho(\mathbf r)$, defined as
 
@@ -794,7 +828,7 @@ Coulomb and exchange integrals
 \end{equation}
 
 \begin{equation}
-  K_{\mu\nu}^\sigma \approx  \tilde K_{\mu\nu}^\sigma = \sum_{\alpha
+  K_{\mu\nu}^\sigma \approx \tilde K_{\mu\nu}^\sigma = \sum_{\alpha
   \beta\lambda\tau}
   D^\sigma_{\lambda\tau}(\mu \lambda | \alpha)(\alpha |
   \beta)^{-1}(\beta|\nu\tau)
@@ -822,8 +856,7 @@ where we defined $\tilde V_\alpha(\mathbf r)$ as
   \label{eq:potential-chi}
 \end{align}
 i.e. the potential of $\tilde\chi_\alpha$. Note that $\tilde V_\alpha$ is
-known analytically for STOs \cite{Cohen2002} and can be efficiently
-computed for NAOs.
+known analytically for STOs \cite{Cohen2002}.
 
 Similarly we can rewrite $(\alpha|\beta)$ as
 
@@ -837,7 +870,7 @@ Similarly we can rewrite $(\alpha|\beta)$ as
 \end{align}
 
 How $(\alpha|\beta)$ is inverted is implementation dependent and will
-be covered in section \ref{sec:Implementation}.
+be covered in Section~\ref{sec:Implementation}.
 
 The integrals \eqref{eq:3-center-ri} and \eqref{eq:2-center-ri} can
 then be approximated by the quadrature scheme explained in the previous section.
@@ -852,7 +885,7 @@ build our library upon. First and foremost we should check if a
 similar reusable library already exists and can be extended to our needs.
 
 During our literature research we examined the reusable library GauXC
-\cite{WilliamsYoung2021 , WilliamsYoung2020}. GauXC is indeed a
+\cite{WilliamsYoung2021, WilliamsYoung2020}. GauXC is indeed a
 strong candidate; the library provides a broad set of functionality
 to create quadrature grids, evaluate Becke's partitioning scheme and
 integrate Gaussian basis sets with excellent scaling on GPGPUs. The
@@ -872,9 +905,7 @@ where a one to one correspondence between functions exists. For
 complex tasks the functionalities, which CUDA and HIP provide, are
 drastically different and the hard truth is that in research codes a
 kernel will actually only be implemented in one framework and the
-other one will be ignored. Our claim is supported by looking at the
-current source code of GauXC, whose CUDA and HIP support has
-drastically diverged.  We came to the conclusion that in order to build a
+other one will be ignored. We came to the conclusion that in order to build a
 maintainable and truly reusable library, we would have to take a
 different approach, where the implementations themselves remain
 hardware agnostic.
@@ -905,12 +936,15 @@ less explicit control over the data management and scheduling than
 one would have in a language like CUDA or HIP. The Kokkos kernels also
 provide a broad range of linear algebra functionality, but they fall
 far short of supporting all BLAS and LAPACK routines. As we will
-show later, in section \ref{subsubsec:dense_la} we needed to adapt an
+show later, in Section~\ref{subsubsec:dense_la} we needed to adapt an
 algorithm that originally made use of a Cholesky decomposition to
 instead use a singular value decomposition, because the Cholesky
 decomposition subroutine of a general symmetric positive definite
-matrix is not implemented in Kokkos Kernels at the time of the current
-writing.
+matrix is not implemented in Kokkos Kernels at the time of writing.
+
+Table~\ref{tab:kokkos_hw_mapping} summarizes how the Kokkos
+abstractions used throughout this work map onto the underlying GPU
+hardware.
 
 \begin{table}[H]
   \centering
@@ -940,21 +974,21 @@ writing.
   \end{tabular}
 \end{table}
 
-\subsection{Grid construction}\label{subsec:grid_construction}
+\subsection{Grid Construction}\label{subsec:grid_construction}
 
 We construct the quadrature grid based on the positions of the nuclei
 $\{\mathbf R_i\}_{i=1}^{N_\text{nuc}}$. For each nucleus we construct
 a spherical quadrature grid with \texttt{IntegratorXX}~\cite{IntegratorXX}, and
 then shift these quadrature grids such that they are centered at their specific
 parent nucleus. We then flatten the quadrature points and weights into one
-dimensional \texttt{Kokkos::View}s of size $N_\text{nuc}\times
+dimensional \texttt{Kokkos::View}s of size $N_\text{nuc}\cdot
 n_\text{quad}$. Note that the number of quadrature points generated
 around one nucleus could be adjusted based on its charge. This would
 allow for example
 heavier nuclei to have more quadrature points surrounding them.
 To keep track of which quadrature point was generated around which nucleus we
 create a \texttt{Kokkos::View} called
-\textit{owner} of size  $N_\text{nuc}\times
+\textit{owner} of size $N_\text{nuc}\cdot
 n_\text{quad}$.
 
 Now that we have fixed the position of the quadrature points, we can move on to
@@ -964,7 +998,7 @@ Kokkos' Data Parallelism
 paradigm as well as Kokkos' Hierarchical Parallelism paradigm.
 The entire control-flow is schematically represented in Figure
 \ref{fig:becke_team_flow} and all memory allocations are documented
-in Table \ref{tab:becke_team_memory_allocations}.
+in Table~\ref{tab:becke_team_memory_allocations}.
 
 First we compute the matrix $R_{ij}$, denoting the distance between
 nucleus $i$ and nucleus $j$, and store it in a global
@@ -981,7 +1015,7 @@ Each team launches a
 $\texttt{Kokkos::TeamVectorRange}$ parallel region, where each thread
 fills one entry in the $r_i$ cache. After the team has finished
 filling the scratch, they proceed to calculate $\mu_{ij}$ and
-$P_i$ according to Equations \eqref{eq:mu_ij} and
+$P_i$ according to Equations~\eqref{eq:mu_ij} and
 \eqref{eq:partition_weight_def}, again using a
 $\texttt{Kokkos::TeamVectorRange}$ parallel region. Next the
 threads compute the normalization constant $Z = \sum_m
@@ -994,8 +1028,9 @@ partitioning weight, according to
 
 \begin{figure}[H]
   \centering
-  % --- Horizontal flowchart, full width ---
-  \resizebox{\textwidth}{!}{%
+  % --- Vertical flowchart: the pipeline reads top to bottom. Height-bounded
+  % (not width-bounded) so the column keeps a legible box size. ---
+  \resizebox{!}{0.50\textheight}{%
     \begin{tikzpicture}[
         node distance=8mm,
         box/.style={draw, rounded corners,
@@ -1017,32 +1052,33 @@ partitioning weight, according to
       % Setup phase
       \node[databox] (dist) {
       $R_{ij} = | \mathbf R_i - \mathbf R_j|$};
-      \node[hostbox, right=of dist] (policy)
+      \node[hostbox, below=of dist] (policy)
       {Create one team per\\ quadrature point $(n,q)$};
       \draw[arr] (dist) -- (policy);
       % Team kernel phase
-      \node[threadbox, right=12mm of policy] (cache)
-      {$r_i = |\mathbf{r}_{nq} - R_i|$};
-      \node[threadbox, right=14mm of cache] (weights)
-      {$\mu_{ij} = \dfrac{r_i - r_j}{\min(R_c,
+      \node[threadbox, below=12mm of policy] (cache)
+      {$r_i = |\mathbf{r}_{nq} - \mathbf R_i|$};
+      \node[threadbox, below=14mm of cache] (weights)
+      {$\mu_{ij} = \dfrac{r_i - r_j}{\min(R_\text{cutoff},
         R_{ij})}$\\[1mm]
       $P_i = \prod_{j\neq i} s_k(\mu_{ij})$};
-      \node[threadbox, right=14mm of weights] (reduce)
+      \node[threadbox, below=14mm of weights] (reduce)
       {$Z = \sum_m P_m(\mathbf{r}_{nq})$};
-      \node[teambox, right=of reduce] (write)
+      \node[teambox, below=of reduce] (write)
       {$p_n = P_n / Z$\\ $w'_{nq} = p_n\, w_{nq}$};
       \draw[arr] (policy) -- (cache);
       \draw[arr] (cache) -- (weights)
-      node[midway, above, barrierlabel] {barrier};
+      node[midway, right, barrierlabel] {barrier};
       \draw[arr] (weights) -- (reduce)
-      node[midway, above, barrierlabel] {barrier};
+      node[midway, right, barrierlabel] {barrier};
       \draw[arr] (reduce) -- (write);
-      % Dashed team-kernel region
+      % Dashed team-kernel region, labelled down its side so the label costs
+      % height rather than width.
       \begin{scope}[on background layer]
         \node[draw, dashed, rounded corners,
           fit=(cache)(weights)(reduce)(write),
           inner sep=4mm,
-          label={[font=\small]below:{Team
+          label={[font=\small, rotate=90, anchor=south]left:{Team
         kernel, per $(n,q)$}}] {};
       \end{scope}
   \end{tikzpicture}}
@@ -1060,14 +1096,14 @@ partitioning weight, according to
       & $N_\text{nuc}$ &  $\mathbf{R}_i$            & --- \\
       \texttt{quadrature\_points} &
       \texttt{View<Point*>}
-      & $N_\text{nuc}\times n_\text{quad}$ & $\mathbf{r}_{nq}$         & --- \\
+      & $N_\text{nuc}\cdot n_\text{quad}$ & $\mathbf{r}_{nq}$         & --- \\
       \texttt{weights}            &
       \texttt{View<double*>}
-      & $N_\text{nuc} \times n_\text{quad}$   & $w_{nq} \to w'_{nq}$
+      & $N_\text{nuc}\cdot n_\text{quad}$   & $w_{nq} \to w'_{nq}$
       & --- \\
       \texttt{owner}            &
       \texttt{View<int*>}
-      & $N_\text{nuc} \times  n_\text{quad}$    & ---       & --- \\
+      & $N_\text{nuc}\cdot n_\text{quad}$    & ---       & --- \\
       \texttt{R\_ij}              &
       \texttt{View<double**, RandomAccess>}
       & $N_\text{nuc}\times N_\text{nuc}$  & $R_{ij}$                  & --- \\
@@ -1103,7 +1139,7 @@ partitioning weight, according to
 
 Throughout this section \( n_\text{quad} \) denotes the number of
 quadrature points generated per nucleus. The total number of quadrature
-points, used in the remainder of the paper, is therefore
+points, used in the remainder of this work, is therefore
 \( N_\text{quad} = n_\text{quad}\times N_\text{nuc} \).
 
 \subsection{Integral Routines}\label{subsec:integral_routines}
@@ -1122,20 +1158,20 @@ drawbacks, which we will analyze in the following subsections.
 \subsubsection{Dense Linear Algebra}\label{subsubsec:dense_la}
 
 The dense linear algebra kernel relies on the idea that GPUs are
-extremely good at doing Dense GEneral Matrix Matrix (GEMM) and Dense
-GEneral Matrix Vector (GEMV) multiplications. And indeed when
-applying our quadrature rule given by \eqref{eq:global_quadrature} to
+extremely good at doing dense GEneral Matrix Matrix (GEMM) and dense
+GEneral Matrix Vector (GEMV) multiplications. Indeed, when applying
+our quadrature rule given by \eqref{eq:global_quadrature} to
 equations $\eqref{eq:coulomb-RI}$ and $\eqref{eq:exchange-RI}$ we can
 rewrite them entirely with matrix-matrix multiplications. The schemes
 we use to compute the Coulomb and the exchange matrix are commonly
 known as the RI-J and RI-K schemes.
 
 Since $\tilde J_{\mu \nu}$ and $\tilde K_{\mu \nu}$ both depend on
-the density matrix $D_{\mu  \nu }$, we need to recompute these
+the density matrix $D_{\mu \nu }$, we need to recompute these
 matrices during each SCF cycle. Nevertheless we are able to
 pre-compute some quantities that can be reused within the schemes. We call
-$\Phi_{\mu  g} = \chi_\mu(\mathbf r_g)$ the basis collocation matrix,
-$\tilde \Phi_{\alpha  g} = \tilde \chi_\alpha(\mathbf r_g)$ the
+$\Phi_{\mu g} = \chi_\mu(\mathbf r_g)$ the basis collocation matrix,
+$\tilde \Phi_{\alpha g} = \tilde \chi_\alpha(\mathbf r_g)$ the
 auxiliary basis collocation matrix and
 $\tilde V_{\alpha g} = \tilde V_\alpha(\mathbf r_g)$ the Coulomb
 collocation matrix.
@@ -1165,9 +1201,9 @@ To enhance numerical stability we are also reducing the linear
 dependence of the auxiliary basis functions by truncating the inner
 dimension of the SVD to only contain the $K$ largest singular values.
 Another way to think about this procedure is as a preconditioning
-step, where we remove all eigenvalues below a certain threshold \(
-\tau_\text{screen} \) to lower the condition
-number of the inverted matrix. The final inverse then reads
+step, where we remove all singular values below a certain threshold
+to lower the condition number of the inverted matrix. The final
+inverse then reads
 
 \begin{align}
   (\alpha | \beta )^{-1}
@@ -1181,8 +1217,8 @@ Another, more computationally efficient, way to compute \(
 X^{-\frac{1}{2}} \) is with a pivoted
 Cholesky factorization of \( (\alpha | \beta  )\). We chose the SVD
 method because the Cholesky factorization is, as of the writing of
-this work, not implemented in the Kokkos Kernel library, whereas
-third-party library calls to LAPACK, CUDA and HIP exist natively in
+this work, not implemented in the Kokkos Kernels library, whereas
+third-party library calls of the SVD to LAPACK, CUDA and HIP exist natively in
 Kokkos Kernels. One should
 also note that the diagonalization step in the startup phase is negligible
 compared to the overall SCF runtime.
@@ -1191,7 +1227,7 @@ Having precomputed all of the quantities above we are ready to tackle
 the SCF cycles. During each SCF cycle we provide the Fock matrix to
 an external SCF library, in our case we chose the reusable open source library
 \texttt{OpenOrbitalOptimizer} \cite{Lehtola2025}. The SCF subroutine in
-return provides us with the density matrix \( D_{\mu  \nu } = \sum_i
+return provides us with the density matrix \( D_{\mu \nu } = \sum_i
 f_i C_{\mu}^iC_{\nu }^i\), where \( f_i \) are the orbital occupation
 numbers and \( C_{\mu}^i \) are the molecular-orbital coefficients
 of the i-th occupied orbital. We then rebuild the Coulomb and
@@ -1256,7 +1292,7 @@ to obtain \( z_\alpha \).
   z_\alpha
   = \sum_{\beta}(\alpha|\beta)^{-1}y_\beta
   \approx \sum_k (X^{-\frac{1}{2}})_{\alpha k} \sum_\beta
-  (X^{-\frac{1}{2}})_{\beta  k} \ y_\beta
+  (X^{-\frac{1}{2}})_{\beta k} \ y_\beta
 \end{align}
 
 We compute \( v_g =  \sum_{\alpha }
@@ -1275,15 +1311,15 @@ doing a GEMM of the scaled and the unscaled collocation matrices.
 \end{align}
 
 This scheme has an asymptotic runtime of \( \mathcal O(N_\text{bf}^2 \times
-N_\text{quad} )\) ( \( \approx  \mathcal O(N_\text{bf}^3)\), if we assume that
+N_\text{quad} )\) ( \( \approx \mathcal O(N_\text{bf}^3)\), if we assume that
 \( N_\text{quad} \) scales linearly with \( N_\text{bf}  \)), where the
 most expensive operation is the final GEMM.
 
 The RI-K scheme is unfortunately not as factorizable as the RI-J
-scheme, but we can still take advantage of the rank-k expansion of
+scheme, but we can still take advantage of the low-rank expansion of
 the density matrix in order to get some factorizations. The
 factorization then reads \( (\mu i | \alpha ) =  \sum_\lambda
-C^i_{\lambda}(\mu \lambda |\alpha )  \). The RI-K scheme then boils
+C^i_{\lambda}(\mu \lambda |\alpha ) \). The RI-K scheme then boils
 down to computing these 3-center integrals and applying \(
 X^{-\frac{1}{2}} \) with a GEMM to obtain a matrix \( T^i_{\mu k} \).
 We then perform a GEMM for each \( T^i_{\mu k} \) and scale the
@@ -1300,14 +1336,14 @@ result by \( f_i \), before adding the term to our final matrix.
   \beta)^{-1} (\beta|\nu i)  \\
   &\approx \sum_i f_i \sum_{\alpha \beta }
   (\mu i | \alpha) \sum_k (X^{-\frac{1}{2}})_{\alpha k}
-  (X^{-\frac{1}{2}})_{\beta  k} (\beta|\nu i) \\
+  (X^{-\frac{1}{2}})_{\beta k} (\beta|\nu i) \\
   &\approx \sum_i f_i \sum_k T^{i}_{\mu  k }  T^{i}_{\nu  k }
   \label{eq:exchange_rearranged}
 \end{align}
 
-The explicit computation of \( T^i_{\nu  k } \) looks as follows
+The explicit computation of \( T^i_{\nu k } \) looks as follows
 \begin{align}
-  T^i_{\nu  k }
+  T^i_{\nu k }
   &=  \sum_\alpha (X^{-\frac{1}{2}})_{\alpha k}\, (\nu i | \alpha ) \\
   &=  \sum_\alpha (X^{-\frac{1}{2}})_{\alpha k}\, \int \chi_\nu(\mathbf r)
   \left(\sum_\lambda \chi_\lambda(\mathbf r)C_{\lambda}^i \right)
@@ -1361,7 +1397,9 @@ SCF cycle, is summarized schematically in Figure
 
 \begin{figure}[H]
   \centering
-  % --- Horizontal flowchart, full width ---
+  % --- Vertical flowchart: the startup phase runs down the left, and the SCF
+  % cycle runs top to bottom as two parallel branches (RI-J | RI-K) that
+  % rejoin at the Fock assembly. ---
   \resizebox{\textwidth}{!}{%
     \begin{tikzpicture}[
         node distance=10mm,
@@ -1376,60 +1414,63 @@ SCF cycle, is summarized schematically in Figure
         branchlabel/.style={font=\large\bfseries, text=black},
         looplabel/.style={font=\small\itshape, text=gray!70!black}
       ]
-      % --- Startup phase ---
+      % --- Startup phase: its own column, top-left ---
       \node[databox] (colloc)
       {Precompute collocation\\matrices
       $\Phi_{\mu g},\ \tilde\Phi_{\alpha g},\ \tilde V_{\alpha g}$};
-      \node[gemmbox, right=of colloc] (metric)
+      \node[gemmbox, below=of colloc] (metric)
       {$(\alpha|\beta)=\displaystyle\sum_g w_g\,
       \tilde\Phi_{\alpha g}\tilde V_{\beta g}$};
-      \node[hostbox, right=of metric] (svd)
+      \node[hostbox, below=of metric] (svd)
       {SVD $+$ truncation\\
       $X^{-\frac12}_{\alpha k}=U_{\alpha k}S_k^{-\frac12}$};
       \draw[arr] (colloc) -- (metric);
       \draw[arr] (metric) -- (svd);
 
-      % --- SCF entry ---
-      \node[hostbox, below=20mm of colloc] (dens)
+      % --- SCF entry, centred over the two branches ---
+      \node[hostbox, right=34mm of colloc] (dens)
       {$D_{\mu\nu},\,C^i_\mu$ from\\\texttt{OpenOrbitalOptimizer}};
 
-      % --- RI-J row ---
-      \node[gemmbox, right=12mm of dens] (rho)
+      % --- RI-J branch (left column) ---
+      \node[gemmbox, below=18mm of dens, xshift=-26mm] (rho)
       {$\rho_g=\displaystyle\sum_{\lambda\tau}
       \Phi_{\lambda g}\Phi_{\tau g}D_{\lambda\tau}$};
-      \node[gemvbox, right=of rho] (yb)
+      \node[gemvbox, below=of rho] (yb)
       {$y_\beta=\displaystyle\sum_g \tilde V_{\beta g}\,w_g\,\rho_g$};
-      \node[gemvbox, right=of yb] (za)
+      \node[gemvbox, below=of yb] (za)
       {$z_\alpha=\displaystyle\sum_{k\beta}
       X^{-\frac12}_{\alpha k}X^{-\frac12}_{\beta k}y_\beta$};
-      \node[gemvbox, right=of za] (vg)
+      \node[gemvbox, below=of za] (vg)
       {$v_g=\displaystyle\sum_\alpha \tilde V_{\alpha g}\,z_\alpha$};
-      \node[gemmbox, right=of vg] (jmn)
+      \node[gemmbox, below=of vg] (jmn)
       {$\tilde J_{\mu\nu}=\displaystyle\sum_g
       \Phi_{\mu g}\,w_g v_g\,\Phi_{\nu g}$};
 
-      % --- RI-K row ---
-      \node[gemmbox, below=16mm of rho] (cig)
+      % --- RI-K branch (right column); K lands level with J ---
+      \node[gemmbox, below=18mm of dens, xshift=26mm] (cig)
       {$c^i_g=\displaystyle\sum_\lambda \Phi_{\lambda g}C^i_\lambda$};
-      \node[gemmbox, right=of cig] (mia)
+      \node[gemmbox, below=of cig] (mia)
       {$(\nu i|\alpha)=\displaystyle\sum_g
       \Phi_{\nu g}w_g c^i_g\tilde V_{\alpha g}$};
-      \node[gemmbox, right=of mia] (tik)
+      \node[gemmbox, below=of mia] (tik)
       {$T^i_{\nu k}=\displaystyle\sum_\alpha
       (\nu i|\alpha)\,X^{-\frac12}_{\alpha k}$};
-      \node[gemmbox, below=16mm of jmn] (kmn)
+      \node[gemmbox] (kmn) at (cig |- jmn)
       {$\tilde K_{\mu\nu}=\displaystyle\sum_i f_i
       \sum_k T^i_{\mu k}T^i_{\nu k}$};
 
-      % --- Fock assembly ---
-      \node[hostbox, right=14mm of jmn, yshift=-14mm] (fock)
+      % --- Fock assembly: where the two branches rejoin ---
+      \node[hostbox, anchor=north]
+      (fock) at ($(jmn.south)!0.5!(kmn.south)+(0,-18mm)$)
       {Assemble Fock \\matrix $F_{\mu\nu}$};
 
-      % --- Arrows ---
-      \draw[arr] (dens) -- (rho)
-      node[midway, above, branchlabel] {RI-J};
-      \draw[arr] (dens.south) |- (cig.west)
-      node[near end, above, branchlabel] {RI-K};
+      % --- Arrows: split out of the density, rejoin at the Fock build ---
+      \coordinate (split) at ($(dens.south)+(0,-7mm)$);
+      \draw[thick] (dens.south) -- (split);
+      \draw[arr] (split) -| (rho.north)
+      node[pos=0.25, above, branchlabel] {RI-J};
+      \draw[arr] (split) -| (cig.north)
+      node[pos=0.25, above, branchlabel] {RI-K};
       \draw[arr] (rho) -- (yb);
       \draw[arr] (yb) -- (za);
       \draw[arr] (za) -- (vg);
@@ -1437,11 +1478,11 @@ SCF cycle, is summarized schematically in Figure
       \draw[arr] (cig) -- (mia);
       \draw[arr] (mia) -- (tik);
       \draw[arr] (tik) -- (kmn);
-      \draw[arr] (jmn.east) -- (fock.north west);
-      \draw[arr] (kmn.east) -- (fock.south west);
-      \draw[arr] (fock.south) to[out=-90, in=-90, looseness=0.5]
-      node[midway, below, looplabel] {updated $D_{\mu\nu}$}
-      (dens.south);
+      \draw[arr] (jmn.south) -- (fock.north west);
+      \draw[arr] (kmn.south) -- (fock.north east);
+      \draw[arr] (fock.east) to[out=0, in=0, looseness=1.4]
+      node[midway, right, looplabel] {updated $D_{\mu\nu}$}
+      (dens.east);
 
       % --- Background: dashed regions ---
       \begin{scope}[on background layer]
@@ -1451,19 +1492,23 @@ SCF cycle, is summarized schematically in Figure
         convergence}}] (scf) {};
         \node[draw, dashed, rounded corners, draw=gray!60, inner sep=3mm,
           fit=(cig)(mia)(tik),
-        label={[looplabel]above:{for each occupied orbital $i$}}] {};
+        label={[looplabel]right:{for each occupied orbital $i$}}] {};
       \end{scope}
 
-      % --- Startup quantities reused each cycle ---
-      \draw[arr, dashed] (svd.south) -- (scf.north -| svd.south)
-      node[midway, right, looplabel]
+      % --- Startup quantities reused each cycle. Routed down the left margin
+      % and in between two branch rows, so the label sits in clear space
+      % instead of on top of the SVD box. ---
+      \coordinate (reuse) at ($(za.south)!0.5!(vg.north)$);
+      \draw[arr, dashed] (svd.south) |- (scf.west |- reuse)
+      node[pos=1, anchor=south east, xshift=-1.5mm, looplabel]
       {$\Phi,\ \tilde V,\ X^{-\frac12}$ reused};
   \end{tikzpicture}}
 
   \caption{Control-flow of the dense RI-J and RI-K integral routines,
-    annotated with the underlying equations. The boxes in the top row
-    form the one-time startup phase; everything inside the outer dashed
-    region is re-evaluated in every SCF cycle. Boxes are colored by
+    annotated with the underlying equations. The boxes in the left-hand
+    column form the one-time startup phase; everything inside the outer
+    dashed region is re-evaluated in every SCF cycle, as two parallel
+    branches that rejoin at the Fock build. Boxes are colored by
     operation type: blue for host orchestration and interaction with
     the external SCF library, yellow for pre-computed data held in
     device memory, orange for dense matrix--matrix products (GEMM), and
@@ -1496,22 +1541,22 @@ steps. First, we create bounding boxes around points that are close to
 each other in space, i.e. we want to find clusters of points. Second,
 we compute bounding boxes around those clusters. Third, we compute a
 cutoff radius for each basis function. Lastly, we compute the
-intersection of all discs, generated by taking the origin of a basis
+intersection of all spheres, generated by taking the origin of a basis
 function as the center and the cutoff radius as the radius, with all
-bounding boxes. If a disc intersects a bounding box we add it to the
+bounding boxes. If a sphere intersects a bounding box we add it to the
 neighbor list.
 
 Fortunately there exists a reusable open source library, called
-\texttt{ArborX} \cite{ LebrunGrandie2020, Prokopenko2025}, written
+\texttt{ArborX} \cite{LebrunGrandie2020, Prokopenko2025}, written
 entirely in Kokkos, which we are able to
 seamlessly integrate into our routines. Through \texttt{ArborX}'s API
 we reorder our quadrature points according to a Z-order. The Z-order
 relies on a space filling curve, which on average makes points that
 are close to each other in space, also close to each other in
 hardware memory. We then build bounding boxes around a pre-defined
-number of points, i.e. a box of size \( B \) contains exactly \( B \)
+number of points, i.e. a box of size \( N_B \) contains exactly \( N_B \)
 points. Since we previously ordered our points, we simply define one
-box to contain all points with indices \( i \in [(n*B)+1, n*(B+1)]
+box to contain all points with indices \( i \in [nN_B+1, (n+1)N_B]
 \). To define the cutoff radii \(  r_\text{cutoff} \) we use a
 screening threshold \( \tau_\text{cutoff} \), s.t.
 \( r > r_\text{cutoff} \implies B(r) < \tau_\text{cutoff} \).
@@ -1524,37 +1569,26 @@ operation whose inner dimension was the full set of quadrature points is
 replaced by a custom team-batched kernel that only visits the points and
 basis functions retained by the neighbor list. We launch one Kokkos team
 per box and, following the same hierarchical-parallelism pattern as the
-Becke partitioning routine (Figure \ref{fig:becke_team_flow}), stage the
-basis-function evaluations \( \phi_i(\mathbf r_g) \) through a fixed-size
+Becke partitioning routine (Figure~\ref{fig:becke_team_flow}), stage the
+basis-function evaluations \( \chi_\mu(\mathbf r_g) \) through a fixed-size
 neighbor-tile cache in team scratch memory.
-
-Staging the evaluations is what makes the local kernels practical. A
-naive local kernel either recomputes each \( \phi_i(\mathbf r_g) \) for
-every neighbor pair -- an \( \mathcal O(N_\text{nb}^2\times N_\text{pts})
-\) redundancy -- or caches the full \( N_\text{nb}\times N_\text{pts} \)
-block, which overflows scratch on large boxes. Tiling resolves both:
-each tile of \texttt{tile\_size} neighbors is evaluated once into a
-buffer of size \( \texttt{tile\_size}\times\texttt{max\_points\_per\_box}
-\) and reused across the paired contraction, so the shared-memory
-footprint becomes independent of the number of neighbors. The symmetric
-pairwise contraction is carried out as a blocked, lower-triangular tile
-loop, halving the arithmetic.
 
 The tiled RI-J routine runs as two team kernels separated by a host-side
 application of \( (\alpha|\beta)^{-1} \): the first accumulates the
 fitted-density coefficients \( y_\alpha \) (rescaled to \( z_\alpha \) by
 two GEMVs), the second contracts the fitted potential back onto basis
 pairs to assemble \( \tilde J_{\mu\nu} \). Its control-flow is shown in
-Figure \ref{fig:tiled_rij_flow} and its allocations in
-Table \ref{tab:tiled_rij_memory}. The tiled RI-K routine loops over the
+Figure~\ref{fig:tiled_rij_flow} and its allocations in
+Table~\ref{tab:tiled_rij_memory}. The tiled RI-K routine loops over the
 occupied orbitals: for each orbital \( i \) it folds \( c^i(\mathbf r_g)
-=\sum_k C_{ki}\phi_k(\mathbf r_g) \) into the quadrature weights, builds
+=\sum_\lambda C^i_\lambda \chi_\lambda(\mathbf r_g) \) into the
+quadrature weights, builds
 the half-transformed three-center integral \( (\nu i|\alpha) \) with the
-tiled kernel -- evaluating every neighbor tile of \( \phi_j \) once and
+tiled kernel -- evaluating every neighbor tile of \( \chi_\nu \) once and
 reusing it across all auxiliary functions \( \alpha \) -- and then
 applies \( X^{-\frac12} \) and accumulates \( \tilde K_{\mu\nu} \) with
 two GEMMs. Its control-flow and allocations are given in
-Figure \ref{fig:tiled_rik_flow} and Table \ref{tab:tiled_rik_memory}.
+Figure~\ref{fig:tiled_rik_flow} and Table~\ref{tab:tiled_rik_memory}.
 
 \begin{figure}[H]
   \centering
@@ -1571,12 +1605,12 @@ Figure \ref{fig:tiled_rik_flow} and Table \ref{tab:tiled_rik_memory}.
         looplabel/.style={font=\small\itshape, text=gray!70!black}
       ]
       \node[databox] (dbuild)
-      {Build density\\$D_{\mu\nu}=\sum_k f_k C_{\mu k}C_{\nu k}$};
+      {Build density\\$D_{\mu\nu}=\sum_i f_i C_{\mu i}C_{\nu i}$};
       \node[threadbox, below=16mm of dbuild] (load1)
       {Load $w_g,\mathbf r_g$\\into scratch};
-      \node[threadbox, right=of load1] (phi1) {Eval tile\\$\phi_a,\phi_b$};
+      \node[threadbox, right=of load1] (phi1) {Eval tile\\$\chi_\mu,\chi_\nu$};
       \node[threadbox, right=of phi1] (rho)
-      {$\rho_g\mathrel{+}=\sum_{ij}\phi_i\phi_j D_{ij}$};
+      {$\rho_g\mathrel{+}=\sum_{\mu\nu}\chi_\mu\chi_\nu D_{\mu\nu}$};
       \node[teambox, right=12mm of rho] (yalpha)
       {$y_\alpha\mathrel{+}=\sum_g \rho_g w_g \tilde V_\alpha(\mathbf r_g)$};
       \node[hostbox, below=22mm of load1] (inv)
@@ -1584,9 +1618,9 @@ Figure \ref{fig:tiled_rik_flow} and Table \ref{tab:tiled_rik_memory}.
       \node[threadbox, below=22mm of inv] (load2) {Load $w_g,\mathbf r_g$};
       \node[threadbox, right=of load2] (vbuild)
       {$v_g\mathrel{+}=\sum_\alpha \tilde V_\alpha(\mathbf r_g) w_g z_\alpha$};
-      \node[threadbox, right=of vbuild] (phi2) {Eval tile\\$\phi_a,\phi_b$};
+      \node[threadbox, right=of vbuild] (phi2) {Eval tile\\$\chi_\mu,\chi_\nu$};
       \node[teambox, right=12mm of phi2] (jij)
-      {$\tilde J_{ij}\mathrel{+}=\sum_g v_g \phi_i\phi_j$};
+      {$\tilde J_{\mu\nu}\mathrel{+}=\sum_g v_g \chi_\mu\chi_\nu$};
       \draw[arr] (dbuild) -- (load1);
       \draw[arr] (load1) -- (phi1);
       \draw[arr] (phi1) -- (rho);
@@ -1616,9 +1650,9 @@ Figure \ref{fig:tiled_rik_flow} and Table \ref{tab:tiled_rik_memory}.
     coefficients $y_\alpha$; a host-side application of
     $(\alpha|\beta)^{-1}$ (two GEMVs) rescales them to $z_\alpha$;
     Kernel~2 assembles $\tilde J_{\mu\nu}$. The inner dashed boxes are
-    the lower-triangular neighbor-tile loops, in which $\phi_a,\phi_b$
+    the lower-triangular neighbor-tile loops, in which $\chi_\mu,\chi_\nu$
     are evaluated once into team scratch and reused. Colors follow
-    Figure \ref{fig:becke_team_flow}: yellow for data-parallel global
+    Figure~\ref{fig:becke_team_flow}: yellow for data-parallel global
     work, orange for team-thread work in scratch, green for atomic
   accumulation into global memory, and blue for host / BLAS calls.}
   \label{fig:tiled_rij_flow}
@@ -1647,9 +1681,9 @@ Figure \ref{fig:tiled_rik_flow} and Table \ref{tab:tiled_rik_memory}.
       \texttt{\{rho,pot\}\_scratch} & \texttt{View<double*, Scratch>}
       & $P_\text{max}$                    & $\rho_g\,/\,v_g$ & per team \\
       \texttt{phi\_a}               & \texttt{View<double*, Scratch>}
-      & $\texttt{tile}\times P_\text{max}$ & $\phi_a$ tile & per team \\
+      & $\texttt{tile}\times P_\text{max}$ & $\chi_\mu$ tile & per team \\
       \texttt{phi\_b}               & \texttt{View<double*, Scratch>}
-      & $\texttt{tile}\times P_\text{max}$ & $\phi_b$ tile & per team \\
+      & $\texttt{tile}\times P_\text{max}$ & $\chi_\nu$ tile & per team \\
       \bottomrule
   \end{tabular}}
   \caption{Memory allocations in \texttt{compute\_coulomb\_tiled}. Both
@@ -1664,7 +1698,10 @@ Figure \ref{fig:tiled_rik_flow} and Table \ref{tab:tiled_rik_memory}.
 
 \begin{figure}[H]
   \centering
-  \resizebox{\textwidth}{!}{%
+  % --- Vertical flowchart: the per-orbital pipeline reads top to bottom, with
+  % the loop-back arc on the right. Height-bounded like Figure
+  % \ref{fig:becke_team_flow}. ---
+  \resizebox{!}{0.78\textheight}{%
     \begin{tikzpicture}[
         node distance=9mm,
         box/.style={draw, rounded corners, minimum height=12mm,
@@ -1677,17 +1714,17 @@ Figure \ref{fig:tiled_rik_flow} and Table \ref{tab:tiled_rik_memory}.
         looplabel/.style={font=\small\itshape, text=gray!70!black}
       ]
       \node[hostbox] (mirror) {Mirror\\$C\to C_h$ (host)};
-      \node[hostbox, right=12mm of mirror] (zero) {Zero\\$(\nu i|\alpha)$};
-      \node[threadbox, right=12mm of zero] (fold)
+      \node[hostbox, below=12mm of mirror] (zero) {Zero\\$(\nu i|\alpha)$};
+      \node[threadbox, below=12mm of zero] (fold)
       {Load $w_g,\mathbf r_g$;\\$w_g\mathrel{*}=c^i(\mathbf r_g)$};
-      \node[threadbox, right=of fold] (phi) {Eval tile\\$\phi_j$};
-      \node[threadbox, right=of phi] (pot)
+      \node[threadbox, below=of fold] (phi) {Eval tile\\$\chi_\nu$};
+      \node[threadbox, below=of phi] (pot)
       {$v_\alpha(\mathbf r_g)=\tilde V_\alpha(\mathbf r_g)\, w_g$};
-      \node[teambox, right=of pot] (tci)
-      {$(\nu i|\alpha)\mathrel{+}=\sum_g v_\alpha(\mathbf r_g)\,\phi_j$};
-      \node[hostbox, right=12mm of tci] (gemm1)
+      \node[teambox, below=of pot] (tci)
+      {$(\nu i|\alpha)\mathrel{+}=\sum_g v_\alpha(\mathbf r_g)\,\chi_\nu$};
+      \node[hostbox, below=12mm of tci] (gemm1)
       {$T^i=(\nu i|\alpha)^{\!\top}X^{-\frac12}$\\GEMM};
-      \node[hostbox, right=of gemm1] (gemm2)
+      \node[hostbox, below=of gemm1] (gemm2)
       {$\tilde K\mathrel{+}=f_i\,T^i(T^i)^{\!\top}$\\GEMM};
       \draw[arr] (mirror) -- (zero);
       \draw[arr] (zero) -- (fold);
@@ -1696,27 +1733,28 @@ Figure \ref{fig:tiled_rik_flow} and Table \ref{tab:tiled_rik_memory}.
       \draw[arr] (pot) -- (tci);
       \draw[arr] (tci) -- (gemm1);
       \draw[arr] (gemm1) -- (gemm2);
-      \draw[arr] (gemm2.south) to[out=-90, in=-90, looseness=0.3]
-      node[midway, below, looplabel] {next orbital $i$} (zero.south);
+      \draw[arr] (gemm2.east) to[out=0, in=0, looseness=0.8]
+      node[midway, right, looplabel] {next orbital $i$} (zero.east);
       \begin{scope}[on background layer]
-        \node[draw, dashed, rounded corners, inner sep=11mm,
+        \node[draw, dashed, rounded corners, inner sep=7mm,
           fit=(zero)(fold)(phi)(pot)(tci)(gemm1)(gemm2),
-        label={[looplabel]above:{for each occupied orbital $i$}}] {};
+        label={[looplabel]below:{for each occupied orbital $i$}}] {};
         \node[draw, dashed, draw=gray!55, rounded corners, inner sep=3mm,
           fit=(fold)(phi)(pot)(tci),
-          label={[looplabel, fill=white]above:{one team per box (inner
-        loop over aux $\alpha$)}}] {};
+          label={[looplabel, fill=white, rotate=90, anchor=south]left:{one
+        team per box (inner loop over aux $\alpha$)}}] {};
       \end{scope}
   \end{tikzpicture}}
   \caption{Control-flow of the neighbor-tiled RI-K kernel
     (\texttt{compute\_exact\_exchange\_tiled}). The occupied orbitals are
     treated one at a time: orbital $i$ is folded into the quadrature
-    weights via $c^i(\mathbf r_g)=\sum_k C_{ki}\phi_k(\mathbf r_g)$, the
+    weights via $c^i(\mathbf r_g)=\sum_\lambda C^i_\lambda
+    \chi_\lambda(\mathbf r_g)$, the
     three-center integral $(\nu i|\alpha)$ is built by the tiled team
-    kernel (each neighbor tile of $\phi_j$ evaluated once and reused
+    kernel (each neighbor tile of $\chi_\nu$ evaluated once and reused
     across all auxiliary functions $\alpha$), and $\tilde K_{\mu\nu}$ is
     accumulated by two host GEMMs applying $X^{-\frac12}$. Colors as in
-  Figure \ref{fig:tiled_rij_flow}.}
+  Figure~\ref{fig:tiled_rij_flow}.}
   \label{fig:tiled_rik_flow}
 \end{figure}
 
@@ -1740,7 +1778,7 @@ Figure \ref{fig:tiled_rik_flow} and Table \ref{tab:tiled_rik_memory}.
       \texttt{points\_scratch}         & \texttt{View<Point*, Scratch>}
       & $P_\text{max}$                   & $\mathbf r_g$ & per team \\
       \texttt{phi\_cache}              & \texttt{View<double*, Scratch>}
-      & $\texttt{tile}\times P_\text{max}$ & $\phi_j$ tile & per team \\
+      & $\texttt{tile}\times P_\text{max}$ & $\chi_\nu$ tile & per team \\
       \texttt{potential\_scratch}      & \texttt{View<double*, Scratch>}
       & $P_\text{max}$                   & $v_\alpha(\mathbf r_g)$ & per team \\
       \bottomrule
@@ -1763,8 +1801,7 @@ thing to keep in mind when comparing the two implementations is that
 due to the collocations being pre-computed in the dense linear
 algebra version, we could in theory also offload the pre-computation
 to another library, whereas in the locally dense version, we need to
-be able to evaluate the basis functions during the kernel, hence
-the basis functions need to be implemented in our library.
+be able to evaluate the basis functions during the kernel.
 
 \section{Results}\label{sec:results}
 
@@ -1779,8 +1816,8 @@ Martin~\cite{Karton11w411}.
 We first need to understand how the choice of the underlying
 quadrature grid affects our experiments. We therefore make an
 incremental study of how the resolution and geometry of a chosen
-quadrature grid affect the HF energies. We start with the Hydrogen
-atom, then move on to the Dihydrogen cation and lastly
+quadrature grid affect the HF energies. We start with the hydrogen
+atom, then move on to the dihydrogen cation and lastly
 perform SCF computations on water. Unless an exact value is available in
 closed form, the energy errors reported in this section are measured
 against a shared self-reference, evaluated on a grid far finer than any
@@ -1791,7 +1828,7 @@ footing.
 
 \subsubsection{The Hydrogen Atom}
 
-The Hydrogen atom only consists of one proton and one
+The hydrogen atom only consists of one proton and one
 electron. This allows us to study the convergence properties of the core
 Hamiltonian in isolation. Since there is no two-electron contribution,
 the accuracy reached here is a best case: it gives us a floor on the
@@ -1833,12 +1870,12 @@ proposal.
   \label{fig:conv_radial_h}
 \end{figure}
 
-\subsubsection{The Dihydrogen cation H$_2^+$}
+\subsubsection{The Dihydrogen Cation H$_2^+$}
 
 Before turning to energies, we verify the quadrature against a quantity
 for which the exact answer is known in closed form. For two \( 1s \)
 Slater functions with \( \zeta = 1 \), one centered on each proton at a
-separation of \( R = 1 \)~Bohr, the overlap integral is
+separation of \( R = 1 \)~bohr, the overlap integral is
 \begin{equation}
   S_{AB} = e^{-R} \left( 1 + R + \frac{R^2}{3} \right)
   = \frac{7}{3} e^{-1} = 0.858385362733,
@@ -1861,7 +1898,7 @@ is tabulated in Table~\ref{tab:data_h2plus}.
     $S_{AB}$ of H$_2^+$ towards its exact analytic value
     $S_\mathrm{exact}=\frac{7}{3}e^{-1}=0.858385362733$. The system is two
     $1s$ Slater functions with $\zeta=1$, one on each proton, at a
-    separation of $R=1$~Bohr. Radial scheme: Treutler-Ahlrichs; angular
+    separation of $R=1$~bohr. Radial scheme: Treutler-Ahlrichs; angular
     scheme: Lebedev-Laikov. Left: radial sweep at a fixed angular order
     $L=59$. Right: angular sweep at a fixed radial resolution
     $n_\mathrm{rad}=200$. Unlike the other convergence studies in this
@@ -1887,7 +1924,7 @@ wherever the radial rather than the angular quadrature is the limiting
 factor. The one systematic exception is the coarsest radial grid, \(
 n_\mathrm{rad}=10 \), where Becke's mapping is the better of the two at
 every angular order---the same coarse-grid behavior we already observed
-for the Hydrogen atom. We should note though that for a fixed angular
+for the hydrogen atom. We should note though that for a fixed angular
 order \( L \), once the error is dominated by the angular quadrature,
 the error plateaus to the same value for both schemes when
 increasing the radial grid resolution. Hence we can only expect the
@@ -1908,7 +1945,7 @@ and expect the (M4) grid to be the most cost-efficient choice.
     the H$_2^+$ core-Hamiltonian ground-state (lowest-MO) energy,
     comparing the Becke and Treutler-Ahlrichs (M4) radial schemes on a
     shared Lebedev angular grid. Molecule: H$_2^+$ with protons
-    at $x=0$ and $x=1$~Bohr; basis: QZ4P. Top left: radial convergence at
+    at $x=0$ and $x=1$~bohr; basis: QZ4P. Top left: radial convergence at
     the finest angular order in the sweep ($L=29$). Top right: angular
     convergence at the finest radial grid ($n_\mathrm{rad}=320$). Bottom:
     for each scheme, $|E-E_\mathrm{ref}|$ versus $n_\mathrm{rad}$ with one
@@ -1922,7 +1959,7 @@ and expect the (M4) grid to be the most cost-efficient choice.
   \label{fig:conv_2d}
 \end{figure}
 
-\subsubsection{Self-Consistent Field calculations}
+\subsubsection{Self-Consistent Field Calculations}
 Now that we have a clear grasp on how the quadrature grids affect the
 convergence of simple systems, we are ready to perform the first full
 SCF calculations. We analyze how the unrestricted Hartree-Fock
@@ -1944,9 +1981,7 @@ quadrature points
 grid). It therefore reduces the cost of the quadrature with no
 discernible drawback. The Treutler pruning scheme, in contrast, seems
 too aggressive in its pruning, as its total error plateaus above \(
-10^{-5} \)~Ha: over the last four grid levels it improves by only a
-factor of three, despite a sixteen-fold increase in the number of
-quadrature points.
+10^{-5} \)~Ha.
 
 The per-term decomposition in Figure~\ref{fig:conv_pruning_terms}
 explains both this accuracy floor and the non-monotonicity of the total
@@ -2009,7 +2044,8 @@ where do our integration routines spend their time.
 
 For both questions we use the W4-11 test set of Karton, Daon and
 Martin~\cite{Karton11w411}, which collects $140$ total atomization
-energies of small first and second row molecules. The reference values
+energies of small molecules, consisting of first and second row
+elements. The reference values
 are zero-point exclusive, non-relativistic and defined at clamped
 nuclei. This is exactly the quantity that a difference of converged SCF
 total energies gives, so no thermochemical or relativistic corrections
@@ -2030,9 +2066,7 @@ A small number of open shell species does not
 converge. We exclude every reaction that contains such a species rather
 than report an energy the solver never accepted, which leaves $139$,
 $131$, $118$ and $121$ of the $140$ reactions for DZ, TZP, TZ2P and
-QZ4P respectively. The excluded reactions cluster around a few
-individual atoms and radicals, since a single unconverged atom removes
-every reaction it takes part in.
+QZ4P respectively.
 
 Two caveats apply to the interpretation of the results. The quantity we
 measure is the sum of the basis set incompleteness error and the
@@ -2043,15 +2077,16 @@ Furthermore, W4-11 deliberately contains several strongly
 multireference species such as C$_2$ and FO$_2$, for which a single
 determinant hybrid functional is not expected to work well.
 
-\subsubsection{Energetic accuracy}
+\subsubsection{Energetic Accuracy}
 
 Figure~\ref{fig:w411_violin} shows the distribution of the signed
 atomization energy error for each basis set, and
 Table~\ref{tab:w411_summary} collects the corresponding summary
 statistics. The distributions narrow and shift towards zero
 monotonically with growing basis size. The mean absolute deviation
-improves from $52.9$~kcal/mol at DZ to $8.9$ at TZP, $6.2$ at TZ2P and
-$5.1$ at QZ4P. The DZ basis carries no polarization functions at all
+improves from $52.9$~kcal/mol at DZ to $8.9$~kcal/mol at TZP,
+$6.2$~kcal/mol at TZ2P and
+$5.1$~kcal/mol at QZ4P. The DZ basis carries no polarization functions at all
 and underbinds so severely that it is of no quantitative use. Adding a
 single polarization shell at TZP is by far the largest single
 improvement, and the remaining progression to TZ2P and QZ4P is
@@ -2076,14 +2111,10 @@ correctly on realistic chemistry.
     pruning and uniform radial sizing. The linear dependence threshold
     of $10^{-4}$ is applied uniformly to all four basis sets. Reference
     values are the zero-point exclusive, non-relativistic,
-    clamped-nuclei atomization energies of Ref.~\cite{Karton11w411}.
+    clamped-nuclei atomization energies of Ref.\cite{Karton11w411}.
     Individual reactions are overlaid as jittered points and the
-    horizontal bar marks the median. The shaded band is the conventional
-    $\pm1$~kcal/mol window of chemical accuracy. The quantity plotted
-    is the combined basis set and functional error. The quadrature
-    error of Section~\ref{subsec:convergence} is smaller by three to
-    four orders of magnitude and is invisible on this scale. The
-  summary statistics are given in Table~\ref{tab:w411_summary}.}
+    horizontal bar marks the median.T he summary statistics are given
+  in Table~\ref{tab:w411_summary}.}
   \label{fig:w411_violin}
 \end{figure}
 
@@ -2101,7 +2132,7 @@ correctly on realistic chemistry.
   \input{Data/tables/w411_summary}
 \end{table}
 
-\subsubsection{Cost and time distribution}
+\subsubsection{Cost and Time Distribution}
 
 Figure~\ref{fig:w411_scaling} plots the measured wall time against the
 number of primary basis functions. The left panel gives the total
@@ -2270,20 +2301,20 @@ would not have been able to finish this work.
 
 \section{Convergence Data}\label{app:convergence_data}
 
-\subsection{Hydrogen atom: radial schemes}
+\subsection{Hydrogen Atom: Radial Schemes}
 \input{Data/tables/radial_h}
 
-\subsection{H$_2^+$: overlap integral}
+\subsection{H$_2^+$: Overlap Integral}
 \input{Data/tables/h2plus}
 
-\subsection{H$_2^+$: radial $\times$ angular sweep}
+\subsection{H$_2^+$: Radial $\times$ Angular Sweep}
 \input{Data/tables/2d_becke}
 \input{Data/tables/2d_m4}
 
-\subsection{Water: angular pruning schemes}
+\subsection{Water: Angular Pruning Schemes}
 \input{Data/tables/pruning}
 
 \bibliographystyle{unsrt}
-\bibliography{Quadratues.bib}
+\bibliography{Quadratures}
 
 \end{document}

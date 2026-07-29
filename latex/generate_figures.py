@@ -2,7 +2,7 @@
 """Regenerate every convergence figure and appendix data table of the thesis.
 
 Reads the raw study data from   latex/Data/*.csv       (written by the C++
-convergence tests in tests/), and writes
+convergence tests in convergence_studies/), and writes
 
   * title-free vector figures  ->  latex/Visualisations/*.pdf
   * booktabs LaTeX data tables ->  latex/Data/tables/*.tex   (input by the
@@ -11,7 +11,7 @@ convergence tests in tests/), and writes
 Usage:  python3 generate_figures.py          (from anywhere; paths are derived
                                               from this file's location)
 
-To refresh a study, re-run its test (tests/convergence_*.cxx), copy the
+To refresh a study, re-run its test (convergence_studies/convergence_*.cxx), copy the
 emitted convergence_*.csv into latex/Data/ and re-run this script. The two
 water CSVs currently in Data/ were transcribed from the hi-res GPU run logs
 and therefore carry only the per-term |errors|; a re-run of the tests
@@ -434,7 +434,7 @@ def pruning():
 
 if __name__ == "__main__":
     # The adaptive-grid study (Data/convergence_adaptive.csv, produced by
-    # tests/convergence_adaptive.cxx) is deliberately not rendered: it was cut
+    # convergence_studies/convergence_adaptive.cxx) is deliberately not rendered: it was cut
     # from the thesis. The raw data is kept, the figures and table are not.
     jobs = {
         "convergence_radial_h.csv": radial_h,

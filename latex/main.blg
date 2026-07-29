@@ -2,10 +2,10 @@ This is BibTeX, Version 0.99d (TeX Live 2023)
 Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: main.aux
 The style file: unsrt.bst
-Database file #1: Quadratues.bib
+Database file #1: Quadratures.bib
 You've used 59 entries,
             1791 wiz_defined-function locations,
-            868 strings with 16153 characters,
+            868 strings with 16150 characters,
 and the built_in function-call counts, 15376 in all, are:
 = -- 1320
 > -- 828
