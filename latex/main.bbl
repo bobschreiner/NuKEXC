@@ -275,6 +275,11 @@ Susi Lehtola and Lori~A. Burns.
 \newblock Openorbitaloptimizer -- a reusable open source library for self-consistent field calculations.
 \newblock {\em The Journal of Physical Chemistry A}, 129(25):5651--5664, June 2025.
 
+\bibitem{Lehtola2018libxc}
+Susi Lehtola, Conrad Steigemann, Micael J.~T. Oliveira, and Miguel A.~L. Marques.
+\newblock Recent developments in libxc --- a comprehensive library of functionals for density functional theory.
+\newblock {\em SoftwareX}, 7:1--5, January 2018.
+
 \bibitem{LebrunGrandie2020}
 D.~Lebrun-Grandié, A.~Prokopenko, B.~Turcksin, and S.~R. Slattery.
 \newblock Arborx: A performance portable geometric search library.

@@ -20,31 +20,50 @@ Two CSVs are written at the end:
   <out>_species.csv    one row per (basis, species): energy, sizes, timings
   <out>_reactions.csv  one row per (basis, reaction): TAE, reference, error
 
-Note on the SCF threshold: open-shell atoms with a degenerate p shell (C, O, F,
-Si, S, Cl ...) leave a residual DIIS gradient that never drops below 1e-7, even
-though the energy is converged to ~1e-10 Ha. Those species are therefore run at
---open-conv-thr (default 1e-6), which converges them in a handful of iterations
-to the same energy. Runs that still fail to converge are kept, with converged=0,
-so they can be counted rather than silently dropped.
+Note on the SCF threshold: every species is run at the same --conv-thr. The
+open-shell atoms with a degenerate p shell used to need a looser gate, but that
+plateau was a symptom of the GWH initial guess (see below); with --guess=core
+they converge in a handful of iterations at the tight threshold. Runs that still
+fail to converge are kept, with converged=0, so they can be counted rather than
+silently dropped.
 
-Note on linear dependence: the standalone default of --lin-dep=1e-6 is too tight
-for the larger Slater sets. QZ4P places 21 functions on every hydrogen, and in
-hydrogen-rich molecules the numerically integrated overlap matrix then retains
-near-null eigenvectors that the canonical orthogonalisation should have removed.
-The symptom is a wildly wrong energy rather than a clean failure -- H2/QZ4P comes
-out at +12.8 Ha instead of -1.17 -- so it must not be dismissed as a convergence
-stall. --lin-dep 1e-4 fixes it, and is applied uniformly to every basis set here:
-using a different threshold per basis would vary the variational space and make
-the cross-basis comparison meaningless.
+Note on serial execution: the sweep runs one calculation at a time, on purpose.
+Each standalone process spawns Kokkos threads across every core, so running
+several concurrently oversubscribes them and changes the order of the
+floating-point reductions that build rho and grad(rho). The energies still agree
+to ~1e-9, but a marginally-stable SCF takes a different trajectory and can flip
+between converged and not: O/TZP came out at 20 Fock builds (converged) serially
+and 240 (unconverged) with four concurrent jobs, from byte-identical inputs. A
+reproducible exclusion list requires serial execution.
 
-Note on occupation freezing: some open-shell radicals (hcnh, h2cn, bn3pi ...)
-have near-degenerate frontier orbitals, and the SCF walks to within ~3e-4 of
-convergence and then hard-stalls: an Aufbau occupation reassignment jumps the
-density to another configuration, after which no DIIS/EDIIS/ODA step lowers the
-energy again (dE stays exactly 0 at a frozen DIIS error). Open-shell species are
-therefore run two-phase via standalone's --freeze-occ: free occupations down to
---open-freeze-occ, then frozen occupations to the tight threshold. Set
---open-freeze-occ 0 to disable.
+Note on linear dependence: --lin-dep defaults to the standalone value of 1e-6.
+It was previously raised to 1e-4 because H2/QZ4P came out at +12.8 Ha instead of
+-1.17, which looked like the canonical orthogonalisation failing to remove
+near-null eigenvectors (QZ4P places 21 functions on every hydrogen). That
+diagnosis was wrong: the wildly wrong energy came from the GWH initial guess
+populating those directions, not from the threshold retaining them. Raising the
+threshold masked it by deleting the directions the guess was abusing. The
+overlap spectrum is in fact grid-independent -- the H2/QZ4P energy is flat from
+1e-6 to 1e-4 (2.7e-7 Ha spread) and only moves at 1e-3 (1.5e-5) and 1e-2
+(1.4e-3), so 1e-4 and below are noise while larger values truncate real
+variational space. The flag is kept so the sensitivity can be re-checked; if it
+is changed it must be applied uniformly to every basis set, since a per-basis
+threshold would vary the variational space and make the cross-basis comparison
+meaningless.
+
+Note on the initial guess: the SCF stalls traced to standalone's GWH guess,
+which estimates Fock off-diagonals from the diagonal of h_core and the overlap.
+With near-linearly-dependent Slater sets (QZ4P places 21 functions on every
+hydrogen) that estimate populates near-null directions, giving a starting
+density with a POSITIVE one-electron energy (tr(D h_core) = +7.8 Ha for
+H2/QZ4P, where it should be -2.6). Robust functionals climb out; LYP-containing
+ones such as B3LYP do not, and whether they recover depends on the grid via
+h_core's quadrature-computed V_ne -- which is why refining the grid appeared to
+make results worse. --guess=core sidesteps it: H2/QZ4P B3LYP then converges in
+5 iterations to the same -1.1739 Ha at nrad=75 and nrad=100. The two-phase
+occupation freezing that used to paper over these stalls has been removed; it
+masked the guess problem and could converge to a non-Aufbau configuration,
+silently recording a wrong energy (O/TZP came out 0.045 Ha high).
 
 Provenance: every parameter that affects the physics is archived in the CSV
 headers of both output files, and the cache filename carries a hash of those
@@ -55,11 +74,10 @@ scheme no longer match and will be recomputed.)
 Usage:
     python benchmarking/benchmark_w411.py                      # full sweep, 4 bases
     python benchmarking/benchmark_w411.py --species h2o o h    # just these
-    python benchmarking/benchmark_w411.py --bases DZ QZ4P --jobs 8
+    python benchmarking/benchmark_w411.py --bases DZ QZ4P
 """
 
 import argparse
-import concurrent.futures
 import datetime
 import hashlib
 import json
@@ -171,17 +189,20 @@ def parse_run(text):
     res["nquad"] = grab(r"Quadrature points\s*:\s*(\d+)", int)
     res["nelec"] = grab(r"Number of Electrons:\s*(\d+)", int)
 
-    # Prefer the solver's fully-converged energy (10 decimals). With two-phase
-    # SCF (--freeze-occ) there are two runs and hence up to two "Converged"
-    # lines; the run only counts as converged if the FINAL solver run ended in
-    # one, i.e. the last "Converged" appears after the last "Iteration" line.
-    # Otherwise fall back to the last energy the Fock builder printed and flag
-    # the run.
+    # Prefer the solver's fully-converged energy (10 decimals). The run only
+    # counts as converged if the solver ended in a "Converged" line, i.e. the
+    # last one appears after the last "Iteration" line. Otherwise fall back to
+    # the last energy the Fock builder printed and flag the run.
+    #
+    # Take the LOWEST converged energy, not the last: the SCF is variational,
+    # so if more than one solver run reports convergence the lower energy is
+    # the physical one. Taking the last silently accepted a non-Aufbau state
+    # 0.045 Ha above the ground state for O/TZP.
     conv = re.findall(r"Converged to energy\s+(-?\d+\.\d+)", text)
     last_conv = text.rfind("Converged to energy")
     last_iter = text.rfind("\nIteration ")
     if conv and last_conv > last_iter:
-        res["energy"] = float(conv[-1])
+        res["energy"] = min(float(c) for c in conv)
         res["converged"] = 1
     else:
         tot = re.findall(r"Total energy\s*:\s*(-?\d+\.\d+)", text)
@@ -211,7 +232,7 @@ def parse_run(text):
     return res
 
 
-def run_one(binary, xyz, basis_dir, charge, mult, conv_thr, freeze_occ, args):
+def run_one(binary, xyz, basis_dir, charge, mult, conv_thr, args):
     cmd = [
         str(binary),
         f"--xyz={xyz}",
@@ -226,11 +247,10 @@ def run_one(binary, xyz, basis_dir, charge, mult, conv_thr, freeze_occ, args):
         f"--multiplicity={mult}",
         f"--conv-thr={conv_thr}",
         f"--lin-dep={args.lin_dep}",
+        f"--guess={args.guess}",
     ]
     # Only forward non-default extras, so an older standalone binary without
     # these flags keeps working for the runs that don't need them.
-    if float(freeze_occ) > 0.0:
-        cmd.append(f"--freeze-occ={freeze_occ}")
     if args.radial is not None:
         cmd.append(f"--radial={args.radial}")
     if args.dens_thr is not None:
@@ -289,22 +309,16 @@ def main():
     ap.add_argument("--conv-thr", default="1e-7")
     ap.add_argument("--pruning", default="robust")
     ap.add_argument(
-        "--open-conv-thr",
-        default="1e-6",
-        help="looser threshold for open-shell species (DIIS plateau)",
+        "--guess",
+        default="core",
+        help="initial guess forwarded to standalone: core (default) or gwh. "
+        "gwh stalls on near-linearly-dependent Slater sets (see docstring)",
     )
     ap.add_argument(
         "--lin-dep",
-        default="1e-4",
-        help="linear-dependence threshold; the standalone default "
-        "of 1e-6 is too tight for QZ4P (see module docstring)",
-    )
-    ap.add_argument(
-        "--open-freeze-occ",
-        default="1e-3",
-        help="two-phase SCF gate for open-shell species: free occupations "
-        "down to this DIIS error, then frozen to the tight threshold "
-        "(see module docstring); 0 disables",
+        default="1e-6",
+        help="linear-dependence threshold (see module docstring); values "
+        "above ~1e-4 truncate real variational space",
     )
     ap.add_argument(
         "--radial",
@@ -317,7 +331,6 @@ def main():
         help="libxc density threshold passthrough; omitted = binary default",
     )
     ap.add_argument("--timeout", type=float, default=7200)
-    ap.add_argument("--jobs", type=int, default=1)
     ap.add_argument("--cache", default=str(repo / "w411_cache"))
     ap.add_argument("--out", default="benchmark_w411")
     ap.add_argument("--workdir", default=str(repo))
@@ -368,8 +381,7 @@ def main():
         "pruning": args.pruning,
         "radial": args.radial if args.radial is not None else "(binary default)",
         "conv_thr": args.conv_thr,
-        "open_conv_thr": args.open_conv_thr,
-        "open_freeze_occ": args.open_freeze_occ,
+        "guess": args.guess,
         "lin_dep": args.lin_dep,
         "dens_thr": args.dens_thr if args.dens_thr is not None else "(binary default)",
     }
@@ -383,13 +395,11 @@ def main():
         if not basis_dir.is_dir():
             sys.exit("No such basis dir: %s" % basis_dir)
         for name in needed:
-            charge, mult, unpaired = species_spec(w411, name)
-            thr = args.open_conv_thr if unpaired > 0 else args.conv_thr
-            freeze = args.open_freeze_occ if unpaired > 0 else "0"
-            tasks.append((basis, name, basis_dir, charge, mult, thr, freeze))
+            charge, mult, _unpaired = species_spec(w411, name)
+            tasks.append((basis, name, basis_dir, charge, mult, args.conv_thr))
 
     def execute(task):
-        basis, name, basis_dir, charge, mult, thr, freeze = task
+        basis, name, basis_dir, charge, mult, thr = task
         jf = cache / ("%s__%s__%s.json" % (basis, name, params_hash))
         if jf.is_file():
             try:
@@ -403,7 +413,6 @@ def main():
             charge,
             mult,
             thr,
-            freeze,
             args,
         )
         parsed.update(
@@ -413,7 +422,6 @@ def main():
                 "charge": charge,
                 "multiplicity": mult,
                 "conv_thr": thr,
-                "freeze_occ": freeze,
                 "params": run_params,
             }
         )
@@ -424,21 +432,24 @@ def main():
 
     results = {}
     total = len(tasks)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        for i, (basis, name, parsed, cached) in enumerate(pool.map(execute, tasks), 1):
-            results[(basis, name)] = parsed
-            flag = "cached" if cached else "ran"
-            err = parsed.get("error")
-            status = (
-                "ERROR: %s" % err
-                if err
-                else "E=%.6f%s"
-                % (parsed["energy"], "" if parsed.get("converged") else " (unconv)")
-            )
-            print(
-                "[%4d/%4d] %-5s %-12s %-6s %s" % (i, total, basis, name, flag, status),
-                flush=True,
-            )
+    # Serial on purpose -- see the note on serial execution in the module
+    # docstring. Concurrency changes the Kokkos reduction order and makes the
+    # converged/unconverged verdict irreproducible.
+    for i, task in enumerate(tasks, 1):
+        basis, name, parsed, cached = execute(task)
+        results[(basis, name)] = parsed
+        flag = "cached" if cached else "ran"
+        err = parsed.get("error")
+        status = (
+            "ERROR: %s" % err
+            if err
+            else "E=%.6f%s"
+            % (parsed["energy"], "" if parsed.get("converged") else " (unconv)")
+        )
+        print(
+            "[%4d/%4d] %-5s %-12s %-6s %s" % (i, total, basis, name, flag, status),
+            flush=True,
+        )
 
     # ---- species CSV -------------------------------------------------------
     startup_keys, fock_keys = set(), set()
@@ -471,7 +482,7 @@ def main():
         for line in provenance:
             f.write(line + "\n")
         f.write(
-            "# conv_thr/freeze_occ columns are the per-species values actually "
+            "# the conv_thr column is the per-species value actually "
             "used (open-shell species differ).\n"
         )
         f.write(
@@ -485,7 +496,6 @@ def main():
                 "charge",
                 "multiplicity",
                 "conv_thr",
-                "freeze_occ",
                 "converged",
                 "nbf",
                 "nbf_aux",
@@ -513,7 +523,6 @@ def main():
                 r["charge"],
                 r["multiplicity"],
                 r.get("conv_thr", ""),
-                r.get("freeze_occ", ""),
                 r["converged"],
                 r["nbf"],
                 r["nbf_aux"],

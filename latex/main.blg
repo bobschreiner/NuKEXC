@@ -3,44 +3,44 @@ Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: main.aux
 The style file: unsrt.bst
 Database file #1: Quadratures.bib
-You've used 59 entries,
+You've used 60 entries,
             1791 wiz_defined-function locations,
-            868 strings with 16150 characters,
-and the built_in function-call counts, 15376 in all, are:
-= -- 1320
-> -- 828
+            875 strings with 16393 characters,
+and the built_in function-call counts, 15603 in all, are:
+= -- 1340
+> -- 842
 < -- 1
-+ -- 303
-- -- 244
-* -- 1412
-:= -- 2510
-add.period$ -- 177
-call.type$ -- 59
-change.case$ -- 58
++ -- 308
+- -- 248
+* -- 1431
+:= -- 2549
+add.period$ -- 180
+call.type$ -- 60
+change.case$ -- 59
 chr.to.int$ -- 0
-cite$ -- 59
-duplicate$ -- 525
-empty$ -- 1389
-format.name$ -- 244
-if$ -- 3211
+cite$ -- 60
+duplicate$ -- 534
+empty$ -- 1408
+format.name$ -- 248
+if$ -- 3258
 int.to.chr$ -- 0
-int.to.str$ -- 59
-missing$ -- 57
-newline$ -- 298
-num.names$ -- 59
-pop$ -- 82
+int.to.str$ -- 60
+missing$ -- 58
+newline$ -- 303
+num.names$ -- 60
+pop$ -- 83
 preamble$ -- 1
 purify$ -- 0
 quote$ -- 0
-skip$ -- 206
+skip$ -- 209
 stack$ -- 0
-substring$ -- 1340
-swap$ -- 68
+substring$ -- 1353
+swap$ -- 69
 text.length$ -- 1
 text.prefix$ -- 0
 top$ -- 0
 type$ -- 0
 warning$ -- 0
-while$ -- 157
-width$ -- 61
-write$ -- 647
+while$ -- 160
+width$ -- 62
+write$ -- 658

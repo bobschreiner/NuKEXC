@@ -445,75 +445,110 @@ def archive_csvs(prefix, dest):
     return written
 
 
-def write_unconverged_table(sp_all, rx_all, path):
-    """Emit the appendix float listing every species that failed to converge.
+# Energies are tabulated at micro-Hartree precision. The SCF is converged well
+# past that, and the archived CSV in latex/Data/ keeps all ten decimals, but the
+# thesis only claims quadrature accuracy at the micro-Hartree level -- printing
+# more digits in a human-readable table would be false precision, and four
+# full-precision columns do not fit the text width.
+E_DECIMALS = 6
 
-    Supports the claim in the Results section that the excluded reactions
-    cluster on a few open-shell atoms and radicals: a single unconverged atom
-    removes every reaction it takes part in, so the reaction count dropped per
-    basis is much larger than the number of failing species.
+
+def write_species_table(sp_all, rx_all, path):
+    """Emit the appendix longtable: converged SCF energies for every species.
+
+    Energies are reported only where the SCF converged. An unconverged run
+    carries the solver's best-so-far rather than a variational energy, so those
+    cells show $\times$ instead of a number -- listing them would invite them to
+    be read as results.
+
+    No charge column: every W4-11 species is neutral, so it would be a column of
+    zeros. Uses longtable because the set has ~150 species.
     """
     present = [b for b in BASIS_ORDER if any(r["basis"] == b for r in sp_all)]
-    bad = sorted({r["species"] for r in sp_all if r.get("converged") != "1"})
+    allsp = sorted({r["species"] for r in sp_all})
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    if not bad:
-        path.write_text(
-            "% No unconverged species in this run -- nothing to tabulate.\n"
-        )
+    if not allsp:
+        path.write_text("% No species rows in this run -- nothing to tabulate.\n")
         return
 
-    # charge/multiplicity are properties of the species, not of the basis
-    meta = {}
+    mult = {}
     for r in sp_all:
-        meta.setdefault(r["species"], (r.get("charge", ""), r.get("multiplicity", "")))
-    status = {(r["species"], r["basis"]): r.get("converged") for r in sp_all}
+        mult.setdefault(r["species"], r.get("multiplicity", ""))
+    conv = {(r["species"], r["basis"]): r.get("converged") for r in sp_all}
+    ener = {(r["species"], r["basis"]): r.get("energy") for r in sp_all}
+    nbad = sum(
+        1 for sp in allsp if any(conv.get((sp, b)) not in (None, "1") for b in present)
+    )
 
-    lines = [
-        r"\begin{table}[H]",
-        r"  \centering\small",
-        r"  \begin{tabular}{@{}llr" + "c" * len(present) + r"@{}}",
+    ncol = 2 + len(present)
+    head = [
         r"    \toprule",
-        r"    Species & $q$ & $2S+1$ & " + " & ".join(present) + r" \\",
+        r"    Species & $2S+1$ & \multicolumn{%d}{c}{$E_\mathrm{SCF}$ (Ha)} \\"
+        % len(present),
+        r"    \cmidrule(l){3-%d}" % ncol,
+        r"     &  & " + " & ".join(present) + r" \\",
         r"    \midrule",
     ]
-    for sp in bad:
-        q, mult = meta.get(sp, ("", ""))
-        cells = []
-        for b in present:
-            st = status.get((sp, b))
-            cells.append("--" if st == "1" else (r"$\times$" if st is not None else ""))
-        # charge may be negative -- math mode so it sets a minus, not a hyphen
-        lines.append(
-            "    \\texttt{%s} & $%s$ & $%s$ & %s \\\\"
-            % (ltx(sp), ltx(q), ltx(mult), " & ".join(cells))
-        )
+    lines = [
+        r"{\small",
+        r"\begin{longtable}{@{}lr" + "r" * len(present) + r"@{}}",
+        r"  \caption{Converged self-consistent field energies for every species "
+        r"of the W4-11 set, in each of the four Slater-type basis sets, with "
+        r"$2S+1$ the spin multiplicity. All species are neutral. Energies are "
+        r"given to $10^{-6}$~Ha; the archived CSV in \texttt{latex/Data/} "
+        r"carries the full ten decimals. A $\times$ marks a calculation that "
+        r"did not reach the convergence thresholds of "
+        r"Section~\ref{subsec:benchmarks}: such a run carries the solver's "
+        r"best-so-far rather than a variational energy, so no number is "
+        r"reported for it. Every reaction containing an unconverged species is "
+        r"excluded from the statistics of Table~\ref{tab:w411_summary}, which "
+        r"is how %d species account for the reaction counts at the foot of this "
+        r"table.}" % nbad,
+        r"  \label{tab:w411_species}\\",
+    ] + head + [
+        r"    \endfirsthead",
+        r"    \multicolumn{%d}{@{}l}{\emph{\tablename~\thetable\ (continued)}}\\" % ncol,
+    ] + head + [
+        r"    \endhead",
+        r"    \midrule",
+        r"    \multicolumn{%d}{r@{}}{\emph{continued on next page}}\\" % ncol,
+        r"    \endfoot",
+        r"    \midrule",
+    ]
     removed = [
         sum(1 for r in rx_all if r["basis"] == b and r.get("all_converged") != "1")
         for b in present
     ]
     total = [sum(1 for r in rx_all if r["basis"] == b) for b in present]
     lines += [
-        r"    \midrule",
-        r"    \multicolumn{3}{@{}l}{Reactions excluded} & "
+        r"    \multicolumn{2}{@{}l}{Reactions excluded} & "
         + " & ".join("%d" % n for n in removed)
         + r" \\",
-        r"    \multicolumn{3}{@{}l}{Reactions retained} & "
+        r"    \multicolumn{2}{@{}l}{Reactions retained} & "
         + " & ".join("%d" % (t - n) for t, n in zip(total, removed))
         + r" \\",
         r"    \bottomrule",
-        r"  \end{tabular}",
-        r"  \caption{Species of the W4-11 set that the SCF did not converge to "
-        r"the thresholds of Section~\ref{subsec:benchmarks}, per Slater-type "
-        r"basis set. $\times$ marks a species that failed, \emph{--} one that "
-        r"converged; $q$ is the charge and $2S+1$ the spin multiplicity. Every "
-        r"reaction containing a failed species is excluded from the statistics "
-        r"of Table~\ref{tab:w411_summary}, which is why a handful of atoms and "
-        r"radicals removes a disproportionate number of reactions.}",
-        r"  \label{tab:w411_unconverged}",
-        r"\end{table}",
-        "",
+        r"    \endlastfoot",
     ]
+    for sp in allsp:
+        cells = []
+        for b in present:
+            st = conv.get((sp, b))
+            if st != "1":
+                # absent from this sweep, or ran but did not converge
+                cells.append("--" if st is None else r"$\times$")
+                continue
+            raw = ener.get((sp, b))
+            try:
+                cells.append("$%.*f$" % (E_DECIMALS, float(raw)))
+            except (TypeError, ValueError):
+                cells.append("--")
+        lines.append(
+            "    \\texttt{%s} & $%s$ & %s \\\\"
+            % (ltx(sp), ltx(mult.get(sp, "")), " & ".join(cells))
+        )
+    lines += [r"\end{longtable}", r"}", ""]
     path.write_text("\n".join(lines))
 
 
@@ -566,8 +601,10 @@ def main():
     ap.add_argument("--out", default=str(repo / "latex/Visualisations"))
     ap.add_argument("--table", default=str(repo / "latex/Data/tables/w411_summary.tex"))
     ap.add_argument(
+        "--species-table",
         "--unconverged-table",
-        default=str(repo / "latex/Data/tables/w411_unconverged.tex"),
+        dest="species_table",
+        default=str(repo / "latex/Data/tables/w411_species.tex"),
     )
     ap.add_argument(
         "--archive",
@@ -633,10 +670,10 @@ def main():
     plot_scaling(species, out, args.csv_prefix)
     plot_breakdown(species, out, args.csv_prefix)
     write_table(reactions, species, Path(args.table))
-    write_unconverged_table(sp_all, rx_all, Path(args.unconverged_table))
+    write_species_table(sp_all, rx_all, Path(args.species_table))
     archived = archive_csvs(args.csv_prefix, Path(args.archive)) if args.archive else []
     print("\nWrote 3 PDFs into %s" % out)
-    print("Wrote unconverged table %s" % args.unconverged_table)
+    print("Wrote species coverage table %s" % args.species_table)
     for a in archived:
         print("Archived %s" % a)
     print("Wrote summary table %s" % args.table)

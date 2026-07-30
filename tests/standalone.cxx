@@ -77,6 +77,7 @@ struct Config {
   double freeze_occ_thr = 0.0;
   std::string pruning = "none";   // grid angular pruning: none/robust/treutler
   std::string radial = "uniform"; // per-element radial sizing: uniform/pyscf
+  std::string guess = "gwh";      // initial guess: gwh/core
   bool nl_histogram = false;      // runtime via --nl-histogram
 };
 
@@ -158,7 +159,8 @@ Config parse_args(int argc, char *argv[]) {
                !p.double_opt("--dens-thr=", cfg.dens_thr) &&
                !p.double_opt("--freeze-occ=", cfg.freeze_occ_thr) &&
                !p.string_opt("--pruning=", cfg.pruning) &&
-               !p.string_opt("--radial=", cfg.radial)) {
+               !p.string_opt("--radial=", cfg.radial) &&
+               !p.string_opt("--guess=", cfg.guess)) {
       throw std::runtime_error("Unknown argument: " + p.arg + " (try --help)");
     }
   }
@@ -493,16 +495,26 @@ int main(int argc, char *argv[]) {
     {
       TIME_SCOPE(startup_timing, "GWH initial guess");
       arma::mat F_gwh(N_bf, N_bf, arma::fill::zeros);
-      const double K_gwh = 1.75;
-      for (int i = 0; i < N_bf; ++i) {
-        for (int j = 0; j < N_bf; ++j) {
-          if (i == j) {
-            F_gwh(i, j) = h_core(i, i);
-          } else {
-            F_gwh(i, j) =
-                0.5 * K_gwh * (h_core(i, i) + h_core(j, j)) * S_arma(i, j);
+      if (cfg.guess == "core") {
+        // Bare core-Hamiltonian guess. GWH estimates off-diagonals from the
+        // diagonal of h_core and the overlap, which populates near-null
+        // directions when the basis is close to linearly dependent; the core
+        // guess has no such estimate and is the diagnostic fallback.
+        F_gwh = h_core;
+      } else if (cfg.guess == "gwh") {
+        const double K_gwh = 1.75;
+        for (int i = 0; i < N_bf; ++i) {
+          for (int j = 0; j < N_bf; ++j) {
+            if (i == j) {
+              F_gwh(i, j) = h_core(i, i);
+            } else {
+              F_gwh(i, j) =
+                  0.5 * K_gwh * (h_core(i, i) + h_core(j, j)) * S_arma(i, j);
+            }
           }
         }
+      } else {
+        throw std::runtime_error("Unknown --guess (use gwh or core)");
       }
       F_gwh_orth = X_arma.t() * F_gwh * X_arma;
     }

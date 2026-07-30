@@ -120,7 +120,7 @@ def radial_h():
         xs, ys = series(rows, "scheme", s, "nrad", "abs_error")
         ax.loglog(xs, ys, label=s, **style(i))
     ax.set_xlabel(r"radial points $n_\mathrm{rad}$")
-    ax.set_ylabel(r"$|E - E_\mathrm{ref}|$  (Ha)")
+    ax.set_ylabel(r"$|E - E_\mathrm{exact}|$  (Ha)")
     ax.grid(True, which="both")
     ax.legend(title="radial scheme")
     save_fig(fig, "convergence_radial_h.pdf")
@@ -133,7 +133,7 @@ def radial_h():
         "  \\begin{tabular}{@{}rr" + "l" * len(order) + "@{}}",
         "    \\toprule",
         "    $n_\\mathrm{rad}$ & $N_\\mathrm{quad}$ & "
-        + " & ".join(f"$|E-E_\\mathrm{{ref}}|$ {s}" for s in order)
+        + " & ".join(f"$|E-E_\\mathrm{{exact}}|$ {s}" for s in order)
         + " \\\\",
         "    \\midrule",
     ]
@@ -150,7 +150,9 @@ def radial_h():
         "  \\end{tabular}",
         "  \\caption{Radial-grid convergence data of the hydrogen-atom study "
         "(Figure~\\ref{fig:conv_radial_h}). Absolute error of the "
-        "core-Hamiltonian lowest-MO energy per radial scheme.}",
+        "core-Hamiltonian lowest-MO energy per radial scheme, measured "
+        "against the exact non-relativistic $1s$ energy "
+        "$E_\\mathrm{exact}=-0.5$~Ha.}",
         "  \\label{tab:data_radial_h}",
         "\\end{table}",
     ]
@@ -178,6 +180,11 @@ def h2plus():
     axa.set_xlabel(r"angular order $L$")
     axa.set_ylabel(r"$|S_{AB} - S_\mathrm{exact}|$")
     axa.grid(True, which="both")
+    # Both panels carry a y-label, so widen the gutter: bbox_inches="tight"
+    # only trims the outer margin and would leave the right label overlapping
+    # the left axes.
+    fig.tight_layout()
+    fig.subplots_adjust(wspace=0.30)
     save_fig(fig, "convergence_h2plus.pdf")
 
     # table: the two sweeps stacked, separated by a midrule
@@ -268,8 +275,10 @@ def conv2d():
                 label=f"{nang}",
                 **style(j),
             )
-        axp.set_xlabel(r"radial points $n_\mathrm{rad}$")
-        axp.set_ylabel(r"$|E - E_\mathrm{ref}|$  (Ha)  [" + s + "]")
+        # Becke/M4 are radial mappings, so the scheme qualifies the radial
+        # axis, not the legend (whose entries are angular orders).
+        axp.set_xlabel(r"radial points $n_\mathrm{rad}$  (" + s + " scheme)")
+        axp.set_ylabel(r"$|E - E_\mathrm{ref}|$  (Ha)")
         axp.grid(True, which="both")
         axp.set_ylim(ylim)
         axp.legend(title="angular order $L$", fontsize=8, ncol=2, loc="lower left")

@@ -13,6 +13,8 @@
 % Useful packages
 \usepackage{amsmath}
 \usepackage{amsfonts}
+\usepackage{amssymb}   % \checkmark for the coverage table
+\usepackage{longtable} % multi-page species coverage table
 \usepackage{graphicx}
 \usepackage{mathtools}
 \usepackage{booktabs}
@@ -936,7 +938,7 @@ less explicit control over the data management and scheduling than
 one would have in a language like CUDA or HIP. The Kokkos kernels also
 provide a broad range of linear algebra functionality, but they fall
 far short of supporting all BLAS and LAPACK routines. As we will
-show later, in Section~\ref{subsubsec:dense_la} we needed to adapt an
+show later, in Section~\ref{subsubsec:dense_la_rij_rik} we needed to adapt an
 algorithm that originally made use of a Cholesky decomposition to
 instead use a singular value decomposition, because the Cholesky
 decomposition subroutine of a general symmetric positive definite
@@ -1155,7 +1157,8 @@ kernels and takes advantage of the local support of atom centered
 orbitals. Each version comes with its specific advantages and
 drawbacks, which we will analyze in the following subsections.
 
-\subsubsection{Dense Linear Algebra}\label{subsubsec:dense_la}
+\subsubsection{Dense Linear Algebra RI-J and RI-K
+schemes}\label{subsubsec:dense_la_rij_rik}
 
 The dense linear algebra kernel relies on the idea that GPUs are
 extremely good at doing dense GEneral Matrix Matrix (GEMM) and dense
@@ -1518,7 +1521,450 @@ SCF cycle, is summarized schematically in Figure
   \label{fig:dense_ri_flow}
 \end{figure}
 
-\subsubsection{Locally Dense Linear Algebra}\label{subsubsec:locally_dense_la}
+\subsubsection{Dense Linear Algebra XC integrals}\label{subsubsec:dense_la_xc}
+
+In order to do a DFT calculation we also need to compute the contributions
+of the exchange-correlation (XC) functional to the Kohn-Sham matrix.
+We will focus the discussion on our implementation of the functionals
+that belong to the generalized gradient approximation level of theory;
+the local density approximation is recovered as the special case of a
+functional that does not depend on the density gradient, for which
+\( \varepsilon_\gamma = 0 \) below and the gradient collocation
+matrices are never needed. Our implementation closely follows the
+algorithm described by Stocks and Barca~\cite{Stocks_2025}.
+
+We write the XC energy as an integral over an energy density,
+\begin{equation}
+  E_\text{XC}^\text{GGA} = \int \varepsilon_\text{XC}^\text{GGA}
+  \big(\rho(\mathbf r), \gamma(\mathbf r)\big)\, d\mathbf r,
+  \qquad \gamma(\mathbf r) = |\nabla \rho(\mathbf r)|^2,
+  \label{eq:E_xc_gga}
+\end{equation}
+where \( \varepsilon_\text{XC}^\text{GGA} \) is the energy per unit
+volume rather than per particle. With that convention the
+abbreviations
+\( \varepsilon_\rho = \partial \varepsilon_\text{XC}^\text{GGA} /
+\partial \rho \) and
+\( \varepsilon_\gamma = \partial \varepsilon_\text{XC}^\text{GGA} /
+\partial \gamma \), used throughout this section, are precisely the two
+quantities a functional library returns.
+
+The contribution to the Kohn-Sham matrix reads
+\begin{equation}
+  V_{\mu \nu }^{\text{GGA}} = \frac{\partial
+  E_\text{XC}^{\text{GGA}}}{\partial D_{\mu \nu }} =
+  \int \Big( \chi_\mu(\mathbf r) Z_\nu(\mathbf r) + \chi_\nu(\mathbf r)
+  Z_\mu(\mathbf r) \Big)\, d\mathbf r,
+  \label{eq:V_xc_gga}
+\end{equation}
+
+where we used
+
+\begin{equation}
+  Z_\nu(\mathbf r) = \frac{1}{2} \chi_\nu(\mathbf r)
+  \varepsilon_\rho(\mathbf r) + 2\big(\nabla \rho(\mathbf r)
+  \cdot \nabla \chi_\nu(\mathbf r)\big)\, \varepsilon_\gamma(\mathbf r).
+  \label{eq:Z_gga}
+\end{equation}
+
+Because of the symmetry of Equation~\eqref{eq:V_xc_gga} we need only
+compute one term and symmetrize the result afterwards,
+
+\begin{equation}
+  V_{\mu \nu }^{\text{GGA}} = \bar V_{\mu \nu }^{\text{GGA}} +
+  \bar V_{\nu \mu }^{\text{GGA}},
+\end{equation}
+where
+\begin{equation}
+  \bar V_{\mu \nu }^{\text{GGA}} = \int \chi_\mu(\mathbf r)
+  Z_\nu(\mathbf r)\, d\mathbf r.
+\end{equation}
+
+Applying our quadrature schemes we obtain the following equations,
+which we implemented again using the dense linear algebra routines
+provided by the Kokkos Kernels library. Note that the dense scheme now
+needs three more precomputed matrices,
+\( \nabla_x\Phi_{\mu g} = \nabla_x\chi_{\mu}(\mathbf r_g) \),
+\( \nabla_y\Phi_{\mu g} = \nabla_y\chi_{\mu}(\mathbf r_g) \) and
+\( \nabla_z\Phi_{\mu g} = \nabla_z\chi_{\mu}(\mathbf r_g) \).
+
+First we evaluate \( \rho \), \( \nabla\rho \) and \( \gamma  \) on the
+grid. Differentiating \( \rho(\mathbf r) = \sum_{\lambda \tau}
+D_{\lambda \tau}\chi_\lambda(\mathbf r)\chi_\tau(\mathbf r) \) produces
+two terms that are equal by the symmetry of \( D \), which is where the
+factor of two originates,
+
+\begin{align}
+  \rho_g &= \sum_{\lambda  \tau } \Phi_{\lambda g} \Phi_{\tau g}
+  D_{\lambda  \tau}  \\
+  \nabla_k\rho_g &= 2\sum_{\lambda  \tau } \nabla_k\Phi_{\lambda g}
+  \Phi_{\tau g} D_{\lambda  \tau}, \qquad k \in \{x,y,z\} \\
+  \gamma_g &= \nabla\rho_g \cdot \nabla\rho_g .
+\end{align}
+
+Evaluating these expressions as written would cost
+\( \mathcal O(N_\text{bf}^2 \times N_\text{quad}) \). Since the density
+is built from the occupied orbitals alone, we instead transform the
+collocation matrices into the molecular orbital basis with four GEMMs,
+
+\begin{equation}
+  \Phi^\text{MO}_{i g} = \sum_\mu C_{\mu i}\Phi_{\mu g},
+  \qquad
+  \nabla_k\Phi^\text{MO}_{i g} = \sum_\mu C_{\mu i}\nabla_k\Phi_{\mu g},
+\end{equation}
+
+and contract over the occupied orbitals instead,
+
+\begin{align}
+  \rho_g &= \sum_i f_i \big(\Phi^\text{MO}_{i g}\big)^2 \\
+  \nabla_k\rho_g &= 2\sum_i f_i \nabla_k\Phi^\text{MO}_{i g}
+  \Phi^\text{MO}_{i g}.
+\end{align}
+
+The transforms scale as \( \mathcal O(N_\text{occ} \times N_\text{bf}
+\times N_\text{quad}) \) and the contraction as \( \mathcal
+O(N_\text{occ} \times N_\text{quad}) \), which is the same reduction we
+already exploit in the RI-K scheme.
+
+Then we pass \( \rho_g  \) and \( \gamma_g \) to
+Libxc~\cite{Lehtola2018libxc}, which evaluates
+\( \varepsilon_\rho(\mathbf r_g) \) and
+\( \varepsilon_\gamma(\mathbf r_g)  \). Note that we have to evaluate
+the functional on the CPU since there exist no hardware agnostic
+library calls to Libxc at the time of writing.
+
+We then move the evaluated functionals back to the GPU, where we
+construct \( Z_{\mu g} \). We launch one team per quadrature point, and
+each team launches one thread per basis function, so that each thread
+computes one entry of \( Z_{\mu g} \). The quadrature weight is folded
+in at this point, i.e. we store \( Z_{\mu g} = w_g Z_\mu(\mathbf r_g)
+\), which avoids a separate pass to scale the collocation matrix.
+
+Finally we perform one GEMM to compute
+\begin{equation}
+  \bar V_{\mu \nu } = \sum_g \Phi_{\mu g} Z_{\nu g}
+\end{equation}
+
+and symmetrize the result, \( V = \bar V + \bar V^T \).
+
+The algorithm of Stocks and Barca~\cite{Stocks_2025} is formulated for
+the spin-restricted case. Since every benchmark of
+Section~\ref{subsec:benchmarks} is unrestricted, we derive the
+generalization here.
+
+A spin-unrestricted GGA functional depends on the two spin densities
+\( \rho^\sigma \) and on the gradient invariants that can be built from
+them,
+
+\begin{equation}
+  E_\text{XC}^\text{GGA} = \int \varepsilon_\text{XC}^\text{GGA}
+  \big( \{\rho^\sigma\}, \{\gamma^{\sigma \sigma'}\} \big)\, d\mathbf r,
+  \qquad
+  \gamma^{\sigma \sigma'}(\mathbf r) = \nabla\rho^\sigma(\mathbf r)
+  \cdot \nabla\rho^{\sigma'}(\mathbf r).
+  \label{eq:E_xc_gga_polarized}
+\end{equation}
+
+Because the dot product is symmetric, \( \gamma^{\sigma \sigma'} =
+\gamma^{\sigma' \sigma} \), only three of the four invariants are
+independent, which is why a functional library exposes three of them.
+
+Each spin channel now carries its own density matrix, so there is one
+Kohn-Sham matrix per channel,
+\( V^{\sigma}_{\mu \nu} = \partial E_\text{XC}^\text{GGA} / \partial
+D^{\sigma}_{\mu \nu} \). Writing \( \sigma' \) for the opposite
+channel, the chain rule runs over all five arguments of
+\eqref{eq:E_xc_gga_polarized}, but two of them drop out: the opposite
+spin density \( \rho^{\sigma'} \) does not depend on
+\( D^{\sigma}_{\mu \nu} \), and neither does the invariant
+\( \gamma^{\sigma' \sigma'} \), which is built from
+\( \nabla \rho^{\sigma'} \) alone. Three terms therefore survive,
+
+\begin{equation}
+  V^{\sigma}_{\mu \nu} = \int \bigg(
+    \varepsilon_{\rho^\sigma}
+    \frac{\partial \rho^\sigma}{\partial D^{\sigma}_{\mu \nu}}
+    + \varepsilon_{\gamma^{\sigma \sigma}}
+    \frac{\partial \gamma^{\sigma \sigma}}{\partial D^{\sigma}_{\mu \nu}}
+    + \varepsilon_{\gamma^{\sigma \sigma'}}
+    \frac{\partial \gamma^{\sigma \sigma'}}{\partial D^{\sigma}_{\mu \nu}}
+  \bigg)\, d\mathbf r,
+  \label{eq:V_xc_chain_polarized}
+\end{equation}
+
+with \( \varepsilon_{\rho^\sigma} = \partial
+\varepsilon_\text{XC}^\text{GGA} / \partial \rho^\sigma \) and
+\( \varepsilon_{\gamma^{\sigma \sigma'}} = \partial
+\varepsilon_\text{XC}^\text{GGA} / \partial \gamma^{\sigma \sigma'} \).
+The three derivatives are
+
+\begin{align}
+  \frac{\partial \rho^\sigma}{\partial D^{\sigma}_{\mu \nu}}
+  &= \chi_\mu \chi_\nu, \\
+  \frac{\partial \gamma^{\sigma \sigma}}{\partial D^{\sigma}_{\mu \nu}}
+  &= 2\, \nabla\rho^\sigma \cdot \nabla(\chi_\mu \chi_\nu), \\
+  \frac{\partial \gamma^{\sigma \sigma'}}{\partial D^{\sigma}_{\mu \nu}}
+  &= \nabla\rho^{\sigma'} \cdot \nabla(\chi_\mu \chi_\nu),
+  \label{eq:gamma_derivatives}
+\end{align}
+
+where \( \nabla(\chi_\mu \chi_\nu) = \chi_\mu \nabla\chi_\nu + \chi_\nu
+\nabla\chi_\mu \). The factor of two in the same-spin invariant appears
+because \( \gamma^{\sigma \sigma} \) is quadratic in
+\( \nabla \rho^\sigma \), whereas the cross invariant
+\( \gamma^{\sigma \sigma'} \) is only linear in it and therefore carries
+no such factor. This asymmetry is the one feature of the unrestricted
+case that has no analogue in \eqref{eq:Z_gga}.
+
+Substituting \eqref{eq:gamma_derivatives} into
+\eqref{eq:V_xc_chain_polarized} and collecting the two gradient terms
+into a single vector per channel,
+
+\begin{equation}
+  \mathbf v^\sigma(\mathbf r) = 2\, \varepsilon_{\gamma^{\sigma
+  \sigma}}(\mathbf r)\, \nabla\rho^\sigma(\mathbf r)
+  + \varepsilon_{\gamma^{\sigma \sigma'}}(\mathbf r)\,
+  \nabla\rho^{\sigma'}(\mathbf r),
+  \label{eq:v_sigma}
+\end{equation}
+
+gives
+
+\begin{equation}
+  V^{\sigma}_{\mu \nu} = \int \Big( \varepsilon_{\rho^\sigma}
+    \chi_\mu \chi_\nu + \mathbf v^\sigma \cdot
+  \nabla(\chi_\mu \chi_\nu) \Big)\, d\mathbf r,
+\end{equation}
+
+which has exactly the structure of the restricted expression and can be
+split the same way, \( V^{\sigma}_{\mu \nu} = \bar{V}^{\sigma}_{\mu
+\nu} + \bar V^{\sigma}_{\nu \mu} \), with
+
+\begin{equation}
+  Z^\sigma_\nu(\mathbf r) = \frac{1}{2} \chi_\nu(\mathbf r)\,
+  \varepsilon_{\rho^\sigma}(\mathbf r) + \mathbf v^\sigma(\mathbf r)
+  \cdot \nabla \chi_\nu(\mathbf r).
+  \label{eq:Z_gga_polarized}
+\end{equation}
+
+Comparing \eqref{eq:Z_gga_polarized} with \eqref{eq:Z_gga} shows that
+the restricted scheme is recovered by setting \( \mathbf v = 2
+\varepsilon_\gamma \nabla\rho \), i.e. by dropping the cross term.
+
+We evaluate \( \rho^\sigma \) and
+\( \nabla\rho^\sigma \) once per channel with the orbital-based
+contraction above, form the three invariants, and interleave them into
+the layout the library expects, which stores the two densities and the
+three invariants consecutively per grid point. A single call then
+returns \( \varepsilon_{\rho^\sigma} \) and
+\( \varepsilon_{\gamma^{\sigma \sigma'}} \) for every grid point, which
+we de-interleave and use to build the two vectors 
+\eqref{eq:v_sigma} in one pass over the grid. From that point on the
+two channels are independent: the kernel that builds \( Z^\sigma_{\mu g}
+\), the GEMM and the symmetrization are the same routine as in the
+restricted case, invoked once per channel with its own
+\( \varepsilon_{\rho^\sigma} \) and \( \mathbf v^\sigma \). Only the
+construction of \( \mathbf v^\sigma \) is new, so the unrestricted path
+costs one extra grid pass and a second assembly.
+
+The complete control-flow of the unrestricted routine is summarized in
+Figure~\ref{fig:gga_lsda_flow} and all memory allocations are listed in
+Table~\ref{tab:gga_lsda_memory}.
+
+\begin{figure}[H]
+  \centering
+  % --- Vertical flowchart. The two spin channels run as parallel columns
+  % that join twice: once to form the cross invariant and call the
+  % functional, and once more for the energy. ---
+  \resizebox{!}{0.74\textheight}{%
+    \begin{tikzpicture}[
+        node distance=9mm,
+        box/.style={draw, rounded corners,
+          minimum height=12mm, minimum width=42mm,
+        align=center, font=\large, inner xsep=2mm},
+        hostbox/.style={box, fill=blue!8, draw=blue!50!black},
+        databox/.style={box, fill=yellow!10, draw=yellow!65!black},
+        gemmbox/.style={box, fill=orange!12, draw=orange!65!black},
+        teambox/.style={box, fill=green!12, draw=green!45!black},
+        arr/.style={-{Latex[length=2mm]}, thick},
+        branchlabel/.style={font=\large\bfseries, text=black},
+        looplabel/.style={font=\small\itshape, text=gray!70!black}
+      ]
+      % --- Startup data, shared by both channels ---
+      \node[databox] (colloc)
+      {Precompute collocation\\matrices
+      $\Phi_{\mu g},\ \nabla_k\Phi_{\mu g}$};
+
+      % --- Channel columns ---
+      \node[gemmbox, below=16mm of colloc, xshift=-30mm] (moa)
+      {$\Phi^\text{MO}_{ig},\ \nabla_k\Phi^\text{MO}_{ig}$\\$4\times$ GEMM};
+      \node[gemmbox, below=16mm of colloc, xshift=30mm] (mob)
+      {$\Phi^\text{MO}_{ig},\ \nabla_k\Phi^\text{MO}_{ig}$\\$4\times$ GEMM};
+      \node[teambox, below=of moa] (dena)
+      {$\rho^\sigma_g,\ \nabla_k\rho^\sigma_g,\
+      \gamma^{\sigma\sigma}_g$};
+      \node[teambox, below=of mob] (denb)
+      {$\rho^{\sigma'}_g,\ \nabla_k\rho^{\sigma'}_g,\
+      \gamma^{\sigma'\sigma'}_g$};
+
+      % --- First join: cross invariant, then the functional on the host ---
+      \node[teambox, anchor=north]
+      (cross) at ($(dena.south)!0.5!(denb.south)+(0,-16mm)$)
+      {$\gamma^{\sigma\sigma'}_g=\nabla\rho^\sigma_g\cdot
+      \nabla\rho^{\sigma'}_g$};
+      \node[hostbox, below=of cross] (libxc)
+      {Interleave $\{\rho^\sigma\},\{\gamma^{\sigma\sigma'}\}$\\
+        one \texttt{Libxc} call on the host\\
+      de-interleave $\varepsilon_{\rho^\sigma},
+      \varepsilon_{\gamma^{\sigma\sigma'}}$};
+      \node[teambox, below=of libxc] (vfield)
+      {$\mathbf v^\sigma=2\varepsilon_{\gamma^{\sigma\sigma}}
+        \nabla\rho^\sigma+\varepsilon_{\gamma^{\sigma\sigma'}}
+      \nabla\rho^{\sigma'}$};
+
+      % --- Second split: per-channel assembly, identical routine ---
+      \node[teambox, below=16mm of vfield, xshift=-30mm] (za)
+      {$Z^\sigma_{\mu g}=w_g\big(\tfrac12\chi_\mu
+      \varepsilon_{\rho^\sigma}+\mathbf v^\sigma\!\cdot\!\nabla\chi_\mu\big)$};
+      \node[teambox, below=16mm of vfield, xshift=30mm] (zb)
+      {$Z^{\sigma'}_{\mu g}=w_g\big(\tfrac12\chi_\mu
+      \varepsilon_{\rho^{\sigma'}}+\mathbf v^{\sigma'}\!\cdot\!
+      \nabla\chi_\mu\big)$};
+      \node[gemmbox, below=of za] (va)
+      {$\bar V^\sigma_{\mu\nu}=\displaystyle\sum_g
+      \Phi_{\mu g}Z^\sigma_{\nu g}$};
+      \node[gemmbox, below=of zb] (vb)
+      {$\bar V^{\sigma'}_{\mu\nu}=\displaystyle\sum_g
+      \Phi_{\mu g}Z^{\sigma'}_{\nu g}$};
+      \node[teambox, below=of va] (syma)
+      {$V^\sigma=\bar V^\sigma+(\bar V^\sigma)^{\!\top}$};
+      \node[teambox, below=of vb] (symb)
+      {$V^{\sigma'}=\bar V^{\sigma'}+(\bar V^{\sigma'})^{\!\top}$};
+
+      % --- Second join: the energy ---
+      \node[teambox, anchor=north]
+      (energy) at ($(syma.south)!0.5!(symb.south)+(0,-16mm)$)
+      {$E_\text{XC}=\displaystyle\sum_g w_g
+      \big(\rho^\sigma_g+\rho^{\sigma'}_g\big)
+      \varepsilon_\text{XC}$};
+
+      % --- Arrows ---
+      \coordinate (split1) at ($(colloc.south)+(0,-6mm)$);
+      \draw[thick] (colloc.south) -- (split1);
+      \draw[arr] (split1) -| (moa.north)
+      node[pos=0.25, above, branchlabel] {spin $\sigma$};
+      \draw[arr] (split1) -| (mob.north)
+      node[pos=0.25, above, branchlabel] {spin $\sigma'$};
+      \draw[arr] (moa) -- (dena);
+      \draw[arr] (mob) -- (denb);
+      \draw[arr] (dena.south) -- (cross.north west);
+      \draw[arr] (denb.south) -- (cross.north east);
+      \draw[arr] (cross) -- (libxc);
+      \draw[arr] (libxc) -- (vfield);
+      \coordinate (split2) at ($(vfield.south)+(0,-6mm)$);
+      \draw[thick] (vfield.south) -- (split2);
+      \draw[arr] (split2) -| (za.north);
+      \draw[arr] (split2) -| (zb.north);
+      \draw[arr] (za) -- (va);
+      \draw[arr] (zb) -- (vb);
+      \draw[arr] (va) -- (syma);
+      \draw[arr] (vb) -- (symb);
+      \draw[arr] (syma.south) -- (energy.north west);
+      \draw[arr] (symb.south) -- (energy.north east);
+
+      % --- The per-channel assembly is one routine, called twice ---
+      \begin{scope}[on background layer]
+        \node[draw, dashed, rounded corners, draw=gray!60, inner sep=4mm,
+          fit=(za)(va)(syma),
+          label={[looplabel, rotate=90, anchor=south]left:{one routine,
+        once per channel}}] {};
+        \node[draw, dashed, rounded corners, draw=gray!60, inner sep=4mm,
+        fit=(zb)(vb)(symb)] {};
+      \end{scope}
+
+      % --- Collocation matrices are reused by the Z kernels ---
+      \coordinate (reusex) at ($(zb.east)+(16mm,0)$);
+      \draw[arr, dashed, shorten >=1.5mm] (colloc.east) -| (reusex) -- (zb.east);
+      \node[looplabel, rotate=-90, anchor=south]
+      at ($(reusex)+(3mm,34mm)$) {$\Phi,\ \nabla\Phi$ reused};
+  \end{tikzpicture}}
+
+  \caption{Control-flow of the spin-unrestricted GGA routine
+    \texttt{compute\_gga\_lsda}, annotated with the underlying
+    equations. The two spin channels run as parallel columns and join
+    twice: once to form the cross invariant
+    $\gamma^{\sigma\sigma'}$, which is the only quantity that couples
+    them, and once at the end for the energy. Boxes are colored by
+    operation type: blue for host-side orchestration and the functional
+    evaluation, which has to run on the CPU; yellow for pre-computed
+    data held in device memory; orange for dense matrix--matrix
+    products (GEMM); and green for team-parallel kernels over the
+    quadrature grid. The two dashed regions mark the per-channel
+    assembly, which is a single routine invoked once per spin with its
+    own $\varepsilon_{\rho^\sigma}$ and $\mathbf v^\sigma$: only the
+    construction of $\mathbf v^\sigma$ above it is specific to the
+  unrestricted case.}
+  \label{fig:gga_lsda_flow}
+\end{figure}
+
+\begin{table}[H]
+  \centering
+  {\small
+    \begin{tabular}{@{}llllc@{}}
+      \toprule
+      Allocation & Type & Size & Symbol & Space \\
+      \midrule
+      \texttt{rho\_\{a,b\}}         & \texttt{View<double*>}
+      & $N_\text{quad}$ & $\rho^\sigma_g$ & device \\
+      \texttt{g\{x,y,z\}\{a,b\}}    & \texttt{View<double*>}
+      & $N_\text{quad}$ & $\nabla_k\rho^\sigma_g$ & device \\
+      \texttt{sigma\_\{aa,bb\}}     & \texttt{View<double*>}
+      & $N_\text{quad}$ & $\gamma^{\sigma\sigma}_g$ & device \\
+      \texttt{sigma\_ud}            & \texttt{View<double*>}
+      & $N_\text{quad}$ & $\gamma^{\sigma\sigma'}_g$ & device \\
+      \midrule
+      \texttt{rho\_pol\_h}          & \texttt{View<double*, Host>}
+      & $2N_\text{quad}$ & $\{\rho^\sigma_g\}$ interleaved & host \\
+      \texttt{sigma\_pol\_h}        & \texttt{View<double*, Host>}
+      & $3N_\text{quad}$ & $\{\gamma^{\sigma\sigma'}_g\}$ interleaved & host \\
+      \texttt{vrho\_pol\_h}         & \texttt{View<double*, Host>}
+      & $2N_\text{quad}$ & $\{\varepsilon_{\rho^\sigma}\}$ interleaved & host \\
+      \texttt{vsigma\_pol\_h}       & \texttt{View<double*, Host>}
+      & $3N_\text{quad}$
+      & $\{\varepsilon_{\gamma^{\sigma\sigma'}}\}$ interleaved & host \\
+      \texttt{exc\_h}               & \texttt{View<double*, Host>}
+      & $N_\text{quad}$ & $\varepsilon_\text{XC}$ & host \\
+      \midrule
+      \texttt{exc}                  & \texttt{View<double*>}
+      & $N_\text{quad}$ & $\varepsilon_\text{XC}$ & device \\
+      \texttt{vrho\_\{up,down\}}    & \texttt{View<double*>}
+      & $N_\text{quad}$ & $\varepsilon_{\rho^\sigma}$ & device \\
+      \texttt{vsigma\_\{uu,ud,dd\}} & \texttt{View<double*>}
+      & $N_\text{quad}$ & $\varepsilon_{\gamma^{\sigma\sigma'}}$ & device \\
+      \texttt{vec\{x,y,z\}\_\{up,dn\}} & \texttt{View<double*>}
+      & $N_\text{quad}$ & $\mathbf v^\sigma$ & device \\
+      \midrule
+      \texttt{Z}                    & \texttt{View<double**>}
+      & $N_\text{bf}\times N_\text{quad}$ & $Z^\sigma_{\mu g}$ & device \\
+      \texttt{V}, \texttt{V\_result} & \texttt{View<double**>}
+      & $N_\text{bf}\times N_\text{bf}$ & $\bar V^\sigma,\ V^\sigma$ & device \\
+      \bottomrule
+    \end{tabular}}
+  \caption{Memory allocations in \texttt{compute\_gga\_lsda}. All device
+    views use \texttt{LayoutLeft}. The last two rows are allocated inside
+    the per-channel assembly and therefore exist once per spin. The
+    dominant term is $\texttt{Z}$, which matches the collocation matrix
+    in size, so the unrestricted GGA build costs one extra
+    $N_\text{bf}\times N_\text{quad}$ array on top of the four
+    collocation matrices it reads; everything else scales with
+    $N_\text{quad}$ alone. The interleaved host buffers are required by
+    the functional library's spin-polarized calling
+  convention.}
+  \label{tab:gga_lsda_memory}
+\end{table}
+
+\subsubsection{Locally Dense Linear
+Algebra}\label{subsubsec:locally_dense_la}
 
 The locally dense linear algebra implementation of the RI-J and RI-K
 scheme tries to overcome the drawbacks of the dense schemes by not
@@ -1608,17 +2054,21 @@ Figure~\ref{fig:tiled_rik_flow} and Table~\ref{tab:tiled_rik_memory}.
       {Build density\\$D_{\mu\nu}=\sum_i f_i C_{\mu i}C_{\nu i}$};
       \node[threadbox, below=16mm of dbuild] (load1)
       {Load $w_g,\mathbf r_g$\\into scratch};
-      \node[threadbox, right=of load1] (phi1) {Eval tile\\$\chi_\mu,\chi_\nu$};
+      \node[threadbox, right=of load1] (phi1) {Eval
+      tile\\$\chi_\mu,\chi_\nu$};
       \node[threadbox, right=of phi1] (rho)
       {$\rho_g\mathrel{+}=\sum_{\mu\nu}\chi_\mu\chi_\nu D_{\mu\nu}$};
       \node[teambox, right=12mm of rho] (yalpha)
-      {$y_\alpha\mathrel{+}=\sum_g \rho_g w_g \tilde V_\alpha(\mathbf r_g)$};
+      {$y_\alpha\mathrel{+}=\sum_g \rho_g w_g \tilde
+      V_\alpha(\mathbf r_g)$};
       \node[hostbox, below=22mm of load1] (inv)
       {Apply $(\alpha|\beta)^{-1}$\\$2\times$ GEMV $\Rightarrow z_\alpha$};
       \node[threadbox, below=22mm of inv] (load2) {Load $w_g,\mathbf r_g$};
       \node[threadbox, right=of load2] (vbuild)
-      {$v_g\mathrel{+}=\sum_\alpha \tilde V_\alpha(\mathbf r_g) w_g z_\alpha$};
-      \node[threadbox, right=of vbuild] (phi2) {Eval tile\\$\chi_\mu,\chi_\nu$};
+      {$v_g\mathrel{+}=\sum_\alpha \tilde V_\alpha(\mathbf r_g)
+      w_g z_\alpha$};
+      \node[threadbox, right=of vbuild] (phi2) {Eval
+      tile\\$\chi_\mu,\chi_\nu$};
       \node[teambox, right=12mm of phi2] (jij)
       {$\tilde J_{\mu\nu}\mathrel{+}=\sum_g v_g \chi_\mu\chi_\nu$};
       \draw[arr] (dbuild) -- (load1);
@@ -1627,7 +2077,8 @@ Figure~\ref{fig:tiled_rik_flow} and Table~\ref{tab:tiled_rik_memory}.
       \draw[arr] (rho) -- (yalpha);
       \draw[arr] (yalpha.south) |- (inv.east)
       node[near start, right, looplabel] {$y_\alpha$};
-      \draw[arr] (inv) -- (load2) node[midway, right, looplabel] {$z_\alpha$};
+      \draw[arr] (inv) -- (load2) node[midway, right, looplabel]
+      {$z_\alpha$};
       \draw[arr] (load2) -- (vbuild);
       \draw[arr] (vbuild) -- (phi2);
       \draw[arr] (phi2) -- (jij);
@@ -1698,7 +2149,8 @@ Figure~\ref{fig:tiled_rik_flow} and Table~\ref{tab:tiled_rik_memory}.
 
 \begin{figure}[H]
   \centering
-  % --- Vertical flowchart: the per-orbital pipeline reads top to bottom, with
+  % --- Vertical flowchart: the per-orbital pipeline reads top to
+  % bottom, with
   % the loop-back arc on the right. Height-bounded like Figure
   % \ref{fig:becke_team_flow}. ---
   \resizebox{!}{0.78\textheight}{%
@@ -1780,7 +2232,8 @@ Figure~\ref{fig:tiled_rik_flow} and Table~\ref{tab:tiled_rik_memory}.
       \texttt{phi\_cache}              & \texttt{View<double*, Scratch>}
       & $\texttt{tile}\times P_\text{max}$ & $\chi_\nu$ tile & per team \\
       \texttt{potential\_scratch}      & \texttt{View<double*, Scratch>}
-      & $P_\text{max}$                   & $v_\alpha(\mathbf r_g)$ & per team \\
+      & $P_\text{max}$                   & $v_\alpha(\mathbf
+      r_g)$ & per team \\
       \bottomrule
   \end{tabular}}
   \caption{Memory allocations in
@@ -1818,11 +2271,14 @@ quadrature grid affects our experiments. We therefore make an
 incremental study of how the resolution and geometry of a chosen
 quadrature grid affect the HF energies. We start with the hydrogen
 atom, then move on to the dihydrogen cation and lastly
-perform SCF computations on water. Unless an exact value is available in
-closed form, the energy errors reported in this section are measured
-against a shared self-reference, evaluated on a grid far finer than any
-grid in the respective sweep, rather than against an exact or
-basis-set-limit value. This isolates the quadrature error from the
+perform SCF computations on the water molecule. Where an exact value is
+available in closed form we use it: the hydrogen atom is measured
+against the analytic $1s$ energy $E_\mathrm{exact}=-0.5$~Ha and the
+H$_2^+$ overlap against its analytic value. Everywhere else the energy
+errors reported in this section are measured against a shared
+self-reference, evaluated on a grid far finer than any grid in the
+respective sweep, rather than against an exact or basis-set limit
+value. Either way the comparison isolates the quadrature error from the
 basis-set incompleteness error and lets us compare schemes on an equal
 footing.
 
@@ -1838,17 +2294,18 @@ We first test how well the radial grids presented in
 Section~\ref{subsec:quadratures} compare against each other.
 Figure~\ref{fig:conv_radial_h} shows that all three schemes converge
 monotonically, with the (M4) grid being the most accurate at every
-radial resolution and reaching \( 8.3 \times 10^{-14} \)~Ha. The (M3)
-grid is the slowest of the three and still sits at \( 6.3 \times
-10^{-12} \)~Ha on the finest grid of the sweep. The two finest (M4)
-points barely differ from one another because they have reached the
-noise floor of the shared reference, not because the scheme has stopped
-converging.
+radial resolution and reaching \( 1.0 \times 10^{-15} \)~Ha. The (M3)
+grid is the slowest of the three and still sits at \( 6.4 \times
+10^{-12} \)~Ha on the finest grid of the sweep. Because the reference
+here is the analytic $1s$ energy rather than a self-reference, the (M4)
+curve keeps descending across the whole sweep and only flattens once it
+reaches the double-precision noise floor of the energy itself, at
+roughly \( 10^{-15} \)~Ha.
 
 Becke's proposed radial mapping is the least accurate of the three on
-coarse grids---at \( n_\mathrm{rad}=10 \) it is more than two orders of
-magnitude worse than (M3)---but it overtakes (M3) from \(
-n_\mathrm{rad}=40 \) onwards and from there on sits between the (M3) and
+coarse grids, at \( n_\mathrm{rad}=10 \) it is more than two orders of
+magnitude worse than (M3), but it overtakes (M3) from \(
+n_\mathrm{rad}=40 \) onwards. From there on it sits between the (M3) and
 (M4) grids. That it eventually beats (M3) is somewhat surprising, since
 the (M3) grid was originally thought of as an improvement over Becke's
 proposal.
@@ -1863,10 +2320,10 @@ proposal.
     Basis: QZ4P (ADF Slater-type). Angular grid: Lebedev, fixed
     at order $L=29$. The radial point count is swept over
     $n_\mathrm{rad}\in\{10,20,40,80,160,320,640\}$. The reference is the
-    mean of the three schemes on the finest grid ($n_\mathrm{rad}=1280$),
-    $E_\mathrm{ref}\approx-0.5$ (a shared self-reference; the
-    exact $1s$ energy is $-0.5$~Ha). The ordinate is
-  $|E-E_\mathrm{ref}|$.}
+    exact non-relativistic $1s$ energy of the hydrogen atom,
+    $E_\mathrm{exact}=-0.5$~Ha, so the ordinate
+    $|E-E_\mathrm{exact}|$ is pure quadrature error with no
+  self-reference noise floor.}
   \label{fig:conv_radial_h}
 \end{figure}
 
@@ -1985,14 +2442,14 @@ too aggressive in its pruning, as its total error plateaus above \(
 
 The per-term decomposition in Figure~\ref{fig:conv_pruning_terms}
 explains both this accuracy floor and the non-monotonicity of the total
-error. The two one-electron terms, \( E_\mathrm{kin} \) and \(
+error. Both one-electron terms, \( E_\mathrm{kin} \) and \(
 E_\mathrm{ne} \), converge one to two orders of magnitude more slowly
 than the Coulomb and exchange terms and therefore limit the overall
 accuracy, while the total error benefits from a partial cancellation
 between the individual contributions and is consequently not monotone in
 the grid size.
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.72\textwidth]{Visualisations/convergence_pruning_total.pdf}
   \caption{Angular pruning-scheme comparison on water (H$_2$O):
@@ -2015,7 +2472,7 @@ the grid size.
   \label{fig:conv_pruning_total}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{Visualisations/convergence_pruning_terms.pdf}
   \caption{Per-term decomposition of the angular pruning-scheme
@@ -2038,7 +2495,7 @@ the grid size.
 
 In the previous section we established that our quadrature converges to
 the level of a few $\mu$Ha. We now want to benchmark the complete code
-on a realistic workload. We ask two questions. The first one being, how
+on a realistic workload. We ask two questions: The first one being, how
 well we can reproduce chemical quantities. The second one being,
 where do our integration routines spend their time.
 
@@ -2064,9 +2521,10 @@ timings were measured on a single GH200 GPU.
 
 A small number of open shell species does not
 converge. We exclude every reaction that contains such a species rather
-than report an energy the solver never accepted, which leaves $139$,
+than report an unconverged energy, which leaves $139$,
 $131$, $118$ and $121$ of the $140$ reactions for DZ, TZP, TZ2P and
-QZ4P respectively.
+QZ4P respectively; Table~\ref{tab:w411_species} lists the
+convergence status of every species in the set.
 
 Two caveats apply to the interpretation of the results. The quantity we
 measure is the sum of the basis set incompleteness error and the
@@ -2086,7 +2544,8 @@ statistics. The distributions narrow and shift towards zero
 monotonically with growing basis size. The mean absolute deviation
 improves from $52.9$~kcal/mol at DZ to $8.9$~kcal/mol at TZP,
 $6.2$~kcal/mol at TZ2P and
-$5.1$~kcal/mol at QZ4P. The DZ basis carries no polarization functions at all
+$5.1$~kcal/mol at QZ4P. The DZ basis carries no polarization
+functions at all
 and underbinds so severely that it is of no quantitative use. Adding a
 single polarization shell at TZP is by far the largest single
 improvement, and the remaining progression to TZ2P and QZ4P is
@@ -2099,13 +2558,14 @@ behavior of B3LYP as evidence that the full pipeline of grid
 construction, density fitting and exchange-correlation quadrature works
 correctly on realistic chemistry.
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.78\textwidth]{Visualisations/benchmark_w411_violin.pdf}
   \caption{Distribution of the signed error in the W4-11 total
     atomization energies, one violin per Slater-type basis set, with the
     number of converged reactions given below each label. Method is
-    unrestricted B3LYP (Libxc \texttt{hyb\_gga\_xc\_b3lyp3}, the VWN3
+    unrestricted B3LYP (\texttt{Libxc}~\cite{Lehtola2018libxc}
+      \texttt{hyb\_gga\_xc\_b3lyp3}, the VWN3
     parametrization) with the dense algorithm. The grid is TA-M4 radial
     with $n_\mathrm{rad}=100$ and Lebedev order $L=35$ with robust
     pruning and uniform radial sizing. The linear dependence threshold
@@ -2113,12 +2573,12 @@ correctly on realistic chemistry.
     values are the zero-point exclusive, non-relativistic,
     clamped-nuclei atomization energies of Ref.\cite{Karton11w411}.
     Individual reactions are overlaid as jittered points and the
-    horizontal bar marks the median.T he summary statistics are given
+    horizontal bar marks the median. The summary statistics are given
   in Table~\ref{tab:w411_summary}.}
   \label{fig:w411_violin}
 \end{figure}
 
-\begin{table}[h]
+\begin{table}[H]
   \centering
   \caption{Summary of the W4-11 B3LYP atomization energy errors per
     basis set. Listed are the number of reactions $N_\mathrm{rx}$ for
@@ -2151,7 +2611,7 @@ independent of the basis set, so it takes only as many distinct values
 as there are molecule sizes in the set and cannot resolve the cost
 differences between the four bases.
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{Visualisations/benchmark_w411_scaling.pdf}
   \caption{Wall time over the W4-11 set against the number of primary
@@ -2164,7 +2624,7 @@ differences between the four bases.
     the exponent $p$ of a least squares power law
     $t\propto N_\mathrm{bf}^{\,p}$ fitted to each basis set. The gray
     guides are $N^2$, $N^3$ and $N^4$ slopes anchored at the median of
-    the data. Systems, method and grid as in
+    the data. Systems, method and grid are described in
   Figure~\ref{fig:w411_violin}.}
   \label{fig:w411_scaling}
 \end{figure}
@@ -2185,7 +2645,7 @@ through the density fitted route of Section~\ref{subsec:density_fitting}
 once per spin channel in every iteration, and it identifies the exact
 exchange kernel as the component where optimization would pay off most.
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{Visualisations/benchmark_w411_breakdown.pdf}
   \caption{Distribution of wall time over the stages of the
@@ -2196,7 +2656,7 @@ exchange kernel as the component where optimization would pay off most.
     the accounted time, which makes the shift of work into the exact
     exchange build with growing basis size explicit. The first five
     categories are incurred once during start-up and the four labeled
-    \emph{SCF} once per Fock build. Systems, method and grid as in
+    \emph{SCF} once per Fock-matrix build. Systems, method and grid as in
   Figure~\ref{fig:w411_violin}. All timings use the dense algorithm.}
   \label{fig:w411_breakdown}
 \end{figure}
@@ -2251,7 +2711,8 @@ to time constraints we settled for STOs provided by
 ADF~\cite{VanLenthe2003}, since they were readily
 available and we could rely on more literature during the debugging
 and testing of the code. We think that a study exploring the
-convergence properties of the NAOs on polyatomic systems is of great interest.
+convergence properties of the NAOs on polyatomic systems is of
+great interest.
 
 At present the code can only handle small systems. Extending the
 code with MPI would allow for distributed computing. Harnessing the
@@ -2278,7 +2739,8 @@ quadrature points at no cost in accuracy, which should translate into
 a comparable saving in wall time, since the computational time grows
 linearly with the grid size. Since the literature has been dominated
 by GTOs, the published quadrature grids have also been optimized for
-their integration. We expect that adaptive schemes that are directly connected
+their integration. We expect that adaptive schemes that are
+directly connected
 to the convergence of the energies could yield improvements in
 overall computational cost.
 
@@ -2313,6 +2775,11 @@ would not have been able to finish this work.
 
 \subsection{Water: Angular Pruning Schemes}
 \input{Data/tables/pruning}
+
+\section{Benchmark Data}\label{app:benchmark_data}
+
+\subsection{W4-11: SCF Convergence Coverage}
+\input{Data/tables/w411_species}
 
 \bibliographystyle{unsrt}
 \bibliography{Quadratures}
