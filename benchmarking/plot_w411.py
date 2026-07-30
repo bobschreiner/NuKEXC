@@ -152,7 +152,17 @@ def fnum(row, key, default=0.0):
         return default
 
 
-def plot_violin(reactions, out):
+def sfmt(x, prec=1):
+    """Format with a true minus sign (U+2212) rather than an ASCII hyphen.
+
+    Matplotlib's tick formatters already emit U+2212 (axes.unicode_minus is on
+    by default), but Python's own %-formatting does not -- so hand-built labels
+    would otherwise show a visibly shorter dash than the axis they sit next to.
+    """
+    return ("%.*f" % (prec, x)).replace("-", "\u2212")
+
+
+def plot_violin(reactions, out, stem="benchmark_w411"):
     """Error distribution of the 140 TAEs, one violin per basis set."""
     present = [b for b in BASIS_ORDER if any(r["basis"] == b for r in reactions)]
     data = [[fnum(r, "error") for r in reactions if r["basis"] == b] for b in present]
@@ -196,7 +206,7 @@ def plot_violin(reactions, out):
     for i, (b, vals) in enumerate(zip(present, data), start=1):
         v = np.asarray(vals)
         ax.annotate(
-            "MSD %.1f\nMAD %.1f" % (v.mean(), np.abs(v).mean()),
+            "MSD %s\nMAD %s" % (sfmt(v.mean()), sfmt(np.abs(v).mean())),
             xy=(i, 0.985),
             xycoords=("data", "axes fraction"),
             ha="center",
@@ -216,7 +226,7 @@ def plot_violin(reactions, out):
     lo, hi = ax.get_ylim()
     ax.set_ylim(lo, hi + 0.22 * (hi - lo))
     fig.tight_layout()
-    fig.savefig(out / "benchmark_w411_violin.pdf")
+    fig.savefig(out / ("%s_violin.pdf" % stem))
     plt.close(fig)
 
     print("Violin summary (kcal/mol):")
@@ -236,7 +246,7 @@ def plot_violin(reactions, out):
         )
 
 
-def plot_scaling(species, out):
+def plot_scaling(species, out, stem="benchmark_w411"):
     """Runtime against problem size, as total cost and as per-Fock-build cost.
 
     Both panels use the number of primary basis functions as the abscissa. The
@@ -321,11 +331,11 @@ def plot_scaling(species, out):
         ax.grid(True, which="both", linestyle=":", alpha=0.5)
         ax.legend(loc="upper left", framealpha=0.92)
     fig.tight_layout()
-    fig.savefig(out / "benchmark_w411_scaling.pdf")
+    fig.savefig(out / ("%s_scaling.pdf" % stem))
     plt.close(fig)
 
 
-def plot_breakdown(species, out):
+def plot_breakdown(species, out, stem="benchmark_w411"):
     """Where the time goes, per basis set: absolute seconds and share."""
     present = [b for b in BASIS_ORDER if any(r["basis"] == b for r in species)]
     # Mean seconds per molecule, so bases with equal species counts compare
@@ -387,7 +397,7 @@ def plot_breakdown(species, out):
         handles[::-1], labels[::-1], loc="center right", framealpha=0.92, fontsize=9
     )
     fig.tight_layout(rect=(0, 0, 0.78, 1))
-    fig.savefig(out / "benchmark_w411_breakdown.pdf")
+    fig.savefig(out / ("%s_breakdown.pdf" % stem))
     plt.close(fig)
 
     print("\nTime breakdown (mean seconds per molecule):")
@@ -403,6 +413,108 @@ def plot_breakdown(species, out):
         ("  %-26s" + "%10.3f" * len(present))
         % tuple(["TOTAL (accounted)"] + [sum(means[b]) for b in present])
     )
+
+
+def ltx(text):
+    """Escape a CSV field for LaTeX text mode."""
+    for a, b in (("\\", r"\textbackslash{}"), ("&", r"\&"), ("%", r"\%"),
+                 ("$", r"\$"), ("#", r"\#"), ("_", r"\_"),
+                 ("{", r"\{"), ("}", r"\}"), ("~", r"\textasciitilde{}"),
+                 ("^", r"\textasciicircum{}")):
+        text = text.replace(a, b)
+    return text
+
+
+def archive_csvs(prefix, dest):
+    """Copy the raw CSVs next to the thesis, mirroring latex/Data/*.csv.
+
+    The convergence studies keep their raw data under latex/Data/ so a thesis
+    checkout can regenerate every figure and table without the build tree.
+    The W4-11 run is expensive (608 SCF calculations on a GPU), so archiving it
+    here is what makes the benchmark reproducible after a `build/` clean.
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    written = []
+    for kind in ("reactions", "species"):
+        src = Path("%s_%s.csv" % (prefix, kind))
+        if not src.is_file():
+            continue
+        tgt = dest / ("%s_%s.csv" % (prefix, kind))
+        tgt.write_bytes(src.read_bytes())
+        written.append(tgt)
+    return written
+
+
+def write_unconverged_table(sp_all, rx_all, path):
+    """Emit the appendix float listing every species that failed to converge.
+
+    Supports the claim in the Results section that the excluded reactions
+    cluster on a few open-shell atoms and radicals: a single unconverged atom
+    removes every reaction it takes part in, so the reaction count dropped per
+    basis is much larger than the number of failing species.
+    """
+    present = [b for b in BASIS_ORDER if any(r["basis"] == b for r in sp_all)]
+    bad = sorted({r["species"] for r in sp_all if r.get("converged") != "1"})
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not bad:
+        path.write_text(
+            "% No unconverged species in this run -- nothing to tabulate.\n"
+        )
+        return
+
+    # charge/multiplicity are properties of the species, not of the basis
+    meta = {}
+    for r in sp_all:
+        meta.setdefault(r["species"], (r.get("charge", ""), r.get("multiplicity", "")))
+    status = {(r["species"], r["basis"]): r.get("converged") for r in sp_all}
+
+    lines = [
+        r"\begin{table}[H]",
+        r"  \centering\small",
+        r"  \begin{tabular}{@{}llr" + "c" * len(present) + r"@{}}",
+        r"    \toprule",
+        r"    Species & $q$ & $2S+1$ & " + " & ".join(present) + r" \\",
+        r"    \midrule",
+    ]
+    for sp in bad:
+        q, mult = meta.get(sp, ("", ""))
+        cells = []
+        for b in present:
+            st = status.get((sp, b))
+            cells.append("--" if st == "1" else (r"$\times$" if st is not None else ""))
+        # charge may be negative -- math mode so it sets a minus, not a hyphen
+        lines.append(
+            "    \\texttt{%s} & $%s$ & $%s$ & %s \\\\"
+            % (ltx(sp), ltx(q), ltx(mult), " & ".join(cells))
+        )
+    removed = [
+        sum(1 for r in rx_all if r["basis"] == b and r.get("all_converged") != "1")
+        for b in present
+    ]
+    total = [sum(1 for r in rx_all if r["basis"] == b) for b in present]
+    lines += [
+        r"    \midrule",
+        r"    \multicolumn{3}{@{}l}{Reactions excluded} & "
+        + " & ".join("%d" % n for n in removed)
+        + r" \\",
+        r"    \multicolumn{3}{@{}l}{Reactions retained} & "
+        + " & ".join("%d" % (t - n) for t, n in zip(total, removed))
+        + r" \\",
+        r"    \bottomrule",
+        r"  \end{tabular}",
+        r"  \caption{Species of the W4-11 set that the SCF did not converge to "
+        r"the thresholds of Section~\ref{subsec:benchmarks}, per Slater-type "
+        r"basis set. $\times$ marks a species that failed, \emph{--} one that "
+        r"converged; $q$ is the charge and $2S+1$ the spin multiplicity. Every "
+        r"reaction containing a failed species is excluded from the statistics "
+        r"of Table~\ref{tab:w411_summary}, which is why a handful of atoms and "
+        r"radicals removes a disproportionate number of reactions.}",
+        r"  \label{tab:w411_unconverged}",
+        r"\end{table}",
+        "",
+    ]
+    path.write_text("\n".join(lines))
 
 
 def write_table(reactions, species, path):
@@ -431,7 +543,7 @@ def write_table(reactions, species, path):
         nbf = np.mean([fnum(r, "nbf") for r in srows]) if srows else 0.0
         tmean = np.mean([fnum(r, "t_total") for r in srows]) if srows else 0.0
         lines.append(
-            "  %s & %d & %.0f & %.2f & %.2f & %.2f & %.2f & %.1f \\\\"
+            "  %s & %d & %.0f & $%.2f$ & %.2f & %.2f & %.2f & %.1f \\\\"
             % (
                 b,
                 v.size,
@@ -453,23 +565,58 @@ def main():
     ap.add_argument("--csv-prefix", default="benchmark_w411")
     ap.add_argument("--out", default=str(repo / "latex/Visualisations"))
     ap.add_argument("--table", default=str(repo / "latex/Data/tables/w411_summary.tex"))
+    ap.add_argument(
+        "--unconverged-table",
+        default=str(repo / "latex/Data/tables/w411_unconverged.tex"),
+    )
+    ap.add_argument(
+        "--archive",
+        default=str(repo / "latex/Data"),
+        help="directory to copy the raw CSVs into ('' disables archiving)",
+    )
+    ap.add_argument(
+        "--scaling-only",
+        "--scaling_only",
+        action="store_true",
+        help="write only the scaling figure and stop; for runs that have "
+             "species timings but no reaction energies (e.g. the sparse and "
+             "tiled algorithm sweeps)",
+    )
     args = ap.parse_args()
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    reactions = load_csv("%s_reactions.csv" % args.csv_prefix)
     species = load_csv("%s_species.csv" % args.csv_prefix)
-    if not reactions or not species:
-        raise SystemExit("Empty input CSVs -- run benchmarking/benchmark_w411.py first")
+    if not species:
+        raise SystemExit(
+            "No species rows in %s_species.csv -- run benchmarking/benchmark_w411.py first"
+            % args.csv_prefix
+        )
 
-    # Keep only fully converged data. Unconverged rows carry the solver's
-    # best-so-far (or, in older CSVs, a rejected trial step) -- either way not
-    # a variational energy, and one bad atom would poison every reaction it
-    # appears in. Coverage per basis is annotated on the violin.
-    rx_all, sp_all = reactions, species
-    reactions = [r for r in reactions if r.get("all_converged") == "1"]
+    # Unconverged rows carry the solver's best-so-far (or, in older CSVs, a
+    # rejected trial step) -- either way not a variational energy, so they are
+    # dropped before anything is plotted. Keep the unfiltered lists for the
+    # coverage table.
+    sp_all = species
     species = [r for r in species if r.get("converged") == "1"]
+
+    if args.scaling_only:
+        # Timings only: no reaction energies are needed, so this works for the
+        # sparse/tiled sweeps whose reaction CSV is empty. Filtering matches
+        # the full path so the two are comparable.
+        plot_scaling(species, out, args.csv_prefix)
+        print("Wrote %s_scaling.pdf into %s" % (args.csv_prefix, out))
+        return
+
+    reactions = load_csv("%s_reactions.csv" % args.csv_prefix)
+    if not reactions:
+        raise SystemExit(
+            "No reaction rows in %s_reactions.csv -- pass --scaling-only to plot "
+            "timings alone" % args.csv_prefix
+        )
+    rx_all = reactions
+    reactions = [r for r in reactions if r.get("all_converged") == "1"]
     for b in BASIS_ORDER:
         dropped = [
             r["reaction"]
@@ -482,11 +629,16 @@ def main():
                 % (b, len(dropped), " ".join(sorted(dropped)))
             )
 
-    plot_violin(reactions, out)
-    plot_scaling(species, out)
-    plot_breakdown(species, out)
+    plot_violin(reactions, out, args.csv_prefix)
+    plot_scaling(species, out, args.csv_prefix)
+    plot_breakdown(species, out, args.csv_prefix)
     write_table(reactions, species, Path(args.table))
+    write_unconverged_table(sp_all, rx_all, Path(args.unconverged_table))
+    archived = archive_csvs(args.csv_prefix, Path(args.archive)) if args.archive else []
     print("\nWrote 3 PDFs into %s" % out)
+    print("Wrote unconverged table %s" % args.unconverged_table)
+    for a in archived:
+        print("Archived %s" % a)
     print("Wrote summary table %s" % args.table)
 
 
