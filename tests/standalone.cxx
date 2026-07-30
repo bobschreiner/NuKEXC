@@ -71,13 +71,10 @@ struct Config {
   std::string xfunc = "lda_x";
   std::string cfunc = "lda_c_pw";
   double dens_thr = 1e-10; // libxc density threshold (runtime --dens-thr=)
-  // Two-phase SCF for occupation-oscillating radicals (--freeze-occ=):
-  // converge with free (Aufbau) occupations to this loose DIIS threshold,
-  // then freeze the occupations and continue to --conv-thr. 0 disables.
-  double freeze_occ_thr = 0.0;
   std::string pruning = "none";   // grid angular pruning: none/robust/treutler
   std::string radial = "uniform"; // per-element radial sizing: uniform/pyscf
-  std::string guess = "gwh";      // initial guess: gwh/core
+  std::string guess = "gwh";      // initial guess: gwh/core/sap
+  std::string sap_dir = "";       // SAP potential dir (empty: built-in default)
   bool nl_histogram = false;      // runtime via --nl-histogram
 };
 
@@ -119,18 +116,17 @@ Config parse_args(int argc, char *argv[]) {
           << cfg.cfunc << ")\n"
           << "  --dens-thr=<float>    Libxc density threshold     (default: "
           << cfg.dens_thr << ")  [below this the functional is zeroed]\n"
-          << "  --freeze-occ=<float>  Two-phase SCF: converge free to this "
-          << "loose threshold,\n"
-          << "                        then freeze occupations and finish to "
-          << "--conv-thr.\n"
-          << "                        For open-shell radicals whose SCF "
-          << "stalls (try 1e-3).\n"
-          << "                        (default: " << cfg.freeze_occ_thr
-          << " = disabled)\n"
           << "  --pruning=<name>      Angular pruning none/robust/treutler "
           << "(default: " << cfg.pruning << ")\n"
           << "  --radial=<name>       Radial sizing uniform/pyscf   (default: "
           << cfg.radial << ")\n"
+          << "  --guess=<name>        Initial guess gwh/core/sap    (default: "
+          << cfg.guess << ")  [core is more robust for near-linearly\n"
+          << "                        dependent Slater sets; sap is the "
+          << "superposition of atomic potentials]\n"
+          << "  --sap-dir=<dir>       SAP potential directory     (default: "
+          << "input/potentials/nr/LDAX/)  [only used by --guess=sap;\n"
+          << "                        NUKEXC_SAP_DIR also works]\n"
           << "  --nl-histogram        Print neighbor-list histogram and write "
           << "pgfplots files  [used by --alg=sparse,tiled]\n"
           << "\n"
@@ -157,10 +153,10 @@ Config parse_args(int argc, char *argv[]) {
                !p.string_opt("--xfunc=", cfg.xfunc) &&
                !p.string_opt("--cfunc=", cfg.cfunc) &&
                !p.double_opt("--dens-thr=", cfg.dens_thr) &&
-               !p.double_opt("--freeze-occ=", cfg.freeze_occ_thr) &&
                !p.string_opt("--pruning=", cfg.pruning) &&
                !p.string_opt("--radial=", cfg.radial) &&
-               !p.string_opt("--guess=", cfg.guess)) {
+               !p.string_opt("--guess=", cfg.guess) &&
+               !p.string_opt("--sap-dir=", cfg.sap_dir)) {
       throw std::runtime_error("Unknown argument: " + p.arg + " (try --help)");
     }
   }
@@ -184,6 +180,11 @@ Config parse_args(int argc, char *argv[]) {
   if (cfg.radial != "uniform" && cfg.radial != "pyscf")
     throw std::runtime_error("Unknown --radial: " + cfg.radial +
                              " (expected 'uniform' or 'pyscf')");
+  // Validated here rather than at the point of use so a typo fails before the
+  // grid, basis and integrals are built.
+  if (cfg.guess != "gwh" && cfg.guess != "core" && cfg.guess != "sap")
+    throw std::runtime_error("Unknown --guess: " + cfg.guess +
+                             " (expected 'gwh', 'core' or 'sap')");
   return cfg;
 }
 
@@ -201,6 +202,11 @@ void print_config(const Config &cfg) {
   rows.push_back({"Angular order", cfg_val(cfg.nang)});
   rows.push_back({"Lin. dep. threshold", cfg_val(cfg.lin_dep_threshold)});
   rows.push_back({"Conv. threshold", cfg_val(cfg.conv_thr)});
+  rows.push_back({"Initial guess", cfg.guess});
+  if (cfg.guess == "sap")
+    rows.push_back({"SAP potentials",
+                    cfg.sap_dir.empty() ? "input/potentials/nr/LDAX/"
+                                        : cfg.sap_dir});
   rows.push_back({"Charge", cfg_val(cfg.charge)});
   rows.push_back({"Multiplicity", cfg_val(cfg.multiplicity)});
   if (cfg.method == "dft") {
@@ -306,8 +312,11 @@ int main(int argc, char *argv[]) {
       // to roundoff: B3LYP at rho=1e-11 with a stale gradient returns
       // e_xc ~ -3e7. Multiplied by the r^2-growing radial weights of the
       // outer shells that injects large spurious contributions into the Fock
-      // matrix, which is what stalls spin-polarized SCF. 1e-10 zeroes those
-      // points and leaves physically populated regions untouched.
+      // matrix. 1e-10 zeroes those points and leaves physically populated
+      // regions untouched. Note this is a cleanliness measure, not a
+      // convergence fix: the open-shell SCF stalls trace to the initial guess
+      // and to the exactly degenerate open shells of the free atoms, and
+      // raising this threshold as far as 1e-5 does not cure them.
       xc_func_set_dens_threshold(&func_x, cfg.dens_thr);
 
       // Libxc defines: XC_EXCHANGE=0, XC_CORRELATION=1,
@@ -449,6 +458,19 @@ int main(int argc, char *argv[]) {
       hcore = compute_core_hamiltonian(basis, grid);
     }
 
+    // ---- SAP guess Hamiltonian ---------------------------------------------
+    // A second pass over the grid with the bare Z replaced by the tabulated
+    // screened charges Z_eff^A(r), giving T + V_SAP. Only the guess uses it:
+    // the SCF itself keeps the true h_core below, so the converged energy is
+    // unchanged and only the starting orbitals differ.
+    arma::mat h_sap;
+    if (cfg.guess == "sap") {
+      TIME_SCOPE(startup_timing, "SAP guess Hamiltonian (T + V_SAP)");
+      auto hsap = compute_core_hamiltonian(basis, grid, /*use_SAP=*/true,
+                                           cfg.sap_dir);
+      h_sap = kokkos_to_arma(hsap.hamiltonian);
+    }
+
     // ---- Orthogonalisation matrix X
     // ------------------------------------------
     DeviceView2DLeft X;
@@ -490,33 +512,38 @@ int main(int argc, char *argv[]) {
       E_nuc = compute_nuclear_repulsion(mol);
     }
 
-    // ---- GWH initial guess -----------------------------------------------
-    arma::mat F_gwh_orth;
+    // ---- Initial guess -----------------------------------------------------
+    arma::mat F_guess_orth;
     {
-      TIME_SCOPE(startup_timing, "GWH initial guess");
-      arma::mat F_gwh(N_bf, N_bf, arma::fill::zeros);
+      TIME_SCOPE(startup_timing, "Initial guess (" + cfg.guess + ")");
+      arma::mat F_guess(N_bf, N_bf, arma::fill::zeros);
       if (cfg.guess == "core") {
         // Bare core-Hamiltonian guess. GWH estimates off-diagonals from the
         // diagonal of h_core and the overlap, which populates near-null
         // directions when the basis is close to linearly dependent; the core
         // guess has no such estimate and is the diagnostic fallback.
-        F_gwh = h_core;
+        F_guess = h_core;
       } else if (cfg.guess == "gwh") {
         const double K_gwh = 1.75;
         for (int i = 0; i < N_bf; ++i) {
           for (int j = 0; j < N_bf; ++j) {
             if (i == j) {
-              F_gwh(i, j) = h_core(i, i);
+              F_guess(i, j) = h_core(i, i);
             } else {
-              F_gwh(i, j) =
+              F_guess(i, j) =
                   0.5 * K_gwh * (h_core(i, i) + h_core(j, j)) * S_arma(i, j);
             }
           }
         }
-      } else {
-        throw std::runtime_error("Unknown --guess (use gwh or core)");
+      } else if (cfg.guess == "sap") {
+        // Superposition of atomic potentials, S. Lehtola, J. Chem. Theory
+        // Comput. 15, 1593 (2019), DOI 10.1021/acs.jctc.8b01089.
+        //
+        // h_sap is already T + V_SAP. Adding h_core would double-count the
+        // nuclear attraction, since V_SAP contains -Z/r in the r -> 0 limit.
+        F_guess = h_sap;
       }
-      F_gwh_orth = X_arma.t() * F_gwh * X_arma;
+      F_guess_orth = X_arma.t() * F_guess * X_arma;
     }
 
     startup_timing.report("Startup Timing Breakdown");
@@ -809,28 +836,11 @@ int main(int argc, char *argv[]) {
         block_descriptions);
 
     solver.verbosity(5);
-    solver.initialize_with_fock({F_gwh_orth, F_gwh_orth});
+    solver.initialize_with_fock({F_guess_orth, F_guess_orth});
 
     Kokkos::Timer scf_timer;
-    if (cfg.freeze_occ_thr > 0.0) {
-      // Two-phase SCF for occupation-oscillating open-shell systems (e.g.
-      // pi radicals with near-degenerate frontier orbitals, where Aufbau
-      // reassignment near convergence makes DIIS chase a moving target).
-      // Phase 1: free occupations down to the loose threshold, which finds
-      // the right configuration. Phase 2: freeze the occupations so the
-      // configuration can no longer change, and converge tightly.
-      const double loose = std::max(cfg.conv_thr, cfg.freeze_occ_thr);
-      std::cout << "Two-phase SCF: free occupations to DIIS error < " << loose
-                << ", then frozen to " << cfg.conv_thr << "\n";
-      solver.convergence_threshold(loose);
-      solver.run();
-      solver.frozen_occupations(true);
-      solver.convergence_threshold(cfg.conv_thr);
-      solver.run();
-    } else {
-      solver.convergence_threshold(cfg.conv_thr);
-      solver.run();
-    }
+    solver.convergence_threshold(cfg.conv_thr);
+    solver.run();
     const double scf_seconds = scf_timer.seconds();
 
     if (is_dft) {

@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex 2023.5.2)  30 JUL 2026 14:51
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex 2023.5.2)  30 JUL 2026 21:15
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -733,122 +733,122 @@ l.33 ... Atom: Radial Schemes}{36}{subsection.A.1}
 \openout6 = `main.toc'.
 
  [2] [3] [4] [5] [6] [7] [8] [9] [10] [11] [12] [13] [14] [15] [16] [17] [18] [19] [20]
-LaTeX Font Info:    Trying to load font information for OMS+cmtt on input line 1917.
-LaTeX Font Info:    No file OMScmtt.fd. on input line 1917.
+LaTeX Font Info:    Trying to load font information for OMS+cmtt on input line 1919.
+LaTeX Font Info:    No file OMScmtt.fd. on input line 1919.
 
 
 LaTeX Font Warning: Font shape `OMS/cmtt/m/n' undefined
 (Font)              using `OMS/cmsy/m/n' instead
-(Font)              for symbol `textbraceleft' on input line 1917.
+(Font)              for symbol `textbraceleft' on input line 1919.
 
 [21] [22] [23] [24] [25] [26]
-<Visualisations/convergence_radial_h.pdf, id=652, 419.92883pt x 289.87497pt>
+<Visualisations/convergence_radial_h.pdf, id=655, 419.92883pt x 289.87497pt>
 File: Visualisations/convergence_radial_h.pdf Graphic file (type pdf)
 <use Visualisations/convergence_radial_h.pdf>
-Package pdftex.def Info: Visualisations/convergence_radial_h.pdf  used on input line 2315.
+Package pdftex.def Info: Visualisations/convergence_radial_h.pdf  used on input line 2318.
 (pdftex.def)             Requested size: 319.37703pt x 220.47533pt.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 2330.
+(hyperref)                removing `math shift' on input line 2333.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `subscript' on input line 2330.
+(hyperref)                removing `subscript' on input line 2333.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `superscript' on input line 2330.
+(hyperref)                removing `superscript' on input line 2333.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 2330.
+(hyperref)                removing `math shift' on input line 2333.
 
-<Visualisations/convergence_h2plus.pdf, id=655, 739.65384pt x 297.25053pt>
+<Visualisations/convergence_h2plus.pdf, id=658, 739.65384pt x 297.25053pt>
 File: Visualisations/convergence_h2plus.pdf Graphic file (type pdf)
 <use Visualisations/convergence_h2plus.pdf>
-Package pdftex.def Info: Visualisations/convergence_h2plus.pdf  used on input line 2353.
+Package pdftex.def Info: Visualisations/convergence_h2plus.pdf  used on input line 2356.
 (pdftex.def)             Requested size: 443.57848pt x 178.27005pt.
 [27 <./Visualisations/convergence_radial_h.pdf>]
-<Visualisations/convergence_2d.pdf, id=720, 818.78627pt x 636.91951pt>
+<Visualisations/convergence_2d.pdf, id=723, 818.78627pt x 636.91951pt>
 File: Visualisations/convergence_2d.pdf Graphic file (type pdf)
 <use Visualisations/convergence_2d.pdf>
-Package pdftex.def Info: Visualisations/convergence_2d.pdf  used on input line 2400.
+Package pdftex.def Info: Visualisations/convergence_2d.pdf  used on input line 2403.
 (pdftex.def)             Requested size: 443.57848pt x 345.04906pt.
-<Visualisations/convergence_pruning_total.pdf, id=728, 438.31754pt x 299.6244pt>
+<Visualisations/convergence_pruning_total.pdf, id=731, 438.31754pt x 299.6244pt>
 File: Visualisations/convergence_pruning_total.pdf Graphic file (type pdf)
 <use Visualisations/convergence_pruning_total.pdf>
-Package pdftex.def Info: Visualisations/convergence_pruning_total.pdf  used on input line 2454.
+Package pdftex.def Info: Visualisations/convergence_pruning_total.pdf  used on input line 2457.
 (pdftex.def)             Requested size: 319.37703pt x 218.3171pt.
  [28 <./Visualisations/convergence_h2plus.pdf>] [29 <./Visualisations/convergence_2d.pdf>]
-<Visualisations/convergence_pruning_terms.pdf, id=851, 780.81506pt x 580.1324pt>
+<Visualisations/convergence_pruning_terms.pdf, id=854, 780.81506pt x 580.1324pt>
 File: Visualisations/convergence_pruning_terms.pdf Graphic file (type pdf)
 <use Visualisations/convergence_pruning_terms.pdf>
-Package pdftex.def Info: Visualisations/convergence_pruning_terms.pdf  used on input line 2477.
+Package pdftex.def Info: Visualisations/convergence_pruning_terms.pdf  used on input line 2480.
 (pdftex.def)             Requested size: 443.57848pt x 329.56354pt.
  [30 <./Visualisations/convergence_pruning_total.pdf>] [31 <./Visualisations/convergence_pruning_terms.pdf>]
-<Visualisations/benchmark_w411_violin.pdf, id=983, 534.79799pt x 375.804pt>
+<Visualisations/benchmark_w411_violin.pdf, id=986, 534.79799pt x 375.804pt>
 File: Visualisations/benchmark_w411_violin.pdf Graphic file (type pdf)
 <use Visualisations/benchmark_w411_violin.pdf>
-Package pdftex.def Info: Visualisations/benchmark_w411_violin.pdf  used on input line 2563.
+Package pdftex.def Info: Visualisations/benchmark_w411_violin.pdf  used on input line 2566.
 (pdftex.def)             Requested size: 345.99066pt x 243.13431pt.
  (./Data/tables/w411_summary.tex) [32 <./Visualisations/benchmark_w411_violin.pdf>]
-<Visualisations/benchmark_w411_scaling.pdf, id=1055, 823.87799pt x 354.12299pt>
+<Visualisations/benchmark_w411_scaling.pdf, id=1059, 823.87799pt x 354.12299pt>
 File: Visualisations/benchmark_w411_scaling.pdf Graphic file (type pdf)
 <use Visualisations/benchmark_w411_scaling.pdf>
-Package pdftex.def Info: Visualisations/benchmark_w411_scaling.pdf  used on input line 2616.
+Package pdftex.def Info: Visualisations/benchmark_w411_scaling.pdf  used on input line 2625.
 (pdftex.def)             Requested size: 443.57848pt x 190.65619pt.
  [33 <./Visualisations/benchmark_w411_scaling.pdf>]
-<Visualisations/benchmark_w411_breakdown.pdf, id=1125, 867.24pt x 361.35pt>
+<Visualisations/benchmark_w411_breakdown.pdf, id=1129, 867.24pt x 361.35pt>
 File: Visualisations/benchmark_w411_breakdown.pdf Graphic file (type pdf)
 <use Visualisations/benchmark_w411_breakdown.pdf>
-Package pdftex.def Info: Visualisations/benchmark_w411_breakdown.pdf  used on input line 2650.
+Package pdftex.def Info: Visualisations/benchmark_w411_breakdown.pdf  used on input line 2659.
 (pdftex.def)             Requested size: 443.57848pt x 184.8264pt.
  [34 <./Visualisations/benchmark_w411_breakdown.pdf>] (./Data/tables/radial_h.tex) [35]
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 2769.
+(hyperref)                removing `math shift' on input line 2778.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `subscript' on input line 2769.
+(hyperref)                removing `subscript' on input line 2778.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `superscript' on input line 2769.
+(hyperref)                removing `superscript' on input line 2778.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 2769.
+(hyperref)                removing `math shift' on input line 2778.
 
 (./Data/tables/h2plus.tex)
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 2772.
+(hyperref)                removing `math shift' on input line 2781.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `subscript' on input line 2772.
+(hyperref)                removing `subscript' on input line 2781.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `superscript' on input line 2772.
+(hyperref)                removing `superscript' on input line 2781.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 2772.
+(hyperref)                removing `math shift' on input line 2781.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 2772.
+(hyperref)                removing `math shift' on input line 2781.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\times' on input line 2772.
+(hyperref)                removing `\times' on input line 2781.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 2772.
+(hyperref)                removing `math shift' on input line 2781.
 
 (./Data/tables/2d_becke.tex
 LaTeX Font Info:    Trying to load font information for OMS+cmr on input line 5.
@@ -866,7 +866,7 @@ Package rerunfilecheck Info: File `main.out' has not changed.
  ) 
 Here is how much of TeX's memory you used:
  26569 strings out of 476025
- 496108 string characters out of 5790018
+ 496109 string characters out of 5790018
  1954388 words of memory out of 5000000
  46271 multiletter control sequences out of 15000+600000
  526244 words of font info for 86 fonts, out of 8000000 for 9000
@@ -874,10 +874,10 @@ Here is how much of TeX's memory you used:
  84i,17n,89p,1190b,1011s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx9.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmr5.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy5.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmti1
 0.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmti12.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmti7.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmti9.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt9.pfb>
-Output written on main.pdf (45 pages, 848061 bytes).
+Output written on main.pdf (45 pages, 844952 bytes).
 PDF statistics:
- 1465 PDF objects out of 1728 (max. 8388607)
- 936 compressed objects within 10 object streams
+ 1468 PDF objects out of 1728 (max. 8388607)
+ 938 compressed objects within 10 object streams
  265 named destinations out of 1000 (max. 500000)
  359 words of extra memory for PDF output out of 10000 (max. 10000000)
 

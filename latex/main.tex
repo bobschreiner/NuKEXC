@@ -342,7 +342,7 @@ is the overlap between the basis functions $\chi_\mu$ and $\chi_\nu$.
 \subsection{Density Functional Theory}\label{subsec:DFT}
 
 Within Kohn-Sham DFT, the two-electron exchange term of
-\eqref{eq:exchange} is replaced by an exchange-correlation (XC)
+\eqref{eq:exchange} is replaced by an exchange-correlation (xc)
 energy functional $E_{xc}[\rho^\sigma]$, evaluated on the density
 $\rho^\sigma(\mathbf r)$ defined by
 
@@ -356,13 +356,13 @@ Unlike the Coulomb and exact exchange integrals, $E_{xc}[\rho]$ is in
 general a nonlinear functional of the density and therefore admits no
 analogous two-electron integral representation.
 
-The contribution of the XC term to the Kohn-Sham Fock matrix is
+The contribution of the xc term to the Kohn-Sham Fock matrix is
 \begin{equation}
   V^{xc}_{\mu\nu} = \int \chi_\mu(\mathbf r)\, v_{xc}(\mathbf
   r)\, \chi_\nu(\mathbf r)\, d\mathbf r,
   \label{eq:xc-matrix}
 \end{equation}
-where $v_{xc}(\mathbf r)$ is the XC potential, obtained from the
+where $v_{xc}(\mathbf r)$ is the xc potential, obtained from the
 functional derivative of $E_{xc}$ with respect to the density,
 \begin{equation}
   v_{xc}(\mathbf r) = \frac{\delta E_{xc}[\rho^\sigma]}{\delta
@@ -986,7 +986,7 @@ parent nucleus. We then flatten the quadrature points and weights into one
 dimensional \texttt{Kokkos::View}s of size $N_\text{nuc}\cdot
 n_\text{quad}$. Note that the number of quadrature points generated
 around one nucleus could be adjusted based on its charge. This would
-allow for example
+allow, for example,
 heavier nuclei to have more quadrature points surrounding them.
 To keep track of which quadrature point was generated around which nucleus we
 create a \texttt{Kokkos::View} called
@@ -1161,8 +1161,8 @@ drawbacks, which we will analyze in the following subsections.
 schemes}\label{subsubsec:dense_la_rij_rik}
 
 The dense linear algebra kernel relies on the idea that GPUs are
-extremely good at doing dense GEneral Matrix Matrix (GEMM) and dense
-GEneral Matrix Vector (GEMV) multiplications. Indeed, when applying
+extremely good at doing dense GEneral Matrix-Matrix (GEMM) and dense
+GEneral Matrix-Vector (GEMV) multiplications. Indeed, when applying
 our quadrature rule given by \eqref{eq:global_quadrature} to
 equations $\eqref{eq:coulomb-RI}$ and $\eqref{eq:exchange-RI}$ we can
 rewrite them entirely with matrix-matrix multiplications. The schemes
@@ -1524,7 +1524,7 @@ SCF cycle, is summarized schematically in Figure
 \subsubsection{Dense Linear Algebra XC integrals}\label{subsubsec:dense_la_xc}
 
 In order to do a DFT calculation we also need to compute the contributions
-of the exchange-correlation (XC) functional to the Kohn-Sham matrix.
+of the exchange-correlation (xc) functional to the Kohn-Sham matrix.
 We will focus the discussion on our implementation of the functionals
 that belong to the generalized gradient approximation level of theory;
 the local density approximation is recovered as the special case of a
@@ -1533,32 +1533,33 @@ functional that does not depend on the density gradient, for which
 matrices are never needed. Our implementation closely follows the
 algorithm described by Stocks and Barca~\cite{Stocks_2025}.
 
-We write the XC energy as an integral over an energy density,
+We write the xc energy as an integral over an energy density,
 \begin{equation}
-  E_\text{XC}^\text{GGA} = \int \varepsilon_\text{XC}^\text{GGA}
+  E_\text{xc}^\text{GGA} = \int \varepsilon_\text{xc}^\text{GGA}
   \big(\rho(\mathbf r), \gamma(\mathbf r)\big)\, d\mathbf r,
   \qquad \gamma(\mathbf r) = |\nabla \rho(\mathbf r)|^2,
   \label{eq:E_xc_gga}
 \end{equation}
-where \( \varepsilon_\text{XC}^\text{GGA} \) is the energy per unit
+where \( \varepsilon_\text{xc}^\text{GGA} \) is the energy per unit
 volume rather than per particle. With that convention the
 abbreviations
-\( \varepsilon_\rho = \partial \varepsilon_\text{XC}^\text{GGA} /
+\( \varepsilon_\rho = \partial \varepsilon_\text{xc}^\text{GGA} /
 \partial \rho \) and
-\( \varepsilon_\gamma = \partial \varepsilon_\text{XC}^\text{GGA} /
+\( \varepsilon_\gamma = \partial \varepsilon_\text{xc}^\text{GGA} /
 \partial \gamma \), used throughout this section, are precisely the two
 quantities a functional library returns.
 
 The contribution to the Kohn-Sham matrix reads
 \begin{equation}
   V_{\mu \nu }^{\text{GGA}} = \frac{\partial
-  E_\text{XC}^{\text{GGA}}}{\partial D_{\mu \nu }} =
+  E_\text{xc}^{\text{GGA}}}{\partial D_{\mu \nu }} =
   \int \Big( \chi_\mu(\mathbf r) Z_\nu(\mathbf r) + \chi_\nu(\mathbf r)
   Z_\mu(\mathbf r) \Big)\, d\mathbf r,
   \label{eq:V_xc_gga}
 \end{equation}
 
-where we used
+where \(  V_{\mu \nu }^{\text{GGA}}\) is the GGA version of
+\(V^{xc}{\mu\nu}\) from Equation~\eqref{eq:xc-matrix} and
 
 \begin{equation}
   Z_\nu(\mathbf r) = \frac{1}{2} \chi_\nu(\mathbf r)
@@ -1657,7 +1658,7 @@ A spin-unrestricted GGA functional depends on the two spin densities
 them,
 
 \begin{equation}
-  E_\text{XC}^\text{GGA} = \int \varepsilon_\text{XC}^\text{GGA}
+  E_\text{xc}^\text{GGA} = \int \varepsilon_\text{xc}^\text{GGA}
   \big( \{\rho^\sigma\}, \{\gamma^{\sigma \sigma'}\} \big)\, d\mathbf r,
   \qquad
   \gamma^{\sigma \sigma'}(\mathbf r) = \nabla\rho^\sigma(\mathbf r)
@@ -1671,7 +1672,7 @@ independent, which is why a functional library exposes three of them.
 
 Each spin channel now carries its own density matrix, so there is one
 Kohn-Sham matrix per channel,
-\( V^{\sigma}_{\mu \nu} = \partial E_\text{XC}^\text{GGA} / \partial
+\( V^{\sigma}_{\mu \nu} = \partial E_\text{xc}^\text{GGA} / \partial
 D^{\sigma}_{\mu \nu} \). Writing \( \sigma' \) for the opposite
 channel, the chain rule runs over all five arguments of
 \eqref{eq:E_xc_gga_polarized}, but two of them drop out: the opposite
@@ -1693,9 +1694,9 @@ spin density \( \rho^{\sigma'} \) does not depend on
 \end{equation}
 
 with \( \varepsilon_{\rho^\sigma} = \partial
-\varepsilon_\text{XC}^\text{GGA} / \partial \rho^\sigma \) and
+\varepsilon_\text{xc}^\text{GGA} / \partial \rho^\sigma \) and
 \( \varepsilon_{\gamma^{\sigma \sigma'}} = \partial
-\varepsilon_\text{XC}^\text{GGA} / \partial \gamma^{\sigma \sigma'} \).
+\varepsilon_\text{xc}^\text{GGA} / \partial \gamma^{\sigma \sigma'} \).
 The three derivatives are
 
 \begin{align}
@@ -1758,7 +1759,7 @@ the layout the library expects, which stores the two densities and the
 three invariants consecutively per grid point. A single call then
 returns \( \varepsilon_{\rho^\sigma} \) and
 \( \varepsilon_{\gamma^{\sigma \sigma'}} \) for every grid point, which
-we de-interleave and use to build the two vectors 
+we de-interleave and use to build the two vectors
 \eqref{eq:v_sigma} in one pass over the grid. From that point on the
 two channels are independent: the kernel that builds \( Z^\sigma_{\mu g}
 \), the GEMM and the symmetrization are the same routine as in the
@@ -1815,7 +1816,7 @@ Table~\ref{tab:gga_lsda_memory}.
       \node[hostbox, below=of cross] (libxc)
       {Interleave $\{\rho^\sigma\},\{\gamma^{\sigma\sigma'}\}$\\
         one \texttt{Libxc} call on the host\\
-      de-interleave $\varepsilon_{\rho^\sigma},
+        de-interleave $\varepsilon_{\rho^\sigma},
       \varepsilon_{\gamma^{\sigma\sigma'}}$};
       \node[teambox, below=of libxc] (vfield)
       {$\mathbf v^\sigma=2\varepsilon_{\gamma^{\sigma\sigma}}
@@ -1828,7 +1829,7 @@ Table~\ref{tab:gga_lsda_memory}.
       \varepsilon_{\rho^\sigma}+\mathbf v^\sigma\!\cdot\!\nabla\chi_\mu\big)$};
       \node[teambox, below=16mm of vfield, xshift=30mm] (zb)
       {$Z^{\sigma'}_{\mu g}=w_g\big(\tfrac12\chi_\mu
-      \varepsilon_{\rho^{\sigma'}}+\mathbf v^{\sigma'}\!\cdot\!
+          \varepsilon_{\rho^{\sigma'}}+\mathbf v^{\sigma'}\!\cdot\!
       \nabla\chi_\mu\big)$};
       \node[gemmbox, below=of za] (va)
       {$\bar V^\sigma_{\mu\nu}=\displaystyle\sum_g
@@ -1844,9 +1845,9 @@ Table~\ref{tab:gga_lsda_memory}.
       % --- Second join: the energy ---
       \node[teambox, anchor=north]
       (energy) at ($(syma.south)!0.5!(symb.south)+(0,-16mm)$)
-      {$E_\text{XC}=\displaystyle\sum_g w_g
-      \big(\rho^\sigma_g+\rho^{\sigma'}_g\big)
-      \varepsilon_\text{XC}$};
+      {$E_\text{xc}=\displaystyle\sum_g w_g
+        \big(\rho^\sigma_g+\rho^{\sigma'}_g\big)
+      \varepsilon_\text{xc}$};
 
       % --- Arrows ---
       \coordinate (split1) at ($(colloc.south)+(0,-6mm)$);
@@ -1884,7 +1885,8 @@ Table~\ref{tab:gga_lsda_memory}.
 
       % --- Collocation matrices are reused by the Z kernels ---
       \coordinate (reusex) at ($(zb.east)+(16mm,0)$);
-      \draw[arr, dashed, shorten >=1.5mm] (colloc.east) -| (reusex) -- (zb.east);
+      \draw[arr, dashed, shorten >=1.5mm] (colloc.east) -| (reusex)
+      -- (zb.east);
       \node[looplabel, rotate=-90, anchor=south]
       at ($(reusex)+(3mm,34mm)$) {$\Phi,\ \nabla\Phi$ reused};
   \end{tikzpicture}}
@@ -1933,10 +1935,10 @@ Table~\ref{tab:gga_lsda_memory}.
       & $3N_\text{quad}$
       & $\{\varepsilon_{\gamma^{\sigma\sigma'}}\}$ interleaved & host \\
       \texttt{exc\_h}               & \texttt{View<double*, Host>}
-      & $N_\text{quad}$ & $\varepsilon_\text{XC}$ & host \\
+      & $N_\text{quad}$ & $\varepsilon_\text{xc}$ & host \\
       \midrule
       \texttt{exc}                  & \texttt{View<double*>}
-      & $N_\text{quad}$ & $\varepsilon_\text{XC}$ & device \\
+      & $N_\text{quad}$ & $\varepsilon_\text{xc}$ & device \\
       \texttt{vrho\_\{up,down\}}    & \texttt{View<double*>}
       & $N_\text{quad}$ & $\varepsilon_{\rho^\sigma}$ & device \\
       \texttt{vsigma\_\{uu,ud,dd\}} & \texttt{View<double*>}
@@ -1949,7 +1951,7 @@ Table~\ref{tab:gga_lsda_memory}.
       \texttt{V}, \texttt{V\_result} & \texttt{View<double**>}
       & $N_\text{bf}\times N_\text{bf}$ & $\bar V^\sigma,\ V^\sigma$ & device \\
       \bottomrule
-    \end{tabular}}
+  \end{tabular}}
   \caption{Memory allocations in \texttt{compute\_gga\_lsda}. All device
     views use \texttt{LayoutLeft}. The last two rows are allocated inside
     the per-channel assembly and therefore exist once per spin. The
@@ -1967,7 +1969,7 @@ Table~\ref{tab:gga_lsda_memory}.
 Algebra}\label{subsubsec:locally_dense_la}
 
 The locally dense linear algebra implementation of the RI-J and RI-K
-scheme tries to overcome the drawbacks of the dense schemes by not
+schemes tries to overcome the drawbacks of the dense schemes by not
 pre-computing the collocation matrices but instead recomputing them
 during each SCF cycle. Recomputing the collocation matrices allows us
 to take advantage of a different feature that atomic orbitals
@@ -2258,10 +2260,10 @@ be able to evaluate the basis functions during the kernel.
 
 \section{Results}\label{sec:results}
 
-In this section we will present the results of our implementations.
-We analyze convergence as well as timing results. We will start with
+This section contains the results of our implementations.
+We analyze convergence as well as timing results, starting with
 preliminary studies on small example systems and then
-later perform full benchmarks on the W4-11 set of Karton, Daon and
+later performing full benchmarks on the W4-11 set of Karton, Daon and
 Martin~\cite{Karton11w411}.
 
 \subsection{Convergence}\label{subsec:convergence}
@@ -2300,7 +2302,8 @@ grid is the slowest of the three and still sits at \( 6.4 \times
 here is the analytic $1s$ energy rather than a self-reference, the (M4)
 curve keeps descending across the whole sweep and only flattens once it
 reaches the double-precision noise floor of the energy itself, at
-roughly \( 10^{-15} \)~Ha.
+roughly \( 10^{-15} \)~Ha. The full data is tabulated in
+Table~\ref{tab:data_radial_h}.
 
 Becke's proposed radial mapping is the least accurate of the three on
 coarse grids, at \( n_\mathrm{rad}=10 \) it is more than two orders of
@@ -2313,17 +2316,17 @@ proposal.
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.72\textwidth]{Visualisations/convergence_radial_h.pdf}
-  \caption{Radial-grid convergence of the core-Hamiltonian lowest-MO
-    energy of a single hydrogen atom, for three radial quadrature
+  \caption{We compute the lowest-MO energy of a single hydrogen atom
+    for three radial quadrature
     schemes: Becke, Treutler-Ahlrichs (M3) ($\alpha=0$) and (M4)
-    ($\alpha=0.6$), all with element scaling $\xi(\mathrm{H})=0.8$.
-    Basis: QZ4P (ADF Slater-type). Angular grid: Lebedev, fixed
+    ($\alpha=0.6$), both with element scaling $\xi(\mathrm{H})=0.8$.
+    As out basis set we chose QZ4P (ADF Slater-type).
+    The angular grid is a Lebedev grid fixed
     at order $L=29$. The radial point count is swept over
     $n_\mathrm{rad}\in\{10,20,40,80,160,320,640\}$. The reference is the
     exact non-relativistic $1s$ energy of the hydrogen atom,
     $E_\mathrm{exact}=-0.5$~Ha, so the ordinate
-    $|E-E_\mathrm{exact}|$ is pure quadrature error with no
-  self-reference noise floor.}
+  $|E-E_\mathrm{exact}|$ is pure quadrature error.}
   \label{fig:conv_radial_h}
 \end{figure}
 
@@ -2586,8 +2589,14 @@ correctly on realistic chemistry.
     functions $\overline{N_\mathrm{bf}}$, the mean signed deviation
     (MSD), the mean absolute deviation (MAD), the root mean square
     deviation (RMSD), the largest absolute deviation and the mean wall
-    time per species $\overline{t}$. Systems, method and grid as in
-  Figure~\ref{fig:w411_violin}.}
+    time per species $\overline{t}$. The error statistics average over
+    the $N_\mathrm{rx}$ reactions in which every species converged,
+    whereas $\overline{N_\mathrm{bf}}$ and $\overline{t}$ average over
+    the individual converged species; the two therefore run over
+    different populations. Timings from runs that did not converge are
+    excluded throughout, since a stalled SCF burns an unbounded number
+    of Fock builds and would inflate the mean by up to $56\%$. Systems,
+  method and grid as in Figure~\ref{fig:w411_violin}.}
   \label{tab:w411_summary}
   \input{Data/tables/w411_summary}
 \end{table}

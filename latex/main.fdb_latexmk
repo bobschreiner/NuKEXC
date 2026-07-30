@@ -1,13 +1,13 @@
 # Fdb version 4
-["bibtex main"] 1785412298 "main.aux" "main.bbl" "main" 1785412301 0
+["bibtex main"] 1785435311 "main.aux" "main.bbl" "main" 1785435313 0
   "./Quadratures.bib" 1785398227 53126 9fced68c87ffb93a7f99d7c36e6f4d53 ""
   "/usr/local/texlive/2023/texmf-dist/bibtex/bst/base/unsrt.bst" 1292289607 18030 1376b4b231b50c66211e47e42eda2875 ""
-  "main.aux" 1785412300 47443 7fc3177506f4374590e74ed6ad2bf932 "pdflatex"
+  "main.aux" 1785435313 48219 597a513ad4a95337ea861ad7a4fd0e13 "pdflatex"
   (generated)
   "main.bbl"
   "main.blg"
   (rewritten before read)
-["pdflatex"] 1785412298 "main.tex" "main.pdf" "main" 1785412301 0
+["pdflatex"] 1785435311 "main.tex" "main.pdf" "main" 1785435313 0
   "/usr/local/texlive/2023/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/local/texlive/2023/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm" 1246382020 1004 54797486969f23fa377b128694d548df ""
   "/usr/local/texlive/2023/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex8.tfm" 1246382020 988 bdf658c3bfc2d96d3c8b02cfc1c94c20 ""
@@ -237,23 +237,23 @@
   "Data/tables/h2plus.tex" 1785411065 1623 5f9c19cc18701dfdfd415aa6fe65103a ""
   "Data/tables/pruning.tex" 1785411066 3826 f26cb61078dc8ef1b283eeeb3d9a739a ""
   "Data/tables/radial_h.tex" 1785411065 1170 ad4108879eeeee06bb4102bf49ce9c83 ""
-  "Data/tables/w411_species.tex" 1785412261 15006 7a04cfd8647e5b3793cb3ca069fc0cd5 ""
-  "Data/tables/w411_summary.tex" 1785412261 498 2d40151215d9370d353340049b3db37d ""
+  "Data/tables/w411_species.tex" 1785434897 14970 48e47db60e98133eb2878ab39f31b149 ""
+  "Data/tables/w411_summary.tex" 1785434897 495 f8d7601a6bf92b737d144ec2315a2441 ""
   "HY__LD02_LogoFV_EN_B3____BW.png" 1779182388 56554 a5b780fd053e8a9b4eb654a4997e0790 ""
-  "Visualisations/benchmark_w411_breakdown.pdf" 1785412261 24188 b4443cef575dd54f5c1a0367b669032a ""
-  "Visualisations/benchmark_w411_scaling.pdf" 1785412261 40499 09f06fed9567e34a9acda72266002e69 ""
-  "Visualisations/benchmark_w411_violin.pdf" 1785412260 34846 2c023e69c1691708e084753589742a40 ""
+  "Visualisations/benchmark_w411_breakdown.pdf" 1785434897 24036 5523dd0db310b76220a8601060da1823 ""
+  "Visualisations/benchmark_w411_scaling.pdf" 1785434897 40222 0b1952e29692155c5d27b2399815daf1 ""
+  "Visualisations/benchmark_w411_violin.pdf" 1785434896 32637 b3b77b422650a15a57133b96ec838e16 ""
   "Visualisations/convergence_2d.pdf" 1785411066 25652 939ba8f0b06328a9fc09e2f6f7670ed0 ""
   "Visualisations/convergence_h2plus.pdf" 1785411065 16484 ac571da2829271a4266a41e2ba8621c0 ""
   "Visualisations/convergence_pruning_terms.pdf" 1785411066 27850 b0f6087dbc786e65a535f1b5fac96f19 ""
   "Visualisations/convergence_pruning_total.pdf" 1785411066 18177 7da3ae77f017c28ba37284b6615f3b5c ""
   "Visualisations/convergence_radial_h.pdf" 1785411065 17674 658a474971a93d73cb88dc0e860a7f8b ""
   "eth-logo-pos.png" 1421235998 6433 4108b8eeace37b94914462ac2431ff66 ""
-  "main.aux" 1785412300 47443 7fc3177506f4374590e74ed6ad2bf932 "pdflatex"
-  "main.bbl" 1785412298 15885 452d5294c9370bd254a2d876e9659821 "bibtex main"
-  "main.out" 1785412300 6248 7a3653cb6911b425a0b1b66dee067446 "pdflatex"
-  "main.tex" 1785410628 127652 42a6b94e634b491fd5aaa58503c34f9b ""
-  "main.toc" 1785412300 3341 9a537dae7636e548d09be25e96fa24e1 "pdflatex"
+  "main.aux" 1785435313 48219 597a513ad4a95337ea861ad7a4fd0e13 "pdflatex"
+  "main.bbl" 1785435311 15885 452d5294c9370bd254a2d876e9659821 "bibtex main"
+  "main.out" 1785435313 6248 7a3653cb6911b425a0b1b66dee067446 "pdflatex"
+  "main.tex" 1785435294 128225 7a9634720d0361d00b4fedc053655e56 ""
+  "main.toc" 1785435313 3341 9a537dae7636e548d09be25e96fa24e1 "pdflatex"
   (generated)
   "main.aux"
   "main.log"

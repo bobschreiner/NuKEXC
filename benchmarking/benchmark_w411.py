@@ -22,7 +22,7 @@ Two CSVs are written at the end:
 
 Note on the SCF threshold: every species is run at the same --conv-thr. The
 open-shell atoms with a degenerate p shell used to need a looser gate, but that
-plateau was a symptom of the GWH initial guess (see below); with --guess=core
+plateau was a symptom of the GWH initial guess (see below); with --guess=sap
 they converge in a handful of iterations at the tight threshold. Runs that still
 fail to converge are kept, with converged=0, so they can be counted rather than
 silently dropped.
@@ -306,11 +306,11 @@ def main():
     ap.add_argument("--xfunc", default="gga_xc_b3lyp3")
     ap.add_argument("--nrad", type=int, default=100)
     ap.add_argument("--nang", type=int, default=35)
-    ap.add_argument("--conv-thr", default="1e-7")
+    ap.add_argument("--conv-thr", default="1e-6")
     ap.add_argument("--pruning", default="robust")
     ap.add_argument(
         "--guess",
-        default="core",
+        default="sap",
         help="initial guess forwarded to standalone: core (default) or gwh. "
         "gwh stalls on near-linearly-dependent Slater sets (see docstring)",
     )

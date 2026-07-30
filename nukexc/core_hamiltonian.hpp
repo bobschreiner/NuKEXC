@@ -22,6 +22,7 @@
 #include "nukexc/grid.hpp"
 #include "nukexc_config.hpp"
 #include "octree.hpp"
+#include "sap.hpp"
 #include "stobasis.hpp"
 
 #include <KokkosBatched_Copy_Decl.hpp>
@@ -32,6 +33,7 @@
 #include <KokkosBatched_Util.hpp>
 
 #include <KokkosBlas3_gemm.hpp>
+#include <Kokkos_Core.hpp>
 #include <Kokkos_Core_fwd.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
 #include <Kokkos_Pair.hpp>
@@ -126,7 +128,6 @@ diag_overlap_integral(STOBasisSet &basis,
       });
   return diag_overlap_matrix;
 }
-
 
 DeviceView2DLeft nuclear_potential_integral(
     STOBasisSet &basis, Kokkos::View<Point *> quadrature_points,
@@ -268,8 +269,15 @@ struct CoreHamiltonianResult {
   DeviceView2DLeft hamiltonian; // T + V_n
 };
 
+// With use_SAP the nuclear term is built from the tabulated SAP screened
+// charges instead of the bare Z, so the returned `hamiltonian` is T + V_SAP,
+// i.e. the SAP guess Fock matrix. `overlap` and `kinetic` are unaffected.
+// sap_dir overrides the potential directory; empty falls back to
+// NUKEXC_SAP_DIR and then to the in-tree default.
 CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
-                                               const FlatGrid &grid) {
+                                               const FlatGrid &grid,
+                                               const bool use_SAP = false,
+                                               const std::string &sap_dir = "") {
 
   int N = basis.nbf();
   auto quadrature_points = grid.quad_points;
@@ -284,6 +292,17 @@ CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
   result.kinetic = DeviceView2DLeft("Kinetic matrix", N, N);
   result.nuclear = DeviceView2DLeft("Nuclear potential matrix", N, N);
   result.hamiltonian = DeviceView2DLeft("Core Hamiltonian", N, N);
+
+  // SAP guess: replace the bare nuclear charges by the tabulated screened
+  // charges Z_eff^A(r). Read once per distinct element and uploaded as a
+  // (n_atoms, n_r) table; the radial grid inverts analytically, so the lookup
+  // in the kernel below costs a couple of flops and two loads.
+  SapPotentials sap;
+  if (use_SAP)
+    sap = load_sap_potentials(
+        grid.Z, sap_dir.empty()
+                    ? sap_potential_dir("input/potentials/nr/LDAX/")
+                    : sap_dir);
 
   // Single set of double buffers shared across all three integrals
   DeviceView2DLeft col_a("col_a", N, CHUNK_SIZE);
@@ -348,12 +367,15 @@ CoreHamiltonianResult compute_core_hamiltonian(const STOBasisSet &basis,
                                      Gz_view(i, g));
               });
 
+          // Z_eff(r) -> Z as r -> 0, so the SAP branch reduces to the bare
+          // nuclear attraction at the cusp and shares the epsilon_shift guard.
           double v_nuc = 0.0;
           Kokkos::parallel_reduce(
               Kokkos::TeamThreadRange(team_member, atom_centers.extent(0)),
               [=](const int k, double &local_v) {
                 double r = dist(local_pt, atom_centers(k)) + epsilon_shift;
-                local_v += double(Z(k)) / r;
+                local_v +=
+                    (use_SAP ? sap_zeff(sap, k, r) : double(Z(k))) / r;
               },
               v_nuc);
           v_nuc = Kokkos::sqrt(v_nuc);
