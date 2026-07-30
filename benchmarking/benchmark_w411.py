@@ -391,7 +391,11 @@ def main():
 
     tasks = []
     for basis in args.bases:
+        # The Cholesky sets live in <root>/<BASIS>.cholesky, the plain ones in
+        # <root>/<BASIS>. Accept either so --basis-root can point at both.
         basis_dir = Path(args.basis_root) / ("%s.cholesky" % basis)
+        if not basis_dir.is_dir():
+            basis_dir = Path(args.basis_root) / basis
         if not basis_dir.is_dir():
             sys.exit("No such basis dir: %s" % basis_dir)
         for name in needed:
