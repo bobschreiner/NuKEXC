@@ -2779,17 +2779,21 @@ would not have been able to finish this work.
       \toprule
       Task & Model & Scope & Remarks   \\
       \midrule
-      Grammar and spelling  &  Claude &  Opus 5 & No Remarks \\
-      Assiting in writing & Claude & Opus 5 & Remarks \\
+      Grammar and spelling  &  Claude Opus 5 &  whole thesis & --- \\
+      Content coherence   &  Claude Opus 5 &  whole thesis &
+      Implemented relevant suggestions \\
+      Plotting of Figures & Claude  Opus 5 & all figures & Plotting
+      scripts in python manually polished \\
+      Tables & Claude  Opus 5 & all tables & Tables are generated
+      from csv files  \\
+      Derivation of unrestriced xc gga kernel
+      & Claude  Opus 5 & section \ref{subsubsec:dense_la_xc}  &
+      Formulas were rederived by hand \\
+      Debugging of C++ code & Claude Opus 5 & all codes & --- \\
+      \bottomrule
   \end{tabular}}
-  \caption{Memory allocations in
-    \texttt{compute\_exact\_exchange\_tiled}. All device views use
-    \texttt{LayoutLeft}; $P_\text{max}=\texttt{max\_points\_per\_box}$
-    and $\texttt{tile}=\texttt{tile\_size}$ (default 32). The three
-    global device matrices are reused across the loop over occupied
-    orbitals; the per-team scratch footprint
-    $(2+\texttt{tile})\,P_\text{max}$ doubles plus $P_\text{max}$ points
-  is independent of the neighbor count.}
+  \caption{Table containing all the tasks that were supported by
+  generative AI models}
   \label{tab:ai_transparency}
 \end{table}
 
