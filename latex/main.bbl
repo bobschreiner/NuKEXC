@@ -300,4 +300,9 @@ Axel~D. Becke.
 \newblock A new mixing of hartree--fock and local density-functional theories.
 \newblock {\em The Journal of Chemical Physics}, 98(2):1372--1377, 1993.
 
+\bibitem{Lehtola2020}
+Susi Lehtola, Lucas Visscher, and Eberhard Engel.
+\newblock Efficient implementation of the superposition of atomic potentials initial guess for electronic structure calculations in gaussian basis sets.
+\newblock {\em The Journal of Chemical Physics}, 152(14), April 2020.
+
 \end{thebibliography}

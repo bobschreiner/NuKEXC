@@ -2169,7 +2169,7 @@ Figure~\ref{fig:tiled_rik_flow} and Table~\ref{tab:tiled_rik_memory}.
         arr/.style={-{Latex[length=2mm]}, thick},
         looplabel/.style={font=\small\itshape, text=gray!70!black}
       ]
-      \node[hostbox] (mirror) {Mirror\\$C\to C_h$ (host)};
+      \node[hostbox] (mirror) {Mirror $f_i$ to host};
       \node[hostbox, below=12mm of mirror] (zero) {Zero\\$(\nu i|\alpha)$};
       \node[threadbox, below=12mm of zero] (fold)
       {Load $w_g,\mathbf r_g$;\\$w_g\mathrel{*}=c^i(\mathbf r_g)$};
@@ -2421,7 +2421,7 @@ and expect the (M4) grid to be the most cost-efficient choice.
   \label{fig:conv_2d}
 \end{figure}
 
-\subsubsection{Self-Consistent Field Calculations}
+\subsubsection{Self-Consistent Field Calculations}\label{subsubsec:scf_calc}
 Now that we have a clear grasp on how the quadrature grids affect the
 convergence of simple systems, we are ready to perform the first full
 SCF calculations. We analyze how the unrestricted Hartree-Fock
@@ -2506,7 +2506,7 @@ where do our integration routines spend their time.
 
 For both questions we use the W4-11 test set of Karton, Daon and
 Martin~\cite{Karton11w411}, which collects $140$ total atomization
-energies of small second row molecules. The reference values
+energies of small first- and second-row molecules. The reference values
 are zero-point exclusive, non-relativistic and defined at clamped
 nuclei. This is exactly the quantity that a difference of converged SCF
 total energies gives, so no thermochemical or relativistic corrections
@@ -2516,13 +2516,13 @@ sets DZ, TZP, TZ2P and QZ4P. The set contains $152$ distinct species,
 which amounts to $608$ SCF calculations in total. All calculations use
 the Treutler-Ahlrichs (M4) radial grid with $100$ radial points,
 a Lebedev angular grid of order $L=35$ with the robust pruning scheme of
-Section~\ref{subsec:grid_construction}, and the dense algorithm. The
+Section~\ref{subsubsec:scf_calc}, and the dense algorithm. The
 SCF is converged to a DIIS error of $10^{-6}$. All
 timings were measured on a single GH200 GPGPU.
 
 We had quite some trouble converging some of the open shell species.
 Changing our initial guess from the core-Hamiltonian one to
-the superposition of atomic potentials (SAP) \cite{} helped but still
+the superposition of atomic potentials (SAP) \cite{Lehtola2020} helped but still
 left us with a non-negligible amount of unconverged energies.
 Therefore we exclude every
 reaction that contains such a species rather
@@ -2558,7 +2558,7 @@ comparatively modest. The QZ4P distribution settles at a mean signed
 deviation of $-2.7$~kcal/mol rather than at zero. This residual is the
 expected behavior of B3LYP itself and not a deficiency of our
 integration, since the functional is known to underbind atomization
-energies \cite{}. We take the agreement of this progression with the published
+energies. We take the agreement of this progression with the published
 behavior of B3LYP as evidence that the full pipeline of grid
 construction, density fitting and exchange-correlation quadrature works
 correctly on realistic chemistry.
@@ -2570,7 +2570,7 @@ correctly on realistic chemistry.
     atomization energies, one violin per Slater-type basis set, with the
     number of converged reactions given below each label. Method is
     unrestricted B3LYP (\texttt{Libxc}~\cite{Lehtola2018libxc}
-      \texttt{hyb\_gga\_xc\_b3lyp3} \cite{}, the VWN3
+      \texttt{hyb\_gga\_xc\_b3lyp3}, the VWN3
     parametrization) with the dense algorithm. The grid is TA-M4 radial
     with $n_\mathrm{rad}=100$ and Lebedev order $L=35$ with robust
     pruning and uniform radial sizing. The linear dependence threshold
@@ -2610,10 +2610,7 @@ number of primary basis functions. The left panel gives the total
 runtime and the right panel the cost of a single Fock build. Dividing
 by the number of Fock builds removes the variation in how many SCF
 iterations each molecule happened to need, so the right panel isolates
-the scaling of the integral kernels themselves. The fitted exponents
-rise with the size of the basis, which reflects that the richer sets
-place proportionally more of the work in the dense linear algebra steps
-that scale most steeply.
+the scaling of the integral kernels themselves.
 
 We deliberately do not use the number of quadrature points on the
 horizontal axis. With uniform radial sizing the molecular grid contains
@@ -2621,6 +2618,7 @@ $n_\mathrm{atoms}\times n_\mathrm{rad}\times n_\mathrm{ang}$ points
 independent of the basis set, so it takes only as many distinct values
 as there are molecule sizes in the set and cannot resolve the cost
 differences between the four bases.
+
 
 \begin{figure}[H]
   \centering
@@ -2643,11 +2641,11 @@ differences between the four bases.
 Figure~\ref{fig:w411_breakdown} decomposes the runtime into the
 individual stages of the calculation, and the outcome is very clear.
 In the small DZ basis the exchange-correlation quadrature dominates
-with about three quarters of the total time. Its absolute cost however
+with about three quarters of the accounted time. Its absolute cost however
 stays nearly constant across the four bases, at roughly $0.55$ to
 $0.62$~s per molecule, because it is bound by the size of the grid and
 not by the size of the basis. The exact exchange build behaves in the
-opposite way. It grows from $0.1$~s per molecule at DZ to $4.23$~s at
+opposite way. It grows from $0.1$~s per molecule at DZ to $4.2$~s at
 QZ4P, where it accounts for $82$ percent of the accounted runtime and
 leaves grid construction, collocation, the core Hamiltonian, the
 auxiliary overlap of the density fitting and the Coulomb build as minor
@@ -2690,14 +2688,14 @@ SCF libraries reproduce the published behavior of B3LYP on the
 atomization energies of the W4-11 set. We observe a systematic
 improvement towards the complete basis set limit going from DZ \( \to
 \) TZP \( \to \) TZ2P \( \to \) QZ4P, which lowers the mean absolute
-deviation from \( 53.1 \) to \( 390 \)~kcal/mol and leaves a residual
+deviation from \( 53.1 \) to \( 3.9 \)~kcal/mol and leaves a residual
 mean signed deviation of \( -2.7 \)~kcal/mol that reflects the
 intrinsic underbinding of the functional rather than our integration.
 
 The timings reveal that the cost shifts into the exact exchange build
 as the basis grows: it is a minor contribution at DZ, where the
 exchange-correlation quadrature dominates with about three quarters of
-the runtime, but takes up \( 84\% \) of the computational time for
+the measured runtime, but takes up \( 82\% \) of the computational time for
 the QZ4P basis set. With an average build time rising from \( 0.07
 \)~s per Fock matrix at DZ to \( 0.53 \)~s at QZ4P for molecules with
 a handful of nuclei, the
@@ -2711,7 +2709,10 @@ be understated. The integration kernels solely rely on a handful
 of precomputed quantities, such as the collocation matrix, which can
 be provided by the calling program. Our library opens access to
 modern GPGPU computational power for Fock and Kohn-Sham
-matrix assembly.
+matrix assembly. The entire source code is publicly available on
+\href{https://www.github.com/bobschreiner/NuKEXC}{https://www.github.com/bobschreiner/NuKEXC}
+under the
+\texttt{GNU GENERAL PUBLIC LICENSE}.
 
 \section{Further Research}\label{sec:further_research}
 
