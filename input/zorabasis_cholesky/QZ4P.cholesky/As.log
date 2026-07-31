@@ -1,0 +1,6 @@
+title:    Arsenic (QZ, all electron, 14S 11P 6D 3F)
+orbital:  14S 11P 6D 3F
+old FIT:  31S 15P 12D 10F 7G
+new FIT:  23S 23P 19D 17F 13G 8H 5I  (wrote As.new)
+diagonal RI error (old): 4.414369e+01
+diagonal RI error (new): 2.364632e-05

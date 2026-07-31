@@ -1,0 +1,6 @@
+title:    Radon (V, all electron)
+orbital:  14S 12P 8D 4F
+old FIT:  31S 16P 12D 9F 7G
+new FIT:  25S 26P 24D 18F 17G 12H 8I  (wrote Rn.new)
+diagonal RI error (old): 1.078705e+02
+diagonal RI error (new): 5.013788e-05

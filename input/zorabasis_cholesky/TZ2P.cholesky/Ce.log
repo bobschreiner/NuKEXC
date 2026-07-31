@@ -1,0 +1,6 @@
+title:    Cerium (IV, all electron)
+orbital:  14S 10P 7D 3F
+old FIT:  32S 15P 12D 8F 6G
+new FIT:  25S 23P 23D 16F 15G 10H 6I  (wrote Ce.new)
+diagonal RI error (old): 4.271893e+01
+diagonal RI error (new): 7.074998e-05

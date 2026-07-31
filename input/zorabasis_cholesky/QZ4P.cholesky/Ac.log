@@ -1,0 +1,6 @@
+title:    Actinium (QZ, all electron, 25S 20P 14D 7F)
+orbital:  25S 20P 14D 7F
+old FIT:  50S 24P 20D 17F 13G
+new FIT:  37S 36P 34D 28F 24G 19H 13I  (wrote Ac.new)
+diagonal RI error (old): 3.592381e+03
+diagonal RI error (new): 5.576305e-05

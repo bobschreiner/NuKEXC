@@ -1,0 +1,6 @@
+title:    Hydrogen (V)
+orbital:  3S 1P 1D
+old FIT:  4S 3P 2D 1F 1G
+new FIT:  6S 4P 4D 1F 1G  (wrote H.new)
+diagonal RI error (old): 1.017329e-01
+diagonal RI error (new): 1.816713e-07

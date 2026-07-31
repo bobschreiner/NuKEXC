@@ -1,0 +1,6 @@
+title:    Plutonium (QZ, all electron, 25S 20P 14D 8F)
+orbital:  25S 20P 14D 8F
+old FIT:  50S 24P 20D 17F 13G
+new FIT:  36S 37P 34D 28F 24G 19H 14I  (wrote Pu.new)
+diagonal RI error (old): 4.048951e+03
+diagonal RI error (new): 1.192649e-04

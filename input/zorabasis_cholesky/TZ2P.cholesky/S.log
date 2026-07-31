@@ -1,0 +1,6 @@
+title:    Sulphur (V)
+orbital:  7S 5P 1D 1F
+old FIT:  14S 7P 6D 2F 1G
+new FIT:  14S 11P 11D 7F 6G 1H 1I  (wrote S.new)
+diagonal RI error (old): 7.742848e-01
+diagonal RI error (new): 2.530735e-06

@@ -1,0 +1,6 @@
+title:    Gold (II, all electron)
+orbital:  13S 10P 6D 3F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  25S 24P 22D 16F 14G 9H 6I  (wrote Au.new)
+diagonal RI error (old): 8.443933e+01
+diagonal RI error (new): 3.873266e-05

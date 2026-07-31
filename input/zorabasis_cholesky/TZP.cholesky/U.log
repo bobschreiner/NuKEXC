@@ -1,0 +1,6 @@
+title:    Uranium (IV, all electron)
+orbital:  16S 12P 9D 5F
+old FIT:  36S 19P 14D 10F 8G
+new FIT:  28S 28P 27D 20F 19G 13H 9I  (wrote U.new)
+diagonal RI error (old): 1.194120e+02
+diagonal RI error (new): 6.207080e-05

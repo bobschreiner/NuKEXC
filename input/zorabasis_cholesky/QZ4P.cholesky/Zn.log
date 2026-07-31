@@ -1,0 +1,6 @@
+title:    Zinc (QZ, all electron, 14S 8P 6D 3F)
+orbital:  14S 8P 6D 3F
+old FIT:  29S 14P 11D 9F 6G
+new FIT:  22S 19P 17D 15F 12G 9H 5I  (wrote Zn.new)
+diagonal RI error (old): 4.573173e+00
+diagonal RI error (new): 1.639188e-05

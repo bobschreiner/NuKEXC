@@ -20,24 +20,26 @@
 #pragma once
 
 #include "atomic_properties.hpp"
-#include "kokkos_config.hpp"
+#include "nukexc_config.hpp"
+#include <Kokkos_Core.hpp>
 #include <decl/Kokkos_Declare_OPENMP.hpp>
 #include <fstream>
 #include <iostream>
 #include <set>
 #include <string>
 #include <vector>
-#
-namespace NuKEXC {
+
+namespace Nukexc {
 
 struct Molecule {
 
-  Kokkos::View<double *[3], Kokkos::HostSpace>
+  Kokkos::View<Point *, ExecSpace>
       atom_centers; // Atom centers in cartesian coordinates (bohr)
-  Kokkos::View<unsigned *, Kokkos::HostSpace> Z; // atomic numbers
-  unsigned natoms; // number of atoms in the molecule
+  Kokkos::View<unsigned *, ExecSpace> Z; // atomic numbers
+  unsigned natoms;                       // number of atoms in the molecule
   std::set<unsigned>
       element_list; // contains a list of all elements present in the list
+  unsigned Z_total;
 
   /**
    * @ brief Default constructor
@@ -52,19 +54,24 @@ struct Molecule {
 
     // Initialize datastructures
     natoms = Z_v.size();
-    atom_centers =
-        Kokkos::View<double *[3], Kokkos::HostSpace>("Atom centers", natoms);
-    Z = Kokkos::View<unsigned *, Kokkos::HostSpace>("Atomic numbers ", natoms);
-
+    atom_centers = Kokkos::View<Point *, ExecSpace>("Atom centers", natoms);
+    Z = Kokkos::View<unsigned *, ExecSpace>("Atomic numbers", natoms);
     element_list = std::set<unsigned>(Z_v.begin(), Z_v.end());
+    Z_total = 0;
+
+    auto Z_h = Kokkos::create_mirror_view(Z);
+    auto atom_centers_h = Kokkos::create_mirror_view(atom_centers);
 
     // Fill Kokkos::View with data
     for (size_t i = 0; i < natoms; ++i) {
-      atom_centers(i, 0) = atom_centers_v[i][0];
-      atom_centers(i, 1) = atom_centers_v[i][1];
-      atom_centers(i, 2) = atom_centers_v[i][2];
-      Z(i) = Z_v[i];
+      atom_centers_h(i)[0] = atom_centers_v[i][0];
+      atom_centers_h(i)[1] = atom_centers_v[i][1];
+      atom_centers_h(i)[2] = atom_centers_v[i][2];
+      Z_h(i) = Z_v[i];
+      Z_total += Z_v[i];
     }
+    Kokkos::deep_copy(Z, Z_h);
+    Kokkos::deep_copy(atom_centers, atom_centers_h);
   };
 }; // struct Molecule
 
@@ -98,25 +105,7 @@ inline void read_xyz(const std::string &filename, Molecule &mol) {
   }
 
   Molecule mol_tmp(centers_v, Z_v);
-  mol.atom_centers = mol_tmp.atom_centers; // shallow copies
-  mol.Z = mol_tmp.Z;                       // shallow copies
-  mol.natoms = mol_tmp.natoms;
+  mol = mol_tmp;
 }
 
-/**
- * @ brief checks if two molecules are the same
- */
-inline bool operator==(const Molecule &m1, const Molecule &m2) {
-  if (m1.natoms != m2.natoms)
-    return false;
-  for (unsigned int i = 0; i < m1.natoms; ++i) {
-    if (m1.Z(i) != m2.Z(i))
-      return false;
-    for (unsigned int j = 0; j < 3; ++j) {
-      if (m1.atom_centers(i, j) != m2.atom_centers(i, j))
-        return false;
-    }
-  }
-  return true;
-};
-} // namespace NuKEXC
+} // namespace Nukexc

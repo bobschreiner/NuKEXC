@@ -1,0 +1,6 @@
+title:    Hafnium (II, 4d frozen)
+orbital:  8S 6P 4D 3F
+old FIT:  25S 15P 12D 8F 7G
+new FIT:  19S 19P 18D 14F 13G 8H 6I  (wrote Hf.4d.new)
+diagonal RI error (old): 7.941990e+00
+diagonal RI error (new): 1.420623e-05

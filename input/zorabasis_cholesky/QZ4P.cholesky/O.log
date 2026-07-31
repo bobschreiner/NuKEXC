@@ -1,0 +1,6 @@
+title:    Oxygen (QZ, all electron, 8S 4P 2D 2F)
+orbital:  8S 4P 2D 2F
+old FIT:  14S 8P 6D 5F 4G
+new FIT:  13S 11P 10D 10F 7G 4H 3I  (wrote O.new)
+diagonal RI error (old): 2.225637e+00
+diagonal RI error (new): 3.710542e-06

@@ -1,0 +1,6 @@
+title:    Technetium (IV, all electron)
+orbital:  12S 8P 6D
+old FIT:  27S 12P 9D 6F 4G
+new FIT:  22S 19P 19D 13F 11G  (wrote Tc.new)
+diagonal RI error (old): 1.801818e+00
+diagonal RI error (new): 1.800214e-05

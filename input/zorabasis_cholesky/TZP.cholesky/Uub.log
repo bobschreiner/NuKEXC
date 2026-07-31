@@ -1,0 +1,6 @@
+title:    Ununbium (IV, all electron)
+orbital:  16S 12P 9D 5F
+old FIT:  37S 19P 14D 11F 8G
+new FIT:  28S 27P 25D 20F 17G 12H 9I  (wrote Uub.new)
+diagonal RI error (old): 2.162706e+02
+diagonal RI error (new): 1.219543e-04

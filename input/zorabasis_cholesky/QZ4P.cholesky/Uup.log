@@ -1,0 +1,6 @@
+title:    Ununpentium (QZ, all electron, 26S 24P 15D 10F)
+orbital:  26S 24P 15D 10F
+old FIT:  53S 26P 22D 19F 14G
+new FIT:  41S 42P 40D 30F 24G 20H 16I  (wrote Uup.new)
+diagonal RI error (old): 5.821192e+04
+diagonal RI error (new): 2.645367e-04

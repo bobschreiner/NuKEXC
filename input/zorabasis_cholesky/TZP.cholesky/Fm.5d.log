@@ -1,0 +1,6 @@
+title:    Fermium (IV, 5d frozen)
+orbital:  11S 8P 6D 4F
+old FIT:  28S 19P 14D 10F 8G
+new FIT:  25S 23P 23D 19F 18G 11H 8I  (wrote Fm.5d.new)
+diagonal RI error (old): 1.108120e+01
+diagonal RI error (new): 2.199063e-05

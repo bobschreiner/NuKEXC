@@ -1,0 +1,6 @@
+title:    Silver (IV, all electron)
+orbital:  12S 8P 6D
+old FIT:  27S 12P 9D 6F 4G
+new FIT:  22S 18P 18D 13F 11G  (wrote Ag.new)
+diagonal RI error (old): 2.118696e+00
+diagonal RI error (new): 1.243733e-05

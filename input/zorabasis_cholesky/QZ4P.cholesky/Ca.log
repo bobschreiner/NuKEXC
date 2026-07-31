@@ -1,0 +1,6 @@
+title:    Calcium (QZ, all electron, 13S 8P 4D 3F)
+orbital:  13S 8P 4D 3F
+old FIT:  24S 14P 11D 9F 6G
+new FIT:  18S 17P 16D 12F 10G 7H 5I  (wrote Ca.new)
+diagonal RI error (old): 3.075961e+00
+diagonal RI error (new): 3.250433e-05

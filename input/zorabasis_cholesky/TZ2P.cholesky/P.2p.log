@@ -1,0 +1,6 @@
+title:    Phosphorus (V, 2p frozen)
+orbital:  5S 4P 1D 1F
+old FIT:  11S 7P 6D 2F 1G
+new FIT:  11S 10P 10D 7F 6G 1H 1I  (wrote P.2p.new)
+diagonal RI error (old): 7.581701e-01
+diagonal RI error (new): 1.864047e-06

@@ -1,0 +1,6 @@
+title:    Arsenic (IV)
+orbital:  8S 7P 4D
+old FIT:  19S 8P 7D 4F 3G
+new FIT:  16S 15P 14D 10F 7G  (wrote As.new)
+diagonal RI error (old): 1.923849e+00
+diagonal RI error (new): 1.436342e-05

@@ -1,0 +1,6 @@
+title:    Ununoctium (V, all electron)
+orbital:  16S 14P 9D 6F
+old FIT:  39S 20P 16D 12F 9G
+new FIT:  29S 29P 27D 22F 18G 14H 11I  (wrote Uuo.new)
+diagonal RI error (old): 2.652169e+02
+diagonal RI error (new): 1.203048e-04

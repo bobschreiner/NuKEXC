@@ -1,0 +1,6 @@
+title:    Silicon (IV, 2p frozen)
+orbital:  5S 4P 1D
+old FIT:  11S 7P 6D 2F 1G
+new FIT:  11S 9P 9D 4F 1G  (wrote Si.2p.new)
+diagonal RI error (old): 3.488205e-02
+diagonal RI error (new): 2.855197e-06

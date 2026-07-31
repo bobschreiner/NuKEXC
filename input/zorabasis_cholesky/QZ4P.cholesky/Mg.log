@@ -1,0 +1,6 @@
+title:    Magnesium (QZ, all electron, 10S 5P 2D 2F)
+orbital:  10S 5P 2D 2F
+old FIT:  19S 10P 8D 7F 4G
+new FIT:  15S 12P 12D 9F 8G 4H 3I  (wrote Mg.new)
+diagonal RI error (old): 1.368317e+00
+diagonal RI error (new): 1.385102e-05

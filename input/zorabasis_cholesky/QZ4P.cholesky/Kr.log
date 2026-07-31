@@ -1,0 +1,6 @@
+title:    Krypton (QZ, all electron, 15S 11P 6D 3F)
+orbital:  15S 11P 6D 3F
+old FIT:  31S 15P 12D 10F 7G
+new FIT:  24S 22P 19D 17F 13G 8H 5I  (wrote Kr.new)
+diagonal RI error (old): 5.192952e+01
+diagonal RI error (new): 4.784301e-05

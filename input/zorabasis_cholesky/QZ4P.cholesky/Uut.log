@@ -1,0 +1,6 @@
+title:    Ununtrium (QZ, all electron, 26S 24P 15D 10F)
+orbital:  26S 24P 15D 10F
+old FIT:  54S 26P 22D 19F 14G
+new FIT:  43S 43P 41D 31F 25G 21H 16I  (wrote Uut.new)
+diagonal RI error (old): 5.567332e+04
+diagonal RI error (new): 1.693303e-04

@@ -1,0 +1,6 @@
+title:    Lead (IV, all electron)
+orbital:  14S 12P 7D 3F
+old FIT:  32S 16P 12D 9F 7G
+new FIT:  27S 25P 24D 19F 16G 9H 6I  (wrote Pb.new)
+diagonal RI error (old): 9.706031e+01
+diagonal RI error (new): 5.643096e-05

@@ -1,0 +1,6 @@
+title:    Argon (II, 2p frozen)
+orbital:  4S 3P
+old FIT:  11S 6P 5D 2F 1G
+new FIT:  10S 8P 6D  (wrote Ar.2p.new)
+diagonal RI error (old): 2.219135e-03
+diagonal RI error (new): 4.670966e-07

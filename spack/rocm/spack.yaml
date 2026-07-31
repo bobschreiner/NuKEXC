@@ -1,0 +1,29 @@
+# NuKEXC library dependencies - AMD GPU backend (Kokkos::HIP + rocSOLVER)
+#
+# EDIT amdgpu_target to match your cluster's GPU, e.g.:
+#   gfx90a = MI210/MI250X, gfx940/942 = MI300A/X
+spack:
+  include:
+  - ../common/packages.yaml
+
+  repos:
+  - ../repo
+
+  concretizer:
+    unify: true
+
+  specs:
+  - kokkos@4 +rocm ~cuda ~sycl cxxstd=20
+    amdgpu_target=gfx90a
+    %rocmcc
+    ^hip@6
+  - kokkos-kernels@4 +rocblas +rocsolver +rocsparse
+    ^kokkos +rocm amdgpu_target=gfx90a ~cuda ~sycl
+    ^hip@6
+  - arborx@2.1 +rocm ~cuda ~sycl
+    ^kokkos +rocm amdgpu_target=gfx90a ~cuda ~sycl
+    ^hip@6
+  - libxc@7.0.0  
+  - integratorxx@master %rocmcc
+
+  view: true

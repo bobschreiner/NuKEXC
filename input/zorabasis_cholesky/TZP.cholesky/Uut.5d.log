@@ -1,0 +1,6 @@
+title:    Ununtrium (IV, 5d frozen)
+orbital:  11S 9P 6D 4F
+old FIT:  30S 20P 16D 12F 9G
+new FIT:  27S 24P 23D 18F 16G 11H 8I  (wrote Uut.5d.new)
+diagonal RI error (old): 1.732951e+01
+diagonal RI error (new): 3.658739e-05

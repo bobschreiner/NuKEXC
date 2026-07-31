@@ -1,0 +1,6 @@
+title:    Fluorine (IV, 1s frozen)
+orbital:  5S 3P 1D
+old FIT:  8S 5P 4D 2F 1G
+new FIT:  10S 9P 8D 3F 1G  (wrote F.1s.new)
+diagonal RI error (old): 3.132639e-02
+diagonal RI error (new): 4.774683e-07

@@ -1,0 +1,6 @@
+title:    Neon (V, 1s frozen)
+orbital:  4S 3P 1D 1F
+old FIT:  8S 5P 4D 2F 1G
+new FIT:  9S 8P 8D 6F 5G 1H 1I  (wrote Ne.1s.new)
+diagonal RI error (old): 9.417420e-01
+diagonal RI error (new): 8.035287e-07

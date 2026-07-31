@@ -1,0 +1,6 @@
+title:    Aluminium (QZ, all electron, 10S 7P 3D 2F)
+orbital:  10S 7P 3D 2F
+old FIT:  19S 10P 9D 7F 4G
+new FIT:  17S 14P 15D 9F 8G 5H 3I  (wrote Al.new)
+diagonal RI error (old): 1.734795e+00
+diagonal RI error (new): 1.350138e-05

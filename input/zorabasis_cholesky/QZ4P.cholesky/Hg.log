@@ -1,0 +1,6 @@
+title:    Mercury (QZ, all electron, 22S 18P 12D 6F)
+orbital:  22S 18P 12D 6F
+old FIT:  46S 22P 18D 15F 11G
+new FIT:  33S 34P 31D 25F 21G 15H 11I  (wrote Hg.new)
+diagonal RI error (old): 2.923775e+03
+diagonal RI error (new): 7.283231e-05

@@ -1,0 +1,6 @@
+title:    Francium (V, 5p frozen)
+orbital:  11S 8P 6D 3F
+old FIT:  28S 18P 14D 10F 8G
+new FIT:  24S 22P 22D 17F 15G 10H 5I  (wrote Fr.5p.new)
+diagonal RI error (old): 5.994803e+00
+diagonal RI error (new): 1.684552e-05

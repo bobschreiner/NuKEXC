@@ -1,0 +1,6 @@
+title:    Nobelium (QZ, all electron, 25S 20P 14D 9F)
+orbital:  25S 20P 14D 9F
+old FIT:  51S 24P 20D 17F 13G
+new FIT:  38S 38P 35D 30F 25G 20H 16I  (wrote No.new)
+diagonal RI error (old): 4.870952e+03
+diagonal RI error (new): 1.391344e-04

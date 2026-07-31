@@ -1,0 +1,6 @@
+title:    Radium (II, all electron)
+orbital:  15S 12P 7D 4F
+old FIT:  35S 18P 14D 10F 8G
+new FIT:  28S 26P 25D 18F 18G 12H 8I  (wrote Ra.new)
+diagonal RI error (old): 1.090386e+02
+diagonal RI error (new): 5.943931e-05

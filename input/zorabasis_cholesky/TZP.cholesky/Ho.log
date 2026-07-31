@@ -1,0 +1,6 @@
+title:    Holmium (IV, all electron)
+orbital:  14S 10P 7D 3F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  25S 24P 23D 17F 16G 10H 6I  (wrote Ho.new)
+diagonal RI error (old): 5.921608e+01
+diagonal RI error (new): 5.514857e-05

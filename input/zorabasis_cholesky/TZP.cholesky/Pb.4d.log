@@ -1,0 +1,6 @@
+title:    Lead (IV, 4d frozen)
+orbital:  10S 8P 5D 3F
+old FIT:  27S 16P 12D 9F 7G
+new FIT:  23S 21P 20D 17F 14G 9H 6I  (wrote Pb.4d.new)
+diagonal RI error (old): 1.438369e+01
+diagonal RI error (new): 5.747590e-06

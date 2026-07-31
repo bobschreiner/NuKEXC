@@ -1,0 +1,6 @@
+title:    Astatine (II, all electron)
+orbital:  13S 11P 6D 3F
+old FIT:  32S 16P 12D 9F 7G
+new FIT:  25S 24P 21D 16F 14G 8H 6I  (wrote At.new)
+diagonal RI error (old): 1.035262e+02
+diagonal RI error (new): 2.417000e-05

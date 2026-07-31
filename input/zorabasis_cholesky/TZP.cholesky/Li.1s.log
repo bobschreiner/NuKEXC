@@ -1,0 +1,6 @@
+title:    Lithium (IV, 1s frozen)
+orbital:  4S 2P 1D
+old FIT:  7S 4P 3D 2F 1G
+new FIT:  9S 7P 6D 2F 1G  (wrote Li.1s.new)
+diagonal RI error (old): 2.117657e-01
+diagonal RI error (new): 3.667348e-07

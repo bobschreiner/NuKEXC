@@ -1,0 +1,6 @@
+title:    Nickel (V, 2p frozen)
+orbital:  7S 5P 3D 1F
+old FIT:  14S 7P 6D 4F 3G
+new FIT:  14S 14P 12D 10F 7G 3H 1I  (wrote Ni.2p.new)
+diagonal RI error (old): 1.150082e+00
+diagonal RI error (new): 1.189845e-05

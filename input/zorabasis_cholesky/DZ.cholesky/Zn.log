@@ -1,0 +1,6 @@
+title:    Zinc (II)
+orbital:  8S 5P 3D
+old FIT:  19S 8P 7D 4F 3G
+new FIT:  15S 15P 12D 9F 6G  (wrote Zn.new)
+diagonal RI error (old): 1.817015e-01
+diagonal RI error (new): 6.060921e-06

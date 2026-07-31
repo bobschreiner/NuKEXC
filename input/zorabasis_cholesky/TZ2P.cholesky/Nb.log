@@ -1,0 +1,6 @@
+title:    Niobium (V, all electron)
+orbital:  12S 8P 6D 1F
+old FIT:  27S 12P 9D 6F 4G
+new FIT:  23S 19P 19D 13F 12G 6H 1I  (wrote Nb.new)
+diagonal RI error (old): 2.743496e+00
+diagonal RI error (new): 7.975244e-06

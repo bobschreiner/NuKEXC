@@ -1,0 +1,6 @@
+title:    Cesium (II, all electron)
+orbital:  13S 10P 5D
+old FIT:  32S 15P 12D 8F 6G
+new FIT:  23S 24P 21D 15F 9G  (wrote Cs.new)
+diagonal RI error (old): 3.084106e+01
+diagonal RI error (new): 1.832583e-05

@@ -1,0 +1,6 @@
+title:    Argon (IV)
+orbital:  7S 5P 1D
+old FIT:  14S 6P 5D 2F 1G
+new FIT:  14S 11P 9D 5F 1G  (wrote Ar.new)
+diagonal RI error (old): 1.353206e-01
+diagonal RI error (new): 4.753707e-06

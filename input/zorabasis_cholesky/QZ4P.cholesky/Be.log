@@ -1,0 +1,6 @@
+title:    Beryllium (QZ, all electron, 7S 3P 2D 2F)
+orbital:  7S 3P 2D 2F
+old FIT:  12S 6P 5D 4F 3G
+new FIT:  12S 10P 10D 8F 7G 4H 3I  (wrote Be.new)
+diagonal RI error (old): 2.084746e+00
+diagonal RI error (new): 2.064115e-06

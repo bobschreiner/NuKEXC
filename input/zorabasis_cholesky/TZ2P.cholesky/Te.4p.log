@@ -1,0 +1,6 @@
+title:    Tellurium (V, 4p frozen)
+orbital:  7S 6P 5D 1F
+old FIT:  21S 13P 11D 7F 5G
+new FIT:  17S 16P 17D 14F 11G 5H 1I  (wrote Te.4p.new)
+diagonal RI error (old): 1.167654e+00
+diagonal RI error (new): 2.883138e-06

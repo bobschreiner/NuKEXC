@@ -1,0 +1,6 @@
+title:    Iodine (IV, 4p frozen)
+orbital:  7S 6P 4D
+old FIT:  21S 13P 11D 7F 5G
+new FIT:  16S 15P 16D 11F 8G  (wrote I.4p.new)
+diagonal RI error (old): 5.943080e-02
+diagonal RI error (new): 8.297212e-06

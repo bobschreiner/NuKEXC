@@ -1,0 +1,6 @@
+title:    Tellurium (QZ, all electron, 18S 15P 8D 3F)
+orbital:  18S 15P 8D 3F
+old FIT:  39S 17P 15D 12F 8G
+new FIT:  28S 28P 26D 20F 15G 10H 5I  (wrote Te.new)
+diagonal RI error (old): 6.438497e+02
+diagonal RI error (new): 2.062832e-05

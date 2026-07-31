@@ -1,0 +1,6 @@
+title:    Boron (IV, 1s frozen)
+orbital:  4S 3P 1D
+old FIT:  8S 5P 4D 2F 1G
+new FIT:  9S 7P 7D 3F 1G  (wrote B.1s.new)
+diagonal RI error (old): 2.243621e-02
+diagonal RI error (new): 5.417250e-07

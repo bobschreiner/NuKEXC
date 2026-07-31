@@ -1,0 +1,6 @@
+title:    Xenon (V, 4p frozen)
+orbital:  7S 6P 5D 1F
+old FIT:  21S 13P 11D 7F 5G
+new FIT:  16S 16P 16D 14F 11G 5H 1I  (wrote Xe.4p.new)
+diagonal RI error (old): 1.109456e+00
+diagonal RI error (new): 6.603832e-06

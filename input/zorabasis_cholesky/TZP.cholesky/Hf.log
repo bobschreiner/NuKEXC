@@ -1,0 +1,6 @@
+title:    Hafnium (IV, all electron)
+orbital:  14S 10P 7D 3F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  25S 24P 23D 18F 16G 10H 6I  (wrote Hf.new)
+diagonal RI error (old): 6.983798e+01
+diagonal RI error (new): 6.805906e-05

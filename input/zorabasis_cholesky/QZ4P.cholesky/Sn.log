@@ -1,0 +1,6 @@
+title:    Tin (QZ, all electron, 18S 15P 8D 3F)
+orbital:  18S 15P 8D 3F
+old FIT:  39S 17P 15D 12F 8G
+new FIT:  28S 28P 27D 19F 15G 10H 5I  (wrote Sn.new)
+diagonal RI error (old): 6.044673e+02
+diagonal RI error (new): 4.677547e-05

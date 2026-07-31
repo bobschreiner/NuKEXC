@@ -1,0 +1,6 @@
+title:    Nickel (IV)
+orbital:  9S 6P 3D
+old FIT:  19S 8P 7D 4F 3G
+new FIT:  16S 15P 13D 8F 6G  (wrote Ni.new)
+diagonal RI error (old): 2.074332e-01
+diagonal RI error (new): 2.088830e-05

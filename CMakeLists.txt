@@ -68,6 +68,8 @@ add_library(${nxc}::NuKEXC ALIAS libnukexc)
 include( nukexc-integratorxx ) # finds package integratorxx
 include( nukexc-kokkos) # finds package Kokkos 
 include( nukexc-kokkos-kernels) # finds package Kokkos-kernels
+include( nukexc-arborx) # finds package arborx
+include( nukexc-libxc ) # finds libxc
 
 
 set(export_properties
@@ -86,7 +88,21 @@ set_property(TARGET libnukexc APPEND PROPERTY EXPORT_PROPERTIES "${export_proper
 
 # Guard the tests
 if(${nxc}_BUILD_TESTING)
+    # Test-only dependencies, resolved once: tests/, benchmarking/ and
+    # convergence_studies/ all link against Catch2 / Armadillo / OOO.
+    include( nukexc-catch2 )
+    include( nukexc-armadillo )
+    include( nukexc-openorbitaloptimizer )
+    include( nukexc-ptxas ) # defines nukexc_ptxas_verbose()
+
+    # standards.*, test_io.* and standalone_helpers.hpp are shared driver
+    # support that lives in tests/; the benchmarking and convergence-study
+    # directories compile/include them from there rather than duplicating them.
+    set(NUKEXC_TEST_SUPPORT_DIR ${PROJECT_SOURCE_DIR}/tests)
+
     add_subdirectory(tests)
+    add_subdirectory(benchmarking)
+    add_subdirectory(convergence_studies)
 endif()
 
 

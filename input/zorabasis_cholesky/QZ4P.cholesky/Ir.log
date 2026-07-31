@@ -1,0 +1,6 @@
+title:    Iridium (QZ, all electron, 22S 17P 11D 6F)
+orbital:  22S 17P 11D 6F
+old FIT:  46S 22P 18D 15F 11G
+new FIT:  33S 32P 30D 23F 20G 15H 11I  (wrote Ir.new)
+diagonal RI error (old): 2.721028e+03
+diagonal RI error (new): 2.207626e-04

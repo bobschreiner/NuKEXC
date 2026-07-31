@@ -1,0 +1,6 @@
+title:    Beryllium (II, 1s frozen)
+orbital:  3S 1P
+old FIT:  7S 4P 3D 2F 1G
+new FIT:  6S 3P 1D  (wrote Be.1s.new)
+diagonal RI error (old): 7.717947e-04
+diagonal RI error (new): 3.153954e-09

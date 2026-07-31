@@ -1,0 +1,6 @@
+title:    Neptunium (IV, all electron)
+orbital:  16S 12P 9D 5F
+old FIT:  36S 19P 14D 10F 8G
+new FIT:  28S 27P 27D 21F 20G 13H 9I  (wrote Np.new)
+diagonal RI error (old): 1.235387e+02
+diagonal RI error (new): 5.818085e-05

@@ -1,0 +1,6 @@
+title:    Palladium (V, 3d frozen)
+orbital:  8S 6P 4D 1F
+old FIT:  20S 12P 9D 6F 4G
+new FIT:  17S 16P 16D 12F 9G 4H 1I  (wrote Pd.3d.new)
+diagonal RI error (old): 1.260576e+00
+diagonal RI error (new): 3.689316e-06

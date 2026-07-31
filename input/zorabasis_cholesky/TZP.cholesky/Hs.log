@@ -1,0 +1,6 @@
+title:    Hassium (IV, all electron)
+orbital:  16S 12P 9D 5F
+old FIT:  37S 19P 14D 11F 8G
+new FIT:  28S 27P 25D 21F 18G 13H 9I  (wrote Hs.new)
+diagonal RI error (old): 1.916374e+02
+diagonal RI error (new): 8.761714e-05

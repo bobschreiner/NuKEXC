@@ -1,0 +1,6 @@
+title:    Meitnerium (QZ, all electron, 25S 21P 14D 9F)
+orbital:  25S 21P 14D 9F
+old FIT:  51S 24P 20D 17F 13G
+new FIT:  38S 38P 37D 27F 24G 19H 15I  (wrote Mt.new)
+diagonal RI error (old): 1.952875e+04
+diagonal RI error (new): 4.318825e-04

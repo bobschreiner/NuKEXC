@@ -1,0 +1,6 @@
+title:    Boron (II)
+orbital:  4S 2P
+old FIT:  10S 5P 4D 2F 1G
+new FIT:  9S 6P 3D  (wrote B.new)
+diagonal RI error (old): 3.919694e-04
+diagonal RI error (new): 6.674818e-07

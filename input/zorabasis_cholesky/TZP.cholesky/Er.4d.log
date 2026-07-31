@@ -1,0 +1,6 @@
+title:    Erbium (IV, 4d frozen)
+orbital:  10S 7P 5D 3F
+old FIT:  25S 15P 12D 8F 7G
+new FIT:  23S 19P 19D 16F 15G 9H 6I  (wrote Er.4d.new)
+diagonal RI error (old): 8.200720e+00
+diagonal RI error (new): 1.213527e-05

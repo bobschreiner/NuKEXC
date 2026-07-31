@@ -1,0 +1,6 @@
+title:    Uranium (QZ, all electron, 25S 20P 14D 8F)
+orbital:  25S 20P 14D 8F
+old FIT:  50S 24P 20D 17F 13G
+new FIT:  35S 37P 33D 29F 24G 19H 14I  (wrote U.new)
+diagonal RI error (old): 3.864209e+03
+diagonal RI error (new): 1.086362e-04

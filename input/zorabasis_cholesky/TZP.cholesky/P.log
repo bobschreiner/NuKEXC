@@ -1,0 +1,6 @@
+title:    Phosphorus (IV)
+orbital:  7S 5P 1D
+old FIT:  14S 7P 6D 2F 1G
+new FIT:  13S 11P 9D 5F 1G  (wrote P.new)
+diagonal RI error (old): 4.364934e-02
+diagonal RI error (new): 3.182359e-06

@@ -1,0 +1,6 @@
+title:    Sulphur (QZ, all electron, 11S 7P 3D 2F)
+orbital:  11S 7P 3D 2F
+old FIT:  21S 11P 9D 7F 4G
+new FIT:  18S 14P 15D 10F 9G 5H 3I  (wrote S.new)
+diagonal RI error (old): 1.742429e+00
+diagonal RI error (new): 1.155950e-05

@@ -1,0 +1,6 @@
+title:    Scandium (QZ, all electron, 13S 8P 5D 3F)
+orbital:  13S 8P 5D 3F
+old FIT:  25S 14P 11D 9F 6G
+new FIT:  18S 17P 17D 13F 11G 8H 5I  (wrote Sc.new)
+diagonal RI error (old): 3.849247e+00
+diagonal RI error (new): 3.399727e-05

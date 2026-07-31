@@ -1,0 +1,6 @@
+title:    Calcium (IV, 2p frozen)
+orbital:  7S 5P 2D
+old FIT:  13S 7P 6D 2F 1G
+new FIT:  13S 12P 11D 7F 3G  (wrote Ca.2p.new)
+diagonal RI error (old): 6.667609e-01
+diagonal RI error (new): 6.036100e-06

@@ -1,0 +1,6 @@
+title:    Antimony (IV, 4p frozen)
+orbital:  7S 6P 4D
+old FIT:  21S 13P 11D 7F 5G
+new FIT:  17S 17P 16D 12F 8G  (wrote Sb.4p.new)
+diagonal RI error (old): 5.007492e-02
+diagonal RI error (new): 1.392527e-06

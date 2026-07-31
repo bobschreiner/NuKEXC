@@ -1,0 +1,6 @@
+title:    Sodium (IV, 1s frozen)
+orbital:  6S 4P 1D
+old FIT:  12S 7P 6D 2F 1G
+new FIT:  12S 11P 9D 4F 1G  (wrote Na.1s.new)
+diagonal RI error (old): 1.121427e-01
+diagonal RI error (new): 1.148913e-06

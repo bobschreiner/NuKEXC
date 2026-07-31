@@ -1,0 +1,6 @@
+title:    Terbium (IV, all electron)
+orbital:  14S 10P 7D 3F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  25S 23P 23D 17F 15G 10H 6I  (wrote Tb.new)
+diagonal RI error (old): 5.474421e+01
+diagonal RI error (new): 6.700231e-05

@@ -21,7 +21,7 @@
 #include "standards.hpp"
 #include <nukexc/molecule.hpp>
 
-namespace NuKEXC {
+namespace Nukexc {
 
 Molecule make_water() {
   Molecule mol;
@@ -49,4 +49,4 @@ void make_benzene(Molecule &mol) { read_xyz("input/benzene.xyz", mol); }
 void make_taxol(Molecule &mol) { read_xyz("input/taxol.xyz", mol); }
 void make_ubiquitin(Molecule &mol) { read_xyz("input/ubiquitin.xyz", mol); }
 
-} // namespace NuKEXC
+} // namespace Nukexc

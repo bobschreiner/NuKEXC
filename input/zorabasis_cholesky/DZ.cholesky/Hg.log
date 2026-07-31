@@ -1,0 +1,6 @@
+title:    Mercury (II, all electron)
+orbital:  13S 10P 6D 3F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  25S 24P 22D 16F 14G 8H 6I  (wrote Hg.new)
+diagonal RI error (old): 8.579376e+01
+diagonal RI error (new): 3.935383e-05

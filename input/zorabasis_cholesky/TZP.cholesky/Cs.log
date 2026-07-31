@@ -1,0 +1,6 @@
+title:    Cesium (IV, all electron)
+orbital:  14S 11P 7D 1F
+old FIT:  32S 15P 12D 8F 6G
+new FIT:  26S 23P 22D 17F 13G 7H 1I  (wrote Cs.new)
+diagonal RI error (old): 3.191509e+01
+diagonal RI error (new): 2.027300e-05

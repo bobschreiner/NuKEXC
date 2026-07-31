@@ -1,0 +1,23 @@
+# NuKEXC W4-11 sweep
+# param alg = sparse
+# param conv_thr = 1e-7
+# param dens_thr = (binary default)
+# param lin_dep = 1e-4
+# param method = dft
+# param nang = 35
+# param nrad = 100
+# param open_conv_thr = 1e-6
+# param open_freeze_occ = 1e-3
+# param pruning = robust
+# param radial = (binary default)
+# param xfunc = gga_xc_b3lyp3
+# param bases = DZ TZP
+# params_hash = 9444a70556
+# binary = /Users/bobschreiner/NuKEXC/build/tests/standalone
+# dataset = /Users/bobschreiner/NuKEXC/input/W4-11
+# basis_root = /Users/bobschreiner/NuKEXC/input/zorabasis_cholesky
+# date_utc = 2026-07-29T19:14:51Z
+# cmdline = benchmark_w411.py --alg sparse --bases DZ TZP --species coo --out sparse
+# conv_thr/freeze_occ columns are the per-species values actually used (open-shell species differ).
+# Startup/Fock timing columns are seconds, summed over the whole run (all Fock builds).
+basis,species,charge,multiplicity,conv_thr,freeze_occ,converged,nbf,nbf_aux,nquad,nelec,energy,n_fock,t_startup,t_fock,t_scf,t_total

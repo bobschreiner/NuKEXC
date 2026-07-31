@@ -1,0 +1,6 @@
+title:    Boron (QZ, all electron, 7S 4P 2D 2F)
+orbital:  7S 4P 2D 2F
+old FIT:  13S 7P 5D 4F 3G
+new FIT:  12S 10P 10D 9F 8G 4H 3I  (wrote B.new)
+diagonal RI error (old): 2.284269e+00
+diagonal RI error (new): 5.311182e-06

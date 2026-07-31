@@ -1,0 +1,6 @@
+title:    Krypton (V)
+orbital:  8S 7P 4D 1F
+old FIT:  19S 8P 7D 4F 3G
+new FIT:  16S 13P 15D 12F 10G 4H 1I  (wrote Kr.new)
+diagonal RI error (old): 2.872972e+00
+diagonal RI error (new): 6.000975e-05

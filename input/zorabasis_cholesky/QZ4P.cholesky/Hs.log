@@ -1,0 +1,6 @@
+title:    Hassium (QZ, all electron, 25S 21P 14D 9F)
+orbital:  25S 21P 14D 9F
+old FIT:  51S 24P 20D 17F 13G
+new FIT:  37S 39P 36D 29F 24G 19H 15I  (wrote Hs.new)
+diagonal RI error (old): 1.926817e+04
+diagonal RI error (new): 3.644338e-04

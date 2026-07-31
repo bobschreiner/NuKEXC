@@ -1,0 +1,6 @@
+title:    Neon (QZ, all electron, 8S 5P 2D 2F)
+orbital:  8S 5P 2D 2F
+old FIT:  14S 8P 6D 5F 4G
+new FIT:  13S 12P 11D 10F 7G 4H 3I  (wrote Ne.new)
+diagonal RI error (old): 2.246354e+00
+diagonal RI error (new): 3.897804e-05

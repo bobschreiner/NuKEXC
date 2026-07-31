@@ -1,0 +1,6 @@
+title:    Hassium (IV, 5d frozen)
+orbital:  11S 7P 6D 4F
+old FIT:  28S 19P 14D 11F 8G
+new FIT:  23S 22P 22D 18F 17G 11H 8I  (wrote Hs.5d.new)
+diagonal RI error (old): 1.493743e+01
+diagonal RI error (new): 3.525580e-05

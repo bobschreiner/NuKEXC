@@ -1,0 +1,6 @@
+title:    Hydrogen (QZ, all electron, 5S 2P 2D)
+orbital:  5S 2P 2D
+old FIT:  8S 5P 4D 3F 2G
+new FIT:  8S 6P 6D 3F 3G  (wrote H.new)
+diagonal RI error (old): 5.856397e-03
+diagonal RI error (new): 7.890365e-07

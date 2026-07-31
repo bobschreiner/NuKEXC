@@ -1,0 +1,6 @@
+title:    Radium (IV, all electron)
+orbital:  16S 12P 8D 4F
+old FIT:  35S 18P 14D 10F 8G
+new FIT:  28S 27P 26D 19F 19G 12H 8I  (wrote Ra.new)
+diagonal RI error (old): 1.092047e+02
+diagonal RI error (new): 3.125680e-05

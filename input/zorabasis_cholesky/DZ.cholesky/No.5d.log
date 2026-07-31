@@ -1,0 +1,6 @@
+title:    Nobelium (II, 5d frozen)
+orbital:  9S 7P 5D 4F
+old FIT:  26S 19P 14D 10F 8G
+new FIT:  21S 21P 21D 18F 16G 10H 8I  (wrote No.5d.new)
+diagonal RI error (old): 1.145390e+01
+diagonal RI error (new): 3.371599e-05

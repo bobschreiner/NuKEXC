@@ -1,0 +1,6 @@
+title:    Fermium (V, all electron)
+orbital:  16S 13P 9D 5F
+old FIT:  36S 19P 14D 10F 8G
+new FIT:  28S 27P 27D 21F 20G 13H 9I  (wrote Fm.new)
+diagonal RI error (old): 1.540257e+02
+diagonal RI error (new): 1.022343e-04

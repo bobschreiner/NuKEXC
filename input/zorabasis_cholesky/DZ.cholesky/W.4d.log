@@ -1,0 +1,6 @@
+title:    Tungsten (II, 4d frozen)
+orbital:  8S 6P 4D 3F
+old FIT:  25S 15P 12D 8F 7G
+new FIT:  19S 18P 18D 15F 12G 8H 6I  (wrote W.4d.new)
+diagonal RI error (old): 9.146704e+00
+diagonal RI error (new): 7.237427e-06

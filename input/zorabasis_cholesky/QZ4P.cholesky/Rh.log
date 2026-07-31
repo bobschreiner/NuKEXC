@@ -1,0 +1,6 @@
+title:    Rhodium (QZ, all electron, 17S 12P 7D 3F)
+orbital:  17S 12P 7D 3F
+old FIT:  36S 17P 14D 12F 8G
+new FIT:  25S 24P 23D 18F 14G 9H 5I  (wrote Rh.new)
+diagonal RI error (old): 8.635185e+01
+diagonal RI error (new): 2.893543e-05

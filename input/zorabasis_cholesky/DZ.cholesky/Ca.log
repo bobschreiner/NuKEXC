@@ -1,0 +1,6 @@
+title:    Calcium (II)
+orbital:  8S 5P 1D
+old FIT:  19S 8P 7D 3F 1G
+new FIT:  15S 13P 10D 5F 1G  (wrote Ca.new)
+diagonal RI error (old): 4.367743e-02
+diagonal RI error (new): 7.979127e-06

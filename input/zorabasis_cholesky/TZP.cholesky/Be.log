@@ -1,0 +1,6 @@
+title:    Beryllium (IV)
+orbital:  5S 2P 1D
+old FIT:  9S 4P 3D 2F 1G
+new FIT:  9S 7P 6D 2F 1G  (wrote Be.new)
+diagonal RI error (old): 3.035834e-02
+diagonal RI error (new): 1.473724e-06

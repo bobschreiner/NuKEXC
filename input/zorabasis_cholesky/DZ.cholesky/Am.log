@@ -1,0 +1,6 @@
+title:    Americium (II, all electron)
+orbital:  15S 12P 8D 5F
+old FIT:  36S 19P 14D 10F 8G
+new FIT:  27S 27P 25D 21F 17G 13H 9I  (wrote Am.new)
+diagonal RI error (old): 1.320678e+02
+diagonal RI error (new): 8.393416e-05

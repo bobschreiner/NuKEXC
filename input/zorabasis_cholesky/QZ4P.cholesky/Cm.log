@@ -1,0 +1,6 @@
+title:    Curium (QZ, all electron, 25S 20P 14D 8F)
+orbital:  25S 20P 14D 8F
+old FIT:  50S 24P 20D 17F 13G
+new FIT:  38S 36P 34D 28F 24G 20H 14I  (wrote Cm.new)
+diagonal RI error (old): 4.242973e+03
+diagonal RI error (new): 8.119926e-05

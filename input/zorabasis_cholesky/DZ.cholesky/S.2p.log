@@ -1,0 +1,6 @@
+title:    Sulphur (II, 2p frozen)
+orbital:  4S 3P
+old FIT:  11S 7P 6D 2F 1G
+new FIT:  10S 8P 6D  (wrote S.2p.new)
+diagonal RI error (old): 4.675569e-04
+diagonal RI error (new): 1.224149e-07

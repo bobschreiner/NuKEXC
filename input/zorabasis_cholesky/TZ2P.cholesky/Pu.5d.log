@@ -1,0 +1,6 @@
+title:    Plutonium (IV, 5d frozen)
+orbital:  11S 8P 6D 4F
+old FIT:  28S 19P 14D 10F 8G
+new FIT:  26S 22P 23D 18F 17G 11H 8I  (wrote Pu.5d.new)
+diagonal RI error (old): 9.730136e+00
+diagonal RI error (new): 4.215138e-05

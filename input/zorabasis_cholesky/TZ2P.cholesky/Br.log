@@ -1,0 +1,6 @@
+title:    Bromine (V)
+orbital:  8S 7P 4D 1F
+old FIT:  19S 8P 7D 4F 3G
+new FIT:  16S 14P 15D 12F 9G 4H 1I  (wrote Br.new)
+diagonal RI error (old): 2.813506e+00
+diagonal RI error (new): 9.501565e-06

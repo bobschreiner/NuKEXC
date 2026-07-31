@@ -1,0 +1,6 @@
+title:    Radium (QZ, all electron, 25S 19P 13D 7F)
+orbital:  25S 19P 13D 7F
+old FIT:  50S 23P 19D 16F 11G
+new FIT:  36S 35P 32D 28F 22G 17H 13I  (wrote Ra.new)
+diagonal RI error (old): 3.502738e+03
+diagonal RI error (new): 7.427390e-05

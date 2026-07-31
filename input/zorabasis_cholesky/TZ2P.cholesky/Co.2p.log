@@ -1,0 +1,6 @@
+title:    Cobalt (V, 2p frozen)
+orbital:  7S 5P 3D 1F
+old FIT:  14S 7P 6D 4F 3G
+new FIT:  14S 13P 12D 9F 7G 3H 1I  (wrote Co.2p.new)
+diagonal RI error (old): 1.244238e+00
+diagonal RI error (new): 1.440814e-05

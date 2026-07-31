@@ -1,0 +1,6 @@
+title:    Rhodium (IV, all electron)
+orbital:  12S 8P 6D
+old FIT:  27S 12P 9D 6F 4G
+new FIT:  23S 19P 18D 13F 11G  (wrote Rh.new)
+diagonal RI error (old): 1.977566e+00
+diagonal RI error (new): 5.931901e-06

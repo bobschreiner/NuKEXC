@@ -1,0 +1,6 @@
+title:    Sodium (V)
+orbital:  7S 4P 1D 1F
+old FIT:  14S 7P 6D 2F 1G
+new FIT:  14S 12P 11D 7F 6G 1H 1I  (wrote Na.new)
+diagonal RI error (old): 9.224225e-01
+diagonal RI error (new): 1.006042e-06

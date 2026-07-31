@@ -1,0 +1,6 @@
+title:    Xenon (II, all electron)
+orbital:  11S 9P 5D
+old FIT:  27S 13P 11D 7F 5G
+new FIT:  21S 20P 18D 13F 9G  (wrote Xe.new)
+diagonal RI error (old): 2.831923e+01
+diagonal RI error (new): 2.002305e-05

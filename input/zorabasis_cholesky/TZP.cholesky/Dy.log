@@ -1,0 +1,6 @@
+title:    Dysprosium (IV, all electron)
+orbital:  14S 10P 7D 3F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  25S 23P 22D 17F 15G 10H 6I  (wrote Dy.new)
+diagonal RI error (old): 5.735563e+01
+diagonal RI error (new): 7.084812e-05

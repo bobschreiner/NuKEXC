@@ -1,0 +1,6 @@
+title:    Potassium (II, 2p frozen)
+orbital:  6S 4P 1D
+old FIT:  13S 7P 6D 2F 1G
+new FIT:  13S 12P 9D 4F 1G  (wrote K.2p.new)
+diagonal RI error (old): 8.057103e-02
+diagonal RI error (new): 1.864412e-06

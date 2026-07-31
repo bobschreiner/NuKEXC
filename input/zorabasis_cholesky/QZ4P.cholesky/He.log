@@ -1,0 +1,6 @@
+title:    Helium (QZ, all electron, 5S 2P 2D)
+orbital:  5S 2P 2D
+old FIT:  10S 4P 4D 3F 2G
+new FIT:  10S 8P 8D 4F 3G  (wrote He.new)
+diagonal RI error (old): 1.880895e-02
+diagonal RI error (new): 2.978451e-07

@@ -1,0 +1,6 @@
+title:    Gadolinium (IV, all electron)
+orbital:  14S 10P 7D 3F
+old FIT:  32S 15P 12D 8F 7G
+new FIT:  25S 24P 23D 17F 15G 10H 6I  (wrote Gd.new)
+diagonal RI error (old): 5.278938e+01
+diagonal RI error (new): 5.341402e-05

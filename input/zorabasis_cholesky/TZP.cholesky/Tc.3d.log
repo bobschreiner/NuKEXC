@@ -1,0 +1,6 @@
+title:    Technetium (IV, 3d frozen)
+orbital:  8S 6P 4D
+old FIT:  20S 12P 9D 6F 4G
+new FIT:  18S 16P 16D 11F 8G  (wrote Tc.3d.new)
+diagonal RI error (old): 1.662479e-01
+diagonal RI error (new): 2.236609e-06

@@ -1,0 +1,6 @@
+title:    Bismuth (IV, all electron)
+orbital:  14S 12P 7D 3F
+old FIT:  32S 16P 12D 9F 7G
+new FIT:  27S 25P 24D 18F 16G 9H 6I  (wrote Bi.new)
+diagonal RI error (old): 9.911558e+01
+diagonal RI error (new): 6.118194e-05

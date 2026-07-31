@@ -32,116 +32,30 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
-#include <nukexc/integration.hpp>
+#include <nukexc/grid.hpp>
+#include <nukexc/core_hamiltonian.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/partitioning.hpp>
 #include <nukexc/stobasis.hpp>
 
-#include "nukexc/kokkos_config.hpp"
+#include "nukexc/nukexc_config.hpp"
+#include "nukexc/octree.hpp"
 #include "standards.hpp"
 
-using namespace NuKEXC;
+using namespace Nukexc;
 
-using bk_type = IntegratorXX::Becke<double, double>;
-using mk_type = IntegratorXX::MuraKnowles<double, double>;
-using mhl_type = IntegratorXX::MurrayHandyLaming<double, double>;
 using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
-
-using ah_type = IntegratorXX::AhrensBeylkin<double>;
-using de_type = IntegratorXX::Delley<double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
-using wo_type = IntegratorXX::Womersley<double>;
 
 TEST_CASE("H20", "[h20_weights]") {
 
-  using namespace IntegratorXX;
-
-  using radial_type = bk_type;
-  using angular_type = ll_type;
-  using angular_traits = quadrature_traits<angular_type>;
-
-  using spherical_type = SphericalQuadrature<radial_type, angular_type>;
-
-  size_t nrad = 120;
-  size_t nang = angular_traits::npts_by_algebraic_order(
-      angular_traits::next_algebraic_order(
-          40)); // Smallest possible angular grid
-
-  // Generate via runtime API
-  auto rad_spec = radial_from_type<radial_type>();
-  auto rad_traits = make_radial_traits(rad_spec, nrad, 1.0);
-  UnprunedSphericalGridSpecification unp(
-      rad_spec, *rad_traits, angular_from_type<angular_type>(), nang);
-
-  auto sph = SphericalGridFactory::generate_grid(unp);
-
-  const unsigned npts = sph->npts();
-
   // Generate water
   Molecule mol = make_water();
-  unsigned int natoms = mol.natoms;
   STOBasisSet stobasis = load_adf_basis(mol);
-
-  // Create all the Kokkos Views on host device
-  Kokkos::View<double *[3]> atom_centers_device(
-      "atom centers", natoms);
-  Kokkos::View<double **[3]> quadrature_points_device(
-      "quadrature_points", natoms, npts);
-  Kokkos::View<double **> weights_device("weights", natoms,
-                                                            npts);
-
-  // Create all the Kokkos Mirror Views on Execution device
-  auto atom_centers_h = Kokkos::create_mirror_view(atom_centers_device);
-  auto quadrature_points_h =
-      Kokkos::create_mirror_view(quadrature_points_device);
-  auto weights_h = Kokkos::create_mirror_view(weights_device);
-
-  Kokkos::deep_copy(atom_centers_h, mol.atom_centers);
-
-  for (int i = 0; i < natoms; ++i) {
-    for (int j = 0; j < npts; ++j) {
-      quadrature_points_h(i, j, 0) = atom_centers_h(i, 0) + sph->points()[j][0];
-      quadrature_points_h(i, j, 1) = atom_centers_h(i, 1) + sph->points()[j][1];
-      quadrature_points_h(i, j, 2) = atom_centers_h(i, 2) + sph->points()[j][2];
-
-      weights_h(i, j) = sph->weights()[j];
-    }
-  }
-
-  // Copy the views from host device to the execution device
-  Kokkos::deep_copy(atom_centers_device, atom_centers_h);
-  Kokkos::deep_copy(quadrature_points_device, quadrature_points_h);
-  Kokkos::deep_copy(weights_device, weights_h);
-
-  // Compute the adjusted weights
-  partition_becke(atom_centers_device, quadrature_points_device,
-                       weights_device);
-
-  // Flatten the weights and quadrature_points
-
-  Kokkos::View<double *> weights_1d("Weights 1D", weights_device.extent(0) *
-                                                      weights_device.extent(1));
-
-  Kokkos::View<double *[3]> quad_points_1d(
-      "Quadrature points 1D",
-      quadrature_points_device.extent(0) * quadrature_points_device.extent(1));
-
-  Kokkos::parallel_for(
-      "FlattenViews",
-      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>({0, 0}, {natoms, npts}),
-      KOKKOS_LAMBDA(const int i, const int j) {
-        // Calculate the logical 1D index
-        int flat_idx = i * npts + j;
-
-        weights_1d(flat_idx) = weights_device(i, j);
-
-        quad_points_1d(flat_idx, 0) = quadrature_points_device(i, j, 0);
-        quad_points_1d(flat_idx, 1) = quadrature_points_device(i, j, 1);
-        quad_points_1d(flat_idx, 2) = quadrature_points_device(i, j, 2);
-      });
+  FlatGrid grid = make_flat_grid<ta_type, ll_type>(mol);
 
   DeviceView2DLeft S =
-      overlap_integral(stobasis, quad_points_1d, weights_1d);
+      overlap_integral(stobasis, grid.quad_points, grid.weights);
 
   auto S_h = Kokkos::create_mirror_view(S);
   Kokkos::deep_copy(S_h, S);
@@ -151,6 +65,229 @@ TEST_CASE("H20", "[h20_weights]") {
   }
 }
 
+TEST_CASE("Compute core Hamiltonian with screening",
+          "[h2o][screening][coreH]") {
+  using radial_type = ta_type;
+  using angular_type = ll_type;
+
+  Molecule mol = make_water();
+  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", 1e-10);
+  FlatGrid grid = make_flat_grid<radial_type, angular_type>(mol, 50, 30);
+  FlatGrid grid_ref = make_flat_grid<radial_type, angular_type>(mol, 50, 30);
+
+  // Unscreened reference
+  CoreHamiltonianResult Hcore_ref = compute_core_hamiltonian(basis, grid_ref);
+
+  // Create bounding boxes for screening
+  const int total_points = grid.quad_points.extent(0);
+  const int max_points_per_box = 512;
+
+  Kokkos::View<Box *, ExecSpace> bounding_boxes =
+      create_bounding_boxes(grid, max_points_per_box);
+
+  // Create NeighborList, by screening bounding boxes
+  NeighborList nl;
+  build_neighbor_list(basis, bounding_boxes, max_points_per_box, total_points,
+                      nl);
+
+  // Compute screened Hamiltonian
+  CoreHamiltonianResult Hcore_scr =
+      compute_core_hamiltonian_screened_scratch(basis, grid, nl);
+
+  int N = basis.nbf();
+  auto S_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.overlap);
+  auto S_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.overlap);
+  auto H_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.hamiltonian);
+  auto H_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.hamiltonian);
+
+  const double tol = 1e-6;
+  for (int i = 0; i < N; ++i) {
+    // Diagonal of overlap should be ~1 (orthonormal basis)
+    REQUIRE_THAT(S_scr(i, i), Catch::Matchers::WithinRel(1.0, 1e-5));
+    for (int j = 0; j < N; ++j) {
+      REQUIRE_THAT(S_scr(i, j), Catch::Matchers::WithinAbs(S_ref(i, j), tol));
+      REQUIRE_THAT(H_scr(i, j), Catch::Matchers::WithinAbs(H_ref(i, j), tol));
+    }
+  }
+}
+
+TEST_CASE("Compute core Hamiltonian with screening (basis on the fly)",
+          "[h2o][screening][on the fly basis][coreH]") {
+  using radial_type = ta_type;
+  using angular_type = ll_type;
+
+  Molecule mol = make_water();
+  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", 1e-10);
+  FlatGrid grid = make_flat_grid<radial_type, angular_type>(mol, 50, 30);
+  FlatGrid grid_ref = make_flat_grid<radial_type, angular_type>(mol, 50, 30);
+
+  // Unscreened reference
+  CoreHamiltonianResult Hcore_ref = compute_core_hamiltonian(basis, grid_ref);
+
+  // Create bounding boxes for screening
+  const int total_points = grid.quad_points.extent(0);
+  const int max_points_per_box = 512;
+
+  Kokkos::View<Box *, ExecSpace> bounding_boxes =
+      create_bounding_boxes(grid, max_points_per_box);
+
+  // Create NeighborList, by screening bounding boxes
+  NeighborList nl;
+  build_neighbor_list(basis, bounding_boxes, max_points_per_box, total_points,
+                      nl);
+
+  // Compute screened Hamiltonian
+  CoreHamiltonianResult Hcore_scr =
+      compute_core_hamiltonian_screened(basis, grid, nl);
+
+  int N = basis.nbf();
+  auto S_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.overlap);
+  auto S_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.overlap);
+  auto H_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.hamiltonian);
+  auto H_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.hamiltonian);
+
+  const double tol = 1e-6;
+  for (int i = 0; i < N; ++i) {
+    // Diagonal of overlap should be ~1 (orthonormal basis)
+    REQUIRE_THAT(S_scr(i, i), Catch::Matchers::WithinRel(1.0, 1e-5));
+    for (int j = 0; j < N; ++j) {
+      REQUIRE_THAT(S_scr(i, j), Catch::Matchers::WithinAbs(S_ref(i, j), tol));
+      REQUIRE_THAT(H_scr(i, j), Catch::Matchers::WithinAbs(H_ref(i, j), tol));
+    }
+  }
+}
+
+TEST_CASE("Compute core Hamiltonian with screening (basis tiled)",
+          "[h2o][screening][tiled][coreH]") {
+  using radial_type = ta_type;
+  using angular_type = ll_type;
+
+  Molecule mol = make_water();
+  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", 1e-10);
+  FlatGrid grid = make_flat_grid<radial_type, angular_type>(mol, 50, 30);
+  FlatGrid grid_ref = make_flat_grid<radial_type, angular_type>(mol, 50, 30);
+
+  // Unscreened reference
+  CoreHamiltonianResult Hcore_ref = compute_core_hamiltonian(basis, grid_ref);
+
+  // Create bounding boxes for screening
+  const int total_points = grid.quad_points.extent(0);
+  const int max_points_per_box = 8;
+
+  Kokkos::View<Box *, ExecSpace> bounding_boxes =
+      create_bounding_boxes(grid, max_points_per_box);
+
+  // Create NeighborList, by screening bounding boxes
+  NeighborList nl;
+  build_neighbor_list(basis, bounding_boxes, max_points_per_box, total_points,
+                      nl);
+
+  // Compute screened Hamiltonian
+  CoreHamiltonianResult Hcore_scr =
+      compute_core_hamiltonian_screened_tiled(basis, grid, nl);
+
+  int N = basis.nbf();
+  auto S_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.overlap);
+  auto S_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.overlap);
+  auto T_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.kinetic);
+  auto T_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.kinetic);
+
+  auto V_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.nuclear);
+  auto V_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.nuclear);
+
+  auto H_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.hamiltonian);
+  auto H_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.hamiltonian);
+
+  const double tol = 1e-6;
+  for (int i = 0; i < N; ++i) {
+    // Diagonal of overlap should be ~1 (orthonormal basis)
+    REQUIRE_THAT(S_scr(i, i), Catch::Matchers::WithinRel(1.0, 1e-5));
+    for (int j = 0; j < N; ++j) {
+      REQUIRE_THAT(S_scr(i, j), Catch::Matchers::WithinAbs(S_ref(i, j), tol));
+      REQUIRE_THAT(T_scr(i, j), Catch::Matchers::WithinAbs(T_ref(i, j), tol));
+      REQUIRE_THAT(V_scr(i, j), Catch::Matchers::WithinAbs(V_ref(i, j), tol));
+      REQUIRE_THAT(H_scr(i, j), Catch::Matchers::WithinAbs(H_ref(i, j), tol));
+    }
+  }
+}
+
+TEST_CASE("Compute core Hamiltonian with screening (basis sparse)",
+          "[h2o][screening][sparse][coreH]") {
+  using radial_type = ta_type;
+  using angular_type = ll_type;
+
+  Molecule mol = make_water();
+  STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P", 1e-10);
+  FlatGrid grid = make_flat_grid<radial_type, angular_type>(mol, 50, 30);
+  FlatGrid grid_ref = make_flat_grid<radial_type, angular_type>(mol, 50, 30);
+
+  // Unscreened reference
+  CoreHamiltonianResult Hcore_ref = compute_core_hamiltonian(basis, grid_ref);
+
+  // Create bounding boxes for screening
+  const int total_points = grid.quad_points.extent(0);
+  const int max_points_per_box = 8;
+
+  Kokkos::View<Box *, ExecSpace> bounding_boxes =
+      create_bounding_boxes(grid, max_points_per_box);
+
+  // Create NeighborList, by screening bounding boxes
+  NeighborList nl;
+  build_neighbor_list(basis, bounding_boxes, max_points_per_box, total_points,
+                      nl);
+
+  // Compute screened Hamiltonian
+  CoreHamiltonianResult Hcore_scr =
+      compute_core_hamiltonian_screened_sparse(basis, grid, nl);
+
+  int N = basis.nbf();
+  auto S_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.overlap);
+  auto S_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.overlap);
+  auto T_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.kinetic);
+  auto T_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.kinetic);
+
+  auto V_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.nuclear);
+  auto V_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.nuclear);
+
+  auto H_ref = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_ref.hamiltonian);
+  auto H_scr = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                   Hcore_scr.hamiltonian);
+
+  const double tol = 1e-6;
+  for (int i = 0; i < N; ++i) {
+    // Diagonal of overlap should be ~1 (orthonormal basis)
+    REQUIRE_THAT(S_scr(i, i), Catch::Matchers::WithinRel(1.0, 1e-5));
+    for (int j = 0; j < N; ++j) {
+      REQUIRE_THAT(S_scr(i, j), Catch::Matchers::WithinAbs(S_ref(i, j), tol));
+      REQUIRE_THAT(T_scr(i, j), Catch::Matchers::WithinAbs(T_ref(i, j), tol));
+      REQUIRE_THAT(V_scr(i, j), Catch::Matchers::WithinAbs(V_ref(i, j), tol));
+      REQUIRE_THAT(H_scr(i, j), Catch::Matchers::WithinAbs(H_ref(i, j), tol));
+    }
+  }
+}
 int main() {
 
   Kokkos::initialize();

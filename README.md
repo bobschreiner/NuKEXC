@@ -13,6 +13,7 @@ NuKEXC is a header-only C++ library for numerically integrating atomic orbital i
 | Kokkos | 4.0 | GPU backend required for production use |
 | KokkosKernels | 4.0 | Must match Kokkos version exactly |
 | IntegratorXX | main branch | Header-only, fetched automatically |
+| ArborX | 2.1 | main branch | Header-only, fetched automatically |
 | ROCm (AMD) | 5.6+ | For HIP/AMD GPU backend |
 | CUDA (NVIDIA) | 11.8+ | For CUDA/NVIDIA GPU backend |
 
@@ -94,6 +95,7 @@ cmake .. \
   -DCMAKE_CXX_COMPILER=hipcc \
   -DKokkos_ROOT=/path/to/kokkos/install \
   -DKokkosKernels_ENABLE_TPL_ROCBLAS=ON \
+  -DKokkosKernels_ENABLE_TPL_ROCSPARSE=ON \
   -DKokkosKernels_ENABLE_TPL_ROCSOLVER=ON
 
 # CUDA example
@@ -160,17 +162,29 @@ cd build
 ctest --output-on-failure
 ```
 
-To run the SCF benchmark specifically:
+The build tree mirrors the three source directories:
+
+| Source | Build output | What lives there |
+|---|---|---|
+| `tests/` | `build/tests/` | Correctness tests (run by `ctest`) and the `standalone` SCF driver |
+| `benchmarking/` | `build/benchmarking/` | Performance benchmarks and the W4-11 accuracy/timing sweep |
+| `convergence_studies/` | `build/convergence_studies/` | Grid-convergence sweeps and the scripts that plot them |
+
+Each of the two latter directories has its own README describing how to
+reproduce the figures it feeds.
+
+To run an end-to-end SCF with its per-section timing breakdown, use the
+`standalone` driver (run it from `build/`, so it finds the copied `input/`):
 
 ```bash
-./tests/benchmark_scf
+./tests/standalone
 ```
 
 Profiling with the Kokkos simple kernel timer:
 
 ```bash
 export KOKKOS_TOOLS_LIBS=/path/to/kokkos-tools/build/profiling/simple-kernel-timer/libkp_kernel_timer.so
-./tests/benchmark_scf
+./tests/standalone
 kp_reader *.dat
 ```
 
@@ -272,7 +286,11 @@ cmake .. \
   -DKokkos_ROOT=${EBROOTKOKKOS} \
   -DKokkosKernels_ROOT=${EBROOTKOKKOSKERNELS} \
   -DCMAKE_BUILD_TYPE=Release \
-  -DNuKEXC_BUILD_TESTING=ON
+  -DNuKEXC_BUILD_TESTING=ON \
+  -DAMDGPU_TARGETS="gfx90a" \
+  -DOpenMP_CXX_FLAGS="-fopenmp" \
+  -DOpenMP_CXX_LIB_NAMES="libomp" \
+  -DOpenMP_libomp_LIBRARY="/opt/rocm-6.3.4/llvm/lib/libomp.so"
  
 make -j16
 ```
@@ -288,6 +306,7 @@ git clone https://github.com/wavefunction91/IntegratorXX.git /path/to/integrator
 ```
  
 Then pass `-DIntegratorXX_ROOT=/path/to/integratorxx` to CMake.
+
 ---
 
 ## License

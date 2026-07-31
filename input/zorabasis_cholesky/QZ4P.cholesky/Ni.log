@@ -1,0 +1,6 @@
+title:    Nickel (QZ, all electron, 14S 8P 5D 3F)
+orbital:  14S 8P 5D 3F
+old FIT:  29S 14P 11D 9F 6G
+new FIT:  23S 19P 16D 14F 11G 8H 5I  (wrote Ni.new)
+diagonal RI error (old): 3.926794e+00
+diagonal RI error (new): 1.579291e-05

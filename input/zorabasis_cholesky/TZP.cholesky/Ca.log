@@ -1,0 +1,6 @@
+title:    Calcium (IV)
+orbital:  9S 6P 2D
+old FIT:  19S 8P 7D 3F 1G
+new FIT:  16S 14P 11D 8F 3G  (wrote Ca.new)
+diagonal RI error (old): 5.216904e-01
+diagonal RI error (new): 4.378661e-06

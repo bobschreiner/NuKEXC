@@ -1,0 +1,6 @@
+title:    Cadmium (IV, all electron)
+orbital:  12S 8P 6D
+old FIT:  27S 12P 9D 6F 4G
+new FIT:  22S 20P 18D 13F 11G  (wrote Cd.new)
+diagonal RI error (old): 1.981076e+00
+diagonal RI error (new): 7.693842e-06

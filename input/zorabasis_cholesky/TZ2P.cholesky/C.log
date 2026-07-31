@@ -1,0 +1,6 @@
+title:    Carbon (V)
+orbital:  5S 3P 1D 1F
+old FIT:  10S 5P 4D 2F 1G
+new FIT:  10S 8P 9D 7F 4G 1H 1I  (wrote C.new)
+diagonal RI error (old): 1.043142e+00
+diagonal RI error (new): 1.396067e-06

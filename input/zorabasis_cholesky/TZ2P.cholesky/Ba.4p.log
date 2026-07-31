@@ -1,0 +1,6 @@
+title:    Barium (V, 4p frozen)
+orbital:  10S 7P 6D 2F
+old FIT:  25S 15P 12D 8F 6G
+new FIT:  21S 21P 18D 15F 12G 8H 3I  (wrote Ba.4p.new)
+diagonal RI error (old): 4.726009e+00
+diagonal RI error (new): 3.107736e-05

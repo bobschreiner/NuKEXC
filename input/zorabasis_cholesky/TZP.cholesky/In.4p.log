@@ -1,0 +1,6 @@
+title:    Indium (IV, 4p frozen)
+orbital:  7S 6P 4D
+old FIT:  21S 13P 11D 7F 5G
+new FIT:  18S 17P 16D 12F 8G  (wrote In.4p.new)
+diagonal RI error (old): 4.589721e-02
+diagonal RI error (new): 2.459620e-06

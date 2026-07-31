@@ -1,0 +1,6 @@
+title:    Seaborgium (V, all electron)
+orbital:  16S 12P 9D 6F
+old FIT:  37S 19P 14D 11F 8G
+new FIT:  30S 27P 25D 21F 19G 14H 11I  (wrote Sg.new)
+diagonal RI error (old): 1.813374e+02
+diagonal RI error (new): 7.468031e-05

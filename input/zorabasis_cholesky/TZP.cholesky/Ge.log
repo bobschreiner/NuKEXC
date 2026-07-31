@@ -1,0 +1,6 @@
+title:    Germanium (IV)
+orbital:  9S 7P 4D
+old FIT:  19S 8P 7D 4F 3G
+new FIT:  16S 16P 15D 11F 7G  (wrote Ge.new)
+diagonal RI error (old): 1.924481e+00
+diagonal RI error (new): 1.148658e-05

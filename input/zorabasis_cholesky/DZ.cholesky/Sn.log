@@ -1,0 +1,6 @@
+title:    Tin (II, all electron)
+orbital:  11S 9P 5D
+old FIT:  27S 13P 11D 7F 5G
+new FIT:  21S 21P 19D 13F 9G  (wrote Sn.new)
+diagonal RI error (old): 2.722184e+01
+diagonal RI error (new): 2.149366e-05

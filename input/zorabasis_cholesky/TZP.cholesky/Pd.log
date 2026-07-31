@@ -1,0 +1,6 @@
+title:    Palladium (IV, all electron)
+orbital:  12S 8P 6D
+old FIT:  27S 12P 9D 6F 4G
+new FIT:  22S 20P 19D 13F 11G  (wrote Pd.new)
+diagonal RI error (old): 2.220296e+00
+diagonal RI error (new): 1.140023e-05

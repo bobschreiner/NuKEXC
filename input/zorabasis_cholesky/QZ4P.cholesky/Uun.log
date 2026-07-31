@@ -1,0 +1,6 @@
+title:    Ununnilium (QZ, all electron, 25S 21P 14D 10F)
+orbital:  25S 21P 14D 10F
+old FIT:  51S 24P 20D 17F 13G
+new FIT:  38S 38P 37D 29F 25G 20H 16I  (wrote Uun.new)
+diagonal RI error (old): 1.984402e+04
+diagonal RI error (new): 5.021409e-04

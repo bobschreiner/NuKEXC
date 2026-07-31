@@ -1,0 +1,6 @@
+title:    Argon (QZ, all electron, 11S 7P 3D 2F)
+orbital:  11S 7P 3D 2F
+old FIT:  21S 11P 9D 7F 4G
+new FIT:  17S 15P 14D 10F 9G 5H 3I  (wrote Ar.new)
+diagonal RI error (old): 2.114881e+00
+diagonal RI error (new): 6.990991e-06

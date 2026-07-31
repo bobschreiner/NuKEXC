@@ -1,0 +1,6 @@
+title:    Uranium (IV, 5d frozen)
+orbital:  11S 8P 6D 4F
+old FIT:  28S 19P 14D 10F 8G
+new FIT:  25S 22P 21D 19F 18G 12H 8I  (wrote U.5d.new)
+diagonal RI error (old): 9.207023e+00
+diagonal RI error (new): 3.239654e-05

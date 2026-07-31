@@ -1,0 +1,6 @@
+title:    Ununoctium (QZ, all electron, 26S 24P 15D 10F)
+orbital:  26S 24P 15D 10F
+old FIT:  53S 25P 21D 18F 13G
+new FIT:  41S 41P 38D 29F 23G 19H 15I  (wrote Uuo.new)
+diagonal RI error (old): 6.204585e+04
+diagonal RI error (new): 4.548613e-04

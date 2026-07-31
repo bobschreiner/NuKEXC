@@ -1,0 +1,6 @@
+title:    Ununpentium (II, 5d frozen)
+orbital:  9S 8P 5D 4F
+old FIT:  28S 20P 16D 12F 9G
+new FIT:  21S 20P 21D 16F 15G 10H 8I  (wrote Uup.5d.new)
+diagonal RI error (old): 1.771816e+01
+diagonal RI error (new): 5.485542e-05

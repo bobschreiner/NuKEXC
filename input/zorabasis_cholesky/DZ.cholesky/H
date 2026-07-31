@@ -1,0 +1,21 @@
+Hydrogen (II)
+
+BASIS
+1S   0.76
+1S   1.28
+END
+
+CORE
+0  0  0  0
+END
+
+DESCRIPTION
+
+END
+
+FIT
+ 1S       2.56000000
+ 1S       2.04000000
+ 1S       1.52000000
+END
+

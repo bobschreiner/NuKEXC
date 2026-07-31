@@ -1,0 +1,6 @@
+title:    Krypton (II, 3p frozen)
+orbital:  5S 4P 2D
+old FIT:  16S 8P 7D 4F 3G
+new FIT:  13S 11P 11D 7F 3G  (wrote Kr.3p.new)
+diagonal RI error (old): 3.104376e-01
+diagonal RI error (new): 2.504350e-06

@@ -20,11 +20,11 @@
 
 #pragma once
 
-#include "kokkos_config.hpp"
+#include "nukexc_config.hpp"
 #include "nukexc_utils.hpp"
-// #include <iostream>
+#include <iostream>
 
-namespace NuKEXC {
+namespace Nukexc {
 
 KOKKOS_INLINE_FUNCTION
 double compute_mu(const double r_i, const double r_j, const double R_ij) {
@@ -34,35 +34,30 @@ double compute_mu(const double r_i, const double r_j, const double R_ij) {
 }
 
 KOKKOS_INLINE_FUNCTION
-double compute_mu_laqua(const double r_i, const double r_j, const double R_ij,
-                        const double R_cutoff = 5.) {
-  double R = Kokkos::min(R_ij, R_cutoff);
-  double mu = (r_i - r_j) / R;
-  mu = mu > 1.0 ? 1.0 : mu < -1.0 ? -1.0 : mu;
-  return mu;
-}
-KOKKOS_INLINE_FUNCTION
 double compute_p(const double x) { return (1.5 * x) - (0.5 * std::pow(x, 3)); }
 
 KOKKOS_INLINE_FUNCTION
 double compute_s(const double f) { return 0.5 * (1.0 - f); }
 
-void partition_becke(const Kokkos::View<double *[3]> &atom_centers,
-                     const Kokkos::View<double **[3]> &quadrature_points,
-                     Kokkos::View<double **> &weights) {
+// Becke partitioning on a flat (possibly irregular) grid.
+//
+// The grid is stored as flat arrays of length `total_points`. `point_owner(g)`
+// is the index of the atom that owns quadrature point `g` -- this replaces the
+// old convention where the point's owning atom was implied by a 2D row index,
+// and is what lets each center carry a different number of quadrature points.
+void partition_becke(const Kokkos::View<Point *> &atom_centers,
+                     const Kokkos::View<Point *> &quadrature_points,
+                     const Kokkos::View<int *> &point_owner,
+                     Kokkos::View<double *> &weights) {
 
   size_t natoms = atom_centers.extent(0);
-  assert(natoms = quadrature_points.extent(0));
-  size_t nquad_points_per_atom = quadrature_points.extent(1);
+  size_t total_points = quadrature_points.extent(0);
 
   Kokkos::View<double **> R("R", natoms, natoms);
 
-  Kokkos::View<double ***> r("r", natoms, nquad_points_per_atom, natoms);
+  Kokkos::View<double **> r("r", total_points, natoms);
 
-  Kokkos::MDRangePolicy range_quad_points({0, 0},
-                                          {natoms, nquad_points_per_atom});
-  Kokkos::MDRangePolicy range_quad_points_natoms(
-      {0, 0, 0}, {natoms, nquad_points_per_atom, natoms});
+  Kokkos::MDRangePolicy range_points_natoms({0, 0}, {total_points, natoms});
 
   Kokkos::MDRangePolicy range_natoms_natoms({0, 0}, {natoms, natoms});
 
@@ -70,46 +65,42 @@ void partition_becke(const Kokkos::View<double *[3]> &atom_centers,
   Kokkos::parallel_for(
       "Compute inter-atomic distances", range_natoms_natoms,
       KOKKOS_LAMBDA(const int &i, const int &j) {
-        auto subView_i = Kokkos::subview(atom_centers, i, Kokkos::ALL());
-        auto subView_j = Kokkos::subview(atom_centers, j, Kokkos::ALL());
-        R(i, j) = rad_dist(subView_i, subView_j) + epsilon_shift;
+        R(i, j) = dist(atom_centers(i), atom_centers(j));
       });
 
   Kokkos::fence();
-  // Computes the distances from atom centers to quadrature points and stroes
-  // them in r_pij
+  // Computes the distances from each quadrature point to every atom center and
+  // stores them in r
   Kokkos::parallel_for(
-      "Compute atomic distances to quad_points", range_quad_points_natoms,
-      KOKKOS_LAMBDA(const int &p, const int &g, const int &i) {
-        auto subView_pg =
-            Kokkos::subview(quadrature_points, p, g, Kokkos::ALL());
-        auto subView_i = Kokkos::subview(atom_centers, i, Kokkos::ALL());
-        r(p, g, i) = rad_dist(subView_pg, subView_i);
+      "Compute atomic distances to quad_points", range_points_natoms,
+      KOKKOS_LAMBDA(const int &g, const int &i) {
+        r(g, i) = dist(quadrature_points(g), atom_centers(i));
       });
 
   Kokkos::fence();
 
   Kokkos::parallel_for(
-      "Compute weights batched", range_quad_points,
-      KOKKOS_LAMBDA(const size_t p, const size_t g) {
-        double w;
+      "Compute weights batched", Kokkos::RangePolicy<ExecSpace>(0, total_points),
+      KOKKOS_LAMBDA(const size_t g) {
+        const int owner = point_owner(g);
+        double w = 0;
         double normalization = 0;
         for (size_t i = 0; i < natoms; ++i) {
           double part_weight = 1.;
           for (size_t j = 0; j < natoms; ++j) {
             if (i != j) {
-              double mu = compute_mu_laqua(r(p, g, i), r(p, g, j), R(i, j));
+              double mu = compute_mu(r(g, i), r(g, j), R(i, j));
               double poly = compute_p(compute_p(compute_p(mu)));
 
               double s = compute_s(poly);
               part_weight *= s;
             }
           }
-          if (i == p)
+          if (i == owner)
             w = part_weight;
           normalization += part_weight;
         }
-        weights(p, g) *= w / normalization;
+        weights(g) *= w / normalization;
       });
 }
 
@@ -117,89 +108,92 @@ void partition_becke(const Kokkos::View<double *[3]> &atom_centers,
 using TeamPolicy = Kokkos::TeamPolicy<ExecSpace>;
 using MemberType = typename TeamPolicy::member_type;
 
-void partition_becke_team(const Kokkos::View<double *[3]> &atom_centers,
-                          const Kokkos::View<double **[3]> &quadrature_points,
-                          Kokkos::View<double **> &weights) {
+void partition_becke_team(const Kokkos::View<Point *> &atom_centers,
+                          const Kokkos::View<Point *> &quadrature_points,
+                          const Kokkos::View<int *> &point_owner,
+                          Kokkos::View<double *> &weights) {
 
   size_t natoms = atom_centers.extent(0);
-  size_t nquad_points_per_atom = quadrature_points.extent(1);
+  size_t total_points = quadrature_points.extent(0);
+
+  const double R_cutoff = 5.0;
 
   Kokkos::View<double **, Layout, ExecSpace,
                Kokkos::MemoryTraits<Kokkos::RandomAccess>>
       R_ij("R_ij", natoms, natoms);
 
-  Kokkos::parallel_for(
-      "Precompute R_ij",
-      Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>>({0, 0},
-                                                        {natoms, natoms}),
+  Kokkos::MDRangePolicy range_natoms_natoms({0, 0}, {natoms, natoms});
 
-      KOKKOS_LAMBDA(const int i, const int j) {
-        if (i != j) {
-          double d2 = 0;
-          for (int k = 0; k < 3; ++k) {
-            double d = atom_centers(i, k) - atom_centers(j, k);
-            d2 += d * d;
-          }
-          R_ij(i, j) = sqrt(d2) + epsilon_shift;
-        }
+  // Computes the atomic distances and stroes them in R_ij
+  Kokkos::parallel_for(
+      "Compute inter-atomic distances", range_natoms_natoms,
+      KOKKOS_LAMBDA(const int &i, const int &j) {
+        R_ij(i, j) =
+            Kokkos::min(dist(atom_centers(i), atom_centers(j)), R_cutoff);
       });
 
-  size_t bytes_per_thread =
-      Kokkos::View<double *, ExecSpace::scratch_memory_space>::shmem_size(
-          natoms);
+  // Two PerTeam scratch caches (distances and partial weights) sized to natoms.
+  using scratch_view_double =
+      Kokkos::View<double *, ExecSpace::scratch_memory_space>;
+
+  const size_t bytes_per_team = 2 * scratch_view_double::shmem_size(natoms);
 
   // Use L1 cache for large molecules, L0 cache of small molecules
-  int cache_level = natoms > 100 ? 1 : 0;
+  const int cache_level = 0;
 
-  // Set the policy to use that amount "PerThread"
+  // Set the policy to use that amount "PerThread" -- one team per quadrature
+  // point, so the league spans all points across all (possibly unequally sized)
+  // atomic grids.
   auto policy =
-      TeamPolicy(natoms, Kokkos::AUTO)
-          .set_scratch_size(cache_level, Kokkos::PerThread(bytes_per_thread));
+      TeamPolicy(total_points, Kokkos::AUTO)
+          .set_scratch_size(cache_level, Kokkos::PerTeam(bytes_per_team));
 
   Kokkos::parallel_for(
       "Becke Team Parallel", policy,
       KOKKOS_LAMBDA(const MemberType &team_member) {
-        size_t p = team_member.league_rank(); // Each team handles one atom p
+        int g = team_member.league_rank(); // flat quadrature-point index
+        int owner = point_owner(g);        // atom that owns this point
 
-        // Scratch memory for distance caching per thread
-        Kokkos::View<double *, ExecSpace::scratch_memory_space,
-                     Kokkos::MemoryUnmanaged>
-            r_cache(team_member.thread_scratch(cache_level), natoms);
+        // PerTeam shared scratch — one r_cache and w_cache per quadrature point
+        scratch_view_double r_cache(team_member.team_scratch(cache_level),
+                                    natoms);
 
-        // Parallelize over the quadrature points 'g' within the team
+        scratch_view_double w_cache(team_member.team_scratch(cache_level),
+                                    natoms);
+
+        Point pt = quadrature_points(g);
+
+        // Phase 1: parallel distance cache over atoms
         Kokkos::parallel_for(
-            Kokkos::TeamThreadRange(team_member, nquad_points_per_atom),
-            [&](const size_t g) {
-              // Cache distances for quadrature point g to all atoms i
-              for (size_t i = 0; i < natoms; ++i) {
-                auto subView_pg =
-                    Kokkos::subview(quadrature_points, p, g, Kokkos::ALL());
-                auto subView_i =
-                    Kokkos::subview(atom_centers, i, Kokkos::ALL());
-                r_cache(i) = rad_dist(subView_pg, subView_i);
+            Kokkos::TeamVectorRange(team_member, natoms),
+            [=](const int i) { r_cache(i) = dist(pt, atom_centers(i)); });
+        team_member.team_barrier();
+
+        // Phase 2: parallel w_i computation
+        Kokkos::parallel_for(
+            Kokkos::TeamVectorRange(team_member, natoms), [=](const int i) {
+              double w_i = 1.0;
+              for (int j = 0; j < natoms; ++j) {
+                if (i == j)
+                  continue;
+                double mu = compute_mu(r_cache(i), r_cache(j), R_ij(i, j));
+                w_i *= compute_s(compute_p(compute_p(compute_p(mu))));
               }
-
-              double w_p;
-              double normalization = 0.0;
-              for (size_t i = 0; i < natoms; ++i) {
-                double w_i = 1.0;
-                for (size_t j = 0; j < natoms; ++j) {
-                  if (i == j)
-                    continue;
-
-                  double mu = (r_cache(i) - r_cache(j)) / R_ij(i, j);
-                  mu = mu > 1.0 ? 1.0 : mu < -1.0 ? -1.0 : mu;
-                  double poly = compute_p(compute_p(compute_p(mu)));
-
-                  w_i *= compute_s(poly);
-                }
-                if (i == p)
-                  w_p = w_i;
-                normalization += w_i;
-              }
-
-              weights(p, g) *= (w_p / normalization);
+              w_cache(i) = w_i;
             });
+        team_member.team_barrier();
+
+        // Phase 3: parallel reduction for normalization
+        double normalization = 0.0;
+        Kokkos::parallel_reduce(
+            Kokkos::TeamVectorRange(team_member, natoms),
+            [=](const int i, double &lsum) { lsum += w_cache(i); },
+            normalization);
+
+        // Single thread applies final weight
+        Kokkos::single(
+            Kokkos::PerTeam(team_member),
+            [=]() { weights(g) *= w_cache(owner) / normalization; });
       });
 }
-} // namespace NuKEXC
+} // namespace Nukexc

@@ -1,0 +1,6 @@
+title:    Rhenium (V, 4d frozen)
+orbital:  10S 7P 5D 4F
+old FIT:  27S 15P 12D 8F 7G
+new FIT:  21S 19P 19D 16F 14G 10H 8I  (wrote Re.4d.new)
+diagonal RI error (old): 1.152401e+01
+diagonal RI error (new): 1.808933e-05

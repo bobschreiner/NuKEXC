@@ -1,0 +1,6 @@
+title:    Silicon (QZ, all electron, 10S 7P 3D 2F)
+orbital:  10S 7P 3D 2F
+old FIT:  19S 10P 9D 7F 4G
+new FIT:  16S 13P 14D 9F 8G 5H 3I  (wrote Si.new)
+diagonal RI error (old): 1.734703e+00
+diagonal RI error (new): 8.462659e-05

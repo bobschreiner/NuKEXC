@@ -1,0 +1,6 @@
+title:    Nitrogen (IV, 1s frozen)
+orbital:  4S 3P 1D
+old FIT:  8S 5P 4D 2F 1G
+new FIT:  9S 7P 7D 3F 1G  (wrote N.1s.new)
+diagonal RI error (old): 9.002403e-03
+diagonal RI error (new): 6.601149e-07

@@ -1,0 +1,6 @@
+title:    Gold (IV, 4d frozen)
+orbital:  10S 7P 5D 3F
+old FIT:  27S 15P 12D 8F 7G
+new FIT:  22S 20P 20D 16F 14G 9H 6I  (wrote Au.4d.new)
+diagonal RI error (old): 1.242463e+01
+diagonal RI error (new): 5.524468e-06

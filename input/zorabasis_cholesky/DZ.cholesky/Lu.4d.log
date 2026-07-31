@@ -1,0 +1,6 @@
+title:    Lutetium (II, 4d frozen)
+orbital:  8S 6P 4D 3F
+old FIT:  25S 15P 12D 8F 7G
+new FIT:  18S 18P 18D 15F 14G 8H 6I  (wrote Lu.4d.new)
+diagonal RI error (old): 7.388286e+00
+diagonal RI error (new): 1.381363e-05

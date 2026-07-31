@@ -1,0 +1,6 @@
+title:    Lanthanum (IV, 4d frozen)
+orbital:  10S 6P 5D 3F
+old FIT:  25S 15P 12D 8F 6G
+new FIT:  22S 18P 19D 14F 14G 9H 6I  (wrote La.4d.new)
+diagonal RI error (old): 5.643707e+00
+diagonal RI error (new): 1.424607e-05

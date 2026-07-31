@@ -1,0 +1,6 @@
+title:    Rhodium (IV, 3d frozen)
+orbital:  8S 6P 4D
+old FIT:  20S 12P 9D 6F 4G
+new FIT:  17S 16P 14D 11F 8G  (wrote Rh.3d.new)
+diagonal RI error (old): 1.470932e-01
+diagonal RI error (new): 4.937011e-06

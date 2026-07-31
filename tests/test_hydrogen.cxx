@@ -17,7 +17,9 @@
  *
  */
 
-#include "nukexc/kokkos_config.hpp"
+#include "nukexc/nukexc_config.hpp"
+#include "nukexc/octree.hpp"
+#include "nukexc/stopotential.hpp"
 #include <Kokkos_Core.hpp>
 #include <catch2/catch_all.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -26,19 +28,25 @@
 #include <integratorxx/generators/radial_factory.hpp>
 #include <integratorxx/generators/spherical_factory.hpp>
 #include <integratorxx/quadratures/radial.hpp>
+#include <integratorxx/quadratures/radial/treutlerahlrichs.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
+#include <nukexc/core_hamiltonian.hpp>
+#include <nukexc/coulomb.hpp>
 #include <nukexc/diagonalizer.hpp>
+#include <nukexc/exact_exchange.hpp>
 #include <nukexc/grid.hpp>
-#include <nukexc/integration.hpp>
 #include <nukexc/molecule.hpp>
 #include <nukexc/partitioning.hpp>
 #include <nukexc/stobasis.hpp>
+#include <nukexc/xc_integrals.hpp>
 
 #include <cmath>
 #include <vector>
 
-using namespace NuKEXC;
+#include <xc.h>
+#include <xc_funcs.h>
+using namespace Nukexc;
 
 using bk_type = IntegratorXX::Becke<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
@@ -68,17 +76,18 @@ TEST_CASE("hydrogen 1s -- normalization, eigenvalues, virial",
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
-  auto grid = make_flat_grid<bk_type, ll_type>(mol);
-  STOBasisSet basis = load_thakkar_basis(mol);
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 40);
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}}); // 1s
 
-  DeviceView2DLeft S = overlap_integral(basis, grid.quad_points, grid.weights);
-  DeviceView2DLeft T = kinetic_integral(basis, grid.quad_points, grid.weights);
-  DeviceView2DLeft V = nuclear_potential_integral(
-      basis, grid.quad_points, grid.weights, grid.atom_centers, grid.Z);
+  CoreHamiltonianResult result = compute_core_hamiltonian(basis, grid);
+  DeviceView2DLeft S = result.overlap;
+  DeviceView2DLeft T = result.kinetic;
+  DeviceView2DLeft V = result.nuclear;
 
   auto S_h = Kokkos::create_mirror_view(S);
   auto T_h = Kokkos::create_mirror_view(T);
   auto V_h = Kokkos::create_mirror_view(V);
+
   Kokkos::deep_copy(S_h, S);
   Kokkos::deep_copy(T_h, T);
   Kokkos::deep_copy(V_h, V);
@@ -132,7 +141,6 @@ TEST_CASE("hydrogen 1s -- normalization, eigenvalues, virial",
 
 TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
           "[multi_shell]") {
-
   // Index map:  0 -> 1s,  1 -> 2p_{m=-1},  2 -> 2p_{m=0},  3 -> 2p_{m=+1}
   STOBasisSet basis = make_manual_basis({
       {1, 0, 0, 1.0, 0., 0., 0.},  // 1s
@@ -143,12 +151,12 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
-  auto grid = make_flat_grid<bk_type, ll_type>(mol);
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 200, 40);
 
-  auto S = overlap_integral(basis, grid.quad_points, grid.weights);
-  auto T = kinetic_integral(basis, grid.quad_points, grid.weights);
-  auto V = nuclear_potential_integral(basis, grid.quad_points, grid.weights,
-                                      grid.atom_centers, grid.Z);
+  CoreHamiltonianResult result = compute_core_hamiltonian(basis, grid);
+  DeviceView2DLeft S = result.overlap;
+  DeviceView2DLeft T = result.kinetic;
+  DeviceView2DLeft V = result.nuclear;
 
   auto S_h = Kokkos::create_mirror_view(S);
   auto T_h = Kokkos::create_mirror_view(T);
@@ -191,9 +199,10 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
   REQUIRE_THAT(V_h(2, 2), Catch::Matchers::WithinRel(-0.25, 1e-7)); // 2p_0
   REQUIRE_THAT(V_h(3, 3), Catch::Matchers::WithinRel(-0.25, 1e-7)); // 2p_{+1}
 
-  // ---- m-degeneracy: all 2p states must give identical diagonal T and V ----
-  // Using a tighter relative tolerance here than for the absolute values,
-  // because residual asymmetry diagnoses a grid-symmetry or sign error.
+  // ---- m-degeneracy: all 2p states must give identical diagonal T and V
+  // ---- Using a tighter relative tolerance here than for the absolute
+  // values, because residual asymmetry diagnoses a grid-symmetry or sign
+  // error.
   REQUIRE_THAT(T_h(1, 1), Catch::Matchers::WithinRel(T_h(2, 2), 1e-10));
   REQUIRE_THAT(T_h(1, 1), Catch::Matchers::WithinRel(T_h(3, 3), 1e-10));
   REQUIRE_THAT(V_h(1, 1), Catch::Matchers::WithinRel(V_h(2, 2), 1e-10));
@@ -220,11 +229,10 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
   // ---- Diagonalization Test ----
   int n_basis = 4;
   // 1. Prepare Batched Views on Device
-  DeviceView2DLeft H("mo_coeffs", n_basis, n_basis);
+  DeviceView2DLeft H("H", n_basis, n_basis);
   DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, n_basis);
   DeviceView1D mo_energies("mo_energies", n_basis);
 
-  auto H_h = Kokkos::create_mirror_view(H);
   auto mo_coeffs_h = Kokkos::create_mirror_view(mo_coeffs);
   auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
 
@@ -234,8 +242,21 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
         H(i, j) = T(i, j) + V(i, j);
       });
 
-  NuKEXC::Diagonalizer diagonalizer(n_basis);
-  diagonalizer.compute_transformation(S);
+  Nukexc::Diagonalizer diagonalizer(n_basis);
+  auto X = diagonalizer.compute_transformation(S);
+  auto X_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, X);
+  int K = X.extent(1);
+
+  for (int i = 0; i < K; ++i) {
+    for (int j = 0; j < K; ++j) {
+      double sum = 0.0;
+      for (int a = 0; a < n_basis; ++a)
+        for (int b = 0; b < n_basis; ++b)
+          sum += X_h(a, i) * S_h(a, b) * X_h(b, j);
+      double expected = (i == j) ? 1.0 : 0.0;
+      REQUIRE_THAT(sum, Catch::Matchers::WithinAbs(expected, 1e-8));
+    }
+  }
   diagonalizer.solve(H, mo_coeffs, mo_energies);
 
   Kokkos::deep_copy(mo_coeffs_h, mo_coeffs);
@@ -290,13 +311,12 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
 
 TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
           "[h2_plus]") {
-
   const double R = 1.0; // bond length in bohr
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}, {R, 0., 0.}},
                std::vector<unsigned>{1u, 1u});
 
-  auto grid = make_flat_grid<bk_type, ll_type>(mol);
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 40);
 
   // Build the basis explicitly so the zeta value is unambiguous.
   STOBasisSet basis = make_manual_basis({
@@ -304,10 +324,10 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
       {1, 0, 0, 1.0, R, 0., 0.},  // 1s on atom B
   });
 
-  auto S = overlap_integral(basis, grid.quad_points, grid.weights);
-  auto T = kinetic_integral(basis, grid.quad_points, grid.weights);
-  auto V = nuclear_potential_integral(basis, grid.quad_points, grid.weights,
-                                      grid.atom_centers, grid.Z);
+  CoreHamiltonianResult result = compute_core_hamiltonian(basis, grid);
+  DeviceView2DLeft S = result.overlap;
+  DeviceView2DLeft T = result.kinetic;
+  DeviceView2DLeft V = result.nuclear;
 
   auto S_h = Kokkos::create_mirror_view(S);
   auto T_h = Kokkos::create_mirror_view(T);
@@ -324,7 +344,8 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
   REQUIRE_THAT(S_h(0, 0), Catch::Matchers::WithinRel(1.0, 1e-7));
   REQUIRE_THAT(S_h(1, 1), Catch::Matchers::WithinRel(1.0, 1e-7));
 
-  // ---- Off-diagonal overlap: exact formula S_AB = e^{-R}(1 + R + R^2/3) ----
+  // ---- Off-diagonal overlap: exact formula S_AB = e^{-R}(1 + R + R^2/3)
+  // ----
   const double S_exact = std::exp(-R) * (1.0 + R + R * R / 3.0);
   REQUIRE_THAT(S_h(0, 1), Catch::Matchers::WithinRel(S_exact, 1e-6));
 
@@ -333,7 +354,8 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
   REQUIRE_THAT(T_h(1, 1), Catch::Matchers::WithinRel(0.5, 1e-7));
 
   // ---- V has no closed form for the cross-nuclear terms, but the two  ----
-  // ---- on-diagonal elements must be equal by the symmetry of the system ----
+  // ---- on-diagonal elements must be equal by the symmetry of the system
+  // ----
   REQUIRE_THAT(V_h(0, 0), Catch::Matchers::WithinRel(V_h(1, 1), 1e-6));
 }
 
@@ -355,21 +377,19 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
 // T_AA = T_BB = 0.5 still holds for the single-center kinetic integrals.
 
 TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
-
   const double R = 1.0; // bond length in bohr
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}, {R, 0., 0.}},
                std::vector<unsigned>{1u, 1u});
 
-  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 50);
+  auto grid = make_flat_grid<bk_type, ll_type>(mol);
 
   // Build the basis explicitly so the zeta value is unambiguous.
   STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P");
-
-  auto S = overlap_integral(basis, grid.quad_points, grid.weights);
-  auto T = kinetic_integral(basis, grid.quad_points, grid.weights);
-  auto V = nuclear_potential_integral(basis, grid.quad_points, grid.weights,
-                                      grid.atom_centers, grid.Z);
+  CoreHamiltonianResult result = compute_core_hamiltonian(basis, grid);
+  DeviceView2DLeft S = result.overlap;
+  DeviceView2DLeft T = result.kinetic;
+  DeviceView2DLeft V = result.nuclear;
 
   auto S_h = Kokkos::create_mirror_view(S);
   auto T_h = Kokkos::create_mirror_view(T);
@@ -387,12 +407,6 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
 
   // 1. Prepare Batched Views on Device
   DeviceView2DLeft H("Hamiltonian", n_basis, n_basis);
-  DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, n_basis);
-  DeviceView1D mo_energies("mo_energies", n_basis);
-
-  auto H_h = Kokkos::create_mirror_view(H);
-  auto mo_coeffs_h = Kokkos::create_mirror_view(mo_coeffs);
-  auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
 
   Kokkos::parallel_for(
       Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {n_basis, n_basis}),
@@ -400,15 +414,23 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
         H(i, j) = T(i, j) + V(i, j);
       });
 
-  NuKEXC::Diagonalizer diagonalizer(n_basis);
-  diagonalizer.compute_transformation(S);
+  Nukexc::Diagonalizer diagonalizer(n_basis);
+  auto X = diagonalizer.compute_transformation(S);
+  const int K = X.extent(1);
+
+  DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, K);
+  DeviceView1D mo_energies("mo_energies", K);
+
+  auto mo_coeffs_h = Kokkos::create_mirror_view(mo_coeffs);
+  auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
+
   diagonalizer.solve(H, mo_coeffs, mo_energies);
 
   Kokkos::deep_copy(mo_coeffs_h, mo_coeffs);
   Kokkos::deep_copy(mo_energies_h, mo_energies);
 
-  for (int i = 0; i < n_basis; ++i) {
-    for (int j = 0; j < n_basis; ++j) {
+  for (int i = 0; i < K; ++i) {
+    for (int j = 0; j < K; ++j) {
       double orthogonality_sum = 0.0;
       for (int a = 0; a < n_basis; ++a) {
         for (int b = 0; b < n_basis; ++b) {
@@ -424,7 +446,7 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
   }
 
   // 6. Verify Energy Ordering (Ascending)
-  for (int i = 0; i < n_basis - 1; ++i) {
+  for (int i = 0; i < K - 1; ++i) {
     CHECK(mo_energies_h(i) <= mo_energies_h(i + 1));
   }
 
@@ -433,12 +455,6 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
   // Depending on your basis set quality, we check if it's in the ballpark.
   double e_ground = mo_energies_h(0);
   REQUIRE(e_ground < 0.0); // Must be bound
-
-  // Optional: print out the spectrum for debugging
-  std::cout << "H2+ Spectrum (R=" << R << ")" << std::endl;
-  for (int i = 0; i < n_basis; ++i)
-    std::cout << mo_energies_h(i) << std::endl;
-  std::cout << std::endl;
 }
 
 // ============================================================
@@ -459,13 +475,12 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
 
 TEST_CASE("H2+ Energies Fused Hamiltonian",
           "[h2_plus][energies][fused hamiltonian]") {
-
   const double R = 1.0; // bond length in bohr
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}, {R, 0., 0.}},
                std::vector<unsigned>{1u, 1u});
 
-  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 50);
+  auto grid = make_flat_grid<bk_type, ll_type>(mol);
 
   // Build the basis explicitly so the zeta value is unambiguous.
   STOBasisSet basis = load_adf_basis(mol, "input/zorabasis/QZ4P");
@@ -473,28 +488,29 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
   int n_basis = basis.nbf();
 
   CoreHamiltonianResult hamiltonian;
-  hamiltonian = compute_core_hamiltonian(basis, grid.quad_points, grid.weights,
-                                         grid.atom_centers, grid.Z);
+  hamiltonian = compute_core_hamiltonian(basis, grid);
 
   // 1. Prepare Batched Views on Device
-  DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, n_basis);
-  DeviceView1D mo_energies("mo_energies", n_basis);
+  auto S_h = Kokkos::create_mirror_view(hamiltonian.overlap);
+  Kokkos::deep_copy(S_h, hamiltonian.overlap);
+
+  Nukexc::Diagonalizer diagonalizer(n_basis);
+  auto X = diagonalizer.compute_transformation(hamiltonian.overlap, 1e-8);
+  const int K = X.extent(1);
+
+  DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, K);
+  DeviceView1D mo_energies("mo_energies", K);
 
   auto mo_coeffs_h = Kokkos::create_mirror_view(mo_coeffs);
   auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
 
-  auto S_h = Kokkos::create_mirror_view(hamiltonian.overlap);
-  Kokkos::deep_copy(S_h, hamiltonian.overlap);
-
-  NuKEXC::Diagonalizer diagonalizer(n_basis);
-  diagonalizer.compute_transformation(hamiltonian.overlap);
   diagonalizer.solve(hamiltonian.hamiltonian, mo_coeffs, mo_energies);
 
   Kokkos::deep_copy(mo_coeffs_h, mo_coeffs);
   Kokkos::deep_copy(mo_energies_h, mo_energies);
 
-  for (int i = 0; i < n_basis; ++i) {
-    for (int j = 0; j < n_basis; ++j) {
+  for (int i = 0; i < K; ++i) {
+    for (int j = 0; j < K; ++j) {
       double orthogonality_sum = 0.0;
       for (int a = 0; a < n_basis; ++a) {
         for (int b = 0; b < n_basis; ++b) {
@@ -510,21 +526,534 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
   }
 
   // 6. Verify Energy Ordering (Ascending)
-  for (int i = 0; i < n_basis - 1; ++i) {
+  for (int i = 0; i < K - 1; ++i) {
     CHECK(mo_energies_h(i) <= mo_energies_h(i + 1));
   }
-
+  // Optional: print out the spectrum for debugging
+#if NDEBUG
+  std::cout << "H2+ Spectrum (R=" << R << ")" << std::endl;
+  for (int i = 0; i < n_basis; ++i)
+    std::cout << mo_energies_h(i) << std::endl;
+  std::cout << std::endl;
+#endif
   // 7. Verify the Ground State Energy (sigma_g)
   // For H2+ at R=1.0 bohr, the exact electronic energy is roughly -1.45 au
   // Depending on your basis set quality, we check if it's in the ballpark.
   double e_ground = mo_energies_h(0);
   REQUIRE(e_ground < 0.0); // Must be bound
+}
 
-  // Optional: print out the spectrum for debugging
-  std::cout << "H2+ Spectrum (R=" << R << ")" << std::endl;
-  for (int i = 0; i < n_basis; ++i)
-    std::cout << mo_energies_h(i) << std::endl;
-  std::cout << std::endl;
+TEST_CASE("compute_coulomb -- hydrogen 1s self-repulsion", "[coulomb]") {
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
+
+  // Primary basis: single 1s STO
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+
+  // Aux basis: needs to be rich enough to represent the density ρ = φ^2,
+  // which for a 1s STO with ζ=1 is a 1s-like function with ζ=2.
+  // Use a few s-type STOs spanning a range of exponents.
+
+  STOBasisSet basis_aux = make_manual_basis({
+      {1, 0, 0, 0.5, 0., 0., 0.},
+      {1, 0, 0, 1.0, 0., 0., 0.},
+      {1, 0, 0, 2.0, 0., 0., 0.},
+      {1, 0, 0, 3.0, 0., 0., 0.},
+      {1, 0, 0, 4.0, 0., 0., 0.},
+  });
+  // Density matrix: fully occupied single orbital, D_11 = 1
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  const int N_bf = basis.nbf();
+  const int N_bf_aux = basis_aux.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
+  DeviceView2DLeft basis_aux_collocation("Auxiliary Basis collocation",
+                                         N_bf_aux, N_quad);
+  DeviceView2DLeft potential_collocation_scaled("Potential collocation",
+                                                N_bf_aux, N_quad);
+  DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
+  DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
+
+  ExecSpace space;
+
+  fill_collocation(space, basis, grid.quad_points, basis_collocation);
+  fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
+  sto_potential_collocation_scaled(space, basis_aux, grid,
+                                   potential_collocation_scaled);
+
+  // Compute (A|B)
+  KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
+                   potential_collocation_scaled, 0.0, aux_overlap);
+
+  Kokkos::parallel_for(
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
+      KOKKOS_LAMBDA(int i, int j) {
+        aux_overlap_sym(i, j) = 0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
+      });
+
+  DeviceView2DLeft half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
+
+  DeviceView2DLeft J = compute_coulomb(
+      space, mo_orbitals, mo_coeff, basis_collocation, basis_aux_collocation,
+      potential_collocation_scaled, half_inverse_X);
+
+  auto J_h = Kokkos::create_mirror_view(J);
+  Kokkos::deep_copy(J_h, J);
+
+  // Analytical self-repulsion of hydrogen 1s: 5/8 hartree
+  REQUIRE_THAT(J_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
+}
+
+TEST_CASE("compute_coulomb sparse -- hydrogen 1s self-repulsion",
+          "[coulomb][sparse]") {
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
+
+  // Primary basis: single 1s STO
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+
+  // Aux basis: needs to be rich enough to represent the density ρ = φ^2,
+  // which for a 1s STO with ζ=1 is a 1s-like function with ζ=2.
+  // Use a few s-type STOs spanning a range of exponents.
+
+  STOBasisSet basis_aux = make_manual_basis({
+      {1, 0, 0, 0.5, 0., 0., 0.},
+      {1, 0, 0, 1.0, 0., 0., 0.},
+      {1, 0, 0, 2.0, 0., 0., 0.},
+      {1, 0, 0, 3.0, 0., 0., 0.},
+      {1, 0, 0, 4.0, 0., 0., 0.},
+  });
+  // Density matrix: fully occupied single orbital, D_11 = 1
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  ExecSpace space;
+  int max_points_per_box = 32;
+  auto bb = create_bounding_boxes(grid, max_points_per_box);
+  NeighborList nl;
+  build_neighbor_list(basis, bb, max_points_per_box, grid.quad_points.extent(0),
+                      nl);
+  NeighborList nl_aux;
+  build_neighbor_list(basis_aux, bb, max_points_per_box,
+                      grid.quad_points.extent(0), nl_aux);
+
+  // Compute (A|B)
+  DeviceView2DLeft aux_overlap_sym =
+      coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
+  DeviceView2DLeft half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
+
+  DeviceView2DLeft J = compute_coulomb_sparse(
+      space, mo_orbitals, mo_coeff, basis, basis_aux, grid, nl, half_inverse_X);
+
+  auto J_h = Kokkos::create_mirror_view(J);
+  Kokkos::deep_copy(J_h, J);
+
+  // Analytical self-repulsion of hydrogen 1s: 5/8 hartree
+  REQUIRE_THAT(J_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
+}
+
+TEST_CASE("compute_exchange -- hydrogen 1s self-exchange", "[exchange]") {
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
+
+  // Primary basis: single 1s STO
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+
+  // Aux basis: needs to be rich enough to represent the density ρ = φ^2,
+  // which for a 1s STO with ζ=1 is a 1s-like function with ζ=2.
+  // Use a few s-type STOs spanning a range of exponents.
+
+  STOBasisSet basis_aux = make_manual_basis({
+      {1, 0, 0, 0.5, 0., 0., 0.},
+      {1, 0, 0, 1.0, 0., 0., 0.},
+      {1, 0, 0, 2.0, 0., 0., 0.},
+      {1, 0, 0, 3.0, 0., 0., 0.},
+      {1, 0, 0, 4.0, 0., 0., 0.},
+  });
+  // Density matrix: fully occupied single orbital, D_11 = 1
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  const int N_bf = basis.nbf();
+  const int N_bf_aux = basis_aux.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
+  DeviceView2DLeft basis_aux_collocation("Auxiliary Basis collocation",
+                                         N_bf_aux, N_quad);
+  DeviceView2DLeft potential_collocation_scaled("Potential collocation",
+                                                N_bf_aux, N_quad);
+
+  DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
+  DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
+
+  ExecSpace space;
+
+  fill_collocation(space, basis, grid.quad_points, basis_collocation);
+  fill_collocation(space, basis_aux, grid.quad_points, basis_aux_collocation);
+  sto_potential_collocation_scaled(space, basis_aux, grid,
+                                   potential_collocation_scaled);
+
+  // Compute (A|B)
+  KokkosBlas::gemm(space, "N", "T", 1.0, basis_aux_collocation,
+                   potential_collocation_scaled, 0.0, aux_overlap);
+
+  Kokkos::parallel_for(
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {N_bf_aux, N_bf_aux}),
+      KOKKOS_LAMBDA(int i, int j) {
+        aux_overlap_sym(i, j) = 0.5 * (aux_overlap(i, j) + aux_overlap(j, i));
+      });
+
+  DeviceView2DLeft half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
+
+  DeviceView2DLeft K = compute_exact_exchange(
+      space, mo_orbitals, mo_coeff, basis_collocation, basis_aux_collocation,
+      potential_collocation_scaled, half_inverse_X);
+
+  auto K_h = Kokkos::create_mirror_view(K);
+  Kokkos::deep_copy(K_h, K);
+
+  // Analytical self-exchange of hydrogen 1s: 5/8 hartree
+  REQUIRE_THAT(K_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
+}
+
+TEST_CASE("compute_exchange sparse -- hydrogen 1s self-exchange",
+          "[exchange][sparse]") {
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
+
+  // Primary basis: single 1s STO
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+
+  // Aux basis: needs to be rich enough to represent the density ρ = φ^2,
+  // which for a 1s STO with ζ=1 is a 1s-like function with ζ=2.
+  // Use a few s-type STOs spanning a range of exponents.
+
+  STOBasisSet basis_aux = make_manual_basis({
+      {1, 0, 0, 0.5, 0., 0., 0.},
+      {1, 0, 0, 1.0, 0., 0., 0.},
+      {1, 0, 0, 2.0, 0., 0., 0.},
+      {1, 0, 0, 3.0, 0., 0., 0.},
+      {1, 0, 0, 4.0, 0., 0., 0.},
+  });
+  // Density matrix: fully occupied single orbital, D_11 = 1
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  ExecSpace space;
+  int max_points_per_box = 32;
+  auto bb = create_bounding_boxes(grid, max_points_per_box);
+  NeighborList nl;
+  build_neighbor_list(basis, bb, max_points_per_box, grid.quad_points.extent(0),
+                      nl);
+  NeighborList nl_aux;
+  build_neighbor_list(basis_aux, bb, max_points_per_box,
+                      grid.quad_points.extent(0), nl_aux);
+
+  // Compute (A|B)
+  DeviceView2DLeft aux_overlap_sym =
+      coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
+  DeviceView2DLeft half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
+
+  DeviceView2DLeft K = compute_exact_exchange_sparse(
+      space, mo_orbitals, mo_coeff, basis, basis_aux, grid, nl, half_inverse_X);
+
+  auto K_h = Kokkos::create_mirror_view(K);
+  Kokkos::deep_copy(K_h, K);
+
+  // Analytical self-exchange of hydrogen 1s: 5/8 hartree
+  REQUIRE_THAT(K_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
+}
+
+TEST_CASE("compute_lda -- hydrogen 1s lda", "[lda]") {
+  // Analytical Slater Exchange LDA energy for a 1s STO (zeta = 1.0)
+  const double ref_value = -0.2127415030860106;
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
+
+  // Primary basis: single 1s STO
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+
+  xc_func_type func;
+  const int func_id = 1;
+  if (xc_func_init(&func, func_id, XC_UNPOLARIZED) != 0) {
+    throw std::runtime_error("Failed to initialize Libxc functional");
+  }
+
+  // Density matrix: fully occupied single orbital, D_11 = 1
+
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  const int N_bf = basis.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
+
+  ExecSpace space;
+  fill_collocation(space, basis, grid.quad_points, basis_collocation);
+
+  auto lda_result =
+      compute_lda(basis_collocation, grid.weights, mo_orbitals, mo_coeff, func);
+
+  // Clean up Libxc internal pointers
+  xc_func_end(&func);
+
+  REQUIRE_THAT(lda_result.energy, Catch::Matchers::WithinRel(ref_value, 1e-10));
+}
+
+TEST_CASE("compute_gga -- hydrogen 1s gga", "[gga]") {
+  // Reference PBE exchange energy and potential for a 1s STO (zeta = 1.0)
+  const double ref_energy = -0.253995708307881;
+  const double ref_potential = -0.320733669386709;
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
+
+  // Primary basis: single 1s STO
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+
+  xc_func_type func;
+  const int func_id = XC_GGA_X_PBE;
+  if (xc_func_init(&func, func_id, XC_UNPOLARIZED) != 0) {
+    throw std::runtime_error("Failed to initialize Libxc functional");
+  }
+
+  // Density matrix: fully occupied single orbital, D_11 = 1
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  const int N_bf = basis.nbf();
+  const int N_quad = grid.quad_points.extent(0);
+
+  DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
+  DeviceView2DLeft collocation_gx("Collocation gx", N_bf, N_quad);
+  DeviceView2DLeft collocation_gy("Collocation gy", N_bf, N_quad);
+  DeviceView2DLeft collocation_gz("Collocation gz", N_bf, N_quad);
+
+  ExecSpace space;
+  fill_collocation(space, basis, grid.quad_points, basis_collocation);
+  fill_grad_collocation(space, basis, grid.quad_points, collocation_gx,
+                        collocation_gy, collocation_gz);
+
+  auto gga_result =
+      compute_gga(basis_collocation, collocation_gx, collocation_gy,
+                  collocation_gz, grid.weights, mo_orbitals, mo_coeff, func);
+
+  // Clean up Libxc internal pointers
+  xc_func_end(&func);
+
+  auto gga_potential_h =
+      Kokkos::create_mirror_view_and_copy(HostSpace{}, gga_result.potential);
+  REQUIRE_THAT(gga_result.energy,
+               Catch::Matchers::WithinRel(ref_energy, 1e-10));
+  REQUIRE_THAT(gga_potential_h(0, 0),
+               Catch::Matchers::WithinRel(ref_potential, 1e-10));
+}
+
+TEST_CASE("compute_coulomb_tiled -- hydrogen 1s self-repulsion",
+          "[coulomb][tiled]") {
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+  STOBasisSet basis_aux = make_manual_basis({
+      {1, 0, 0, 0.5, 0., 0., 0.},
+      {1, 0, 0, 1.0, 0., 0., 0.},
+      {1, 0, 0, 2.0, 0., 0., 0.},
+      {1, 0, 0, 3.0, 0., 0., 0.},
+      {1, 0, 0, 4.0, 0., 0., 0.},
+  });
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  ExecSpace space;
+  int max_points_per_box = 32;
+  auto bb = create_bounding_boxes(grid, max_points_per_box);
+  NeighborList nl, nl_aux;
+  build_neighbor_list(basis, bb, max_points_per_box, grid.quad_points.extent(0),
+                      nl);
+  build_neighbor_list(basis_aux, bb, max_points_per_box,
+                      grid.quad_points.extent(0), nl_aux);
+  auto aux_overlap_sym =
+      coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
+  auto half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
+
+  DeviceView2DLeft J = compute_coulomb_tiled(
+      space, mo_orbitals, mo_coeff, basis, basis_aux, grid, nl, half_inverse_X);
+  auto J_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, J);
+  REQUIRE_THAT(J_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
+}
+
+TEST_CASE("compute_exact_exchange_tiled -- hydrogen 1s self-exchange",
+          "[exchange][tiled]") {
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
+               std::vector<unsigned>{1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 20);
+  STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
+  STOBasisSet basis_aux = make_manual_basis({
+      {1, 0, 0, 0.5, 0., 0., 0.},
+      {1, 0, 0, 1.0, 0., 0., 0.},
+      {1, 0, 0, 2.0, 0., 0., 0.},
+      {1, 0, 0, 3.0, 0., 0., 0.},
+      {1, 0, 0, 4.0, 0., 0., 0.},
+  });
+  DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 1.0;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  ExecSpace space;
+  int max_points_per_box = 32;
+  auto bb = create_bounding_boxes(grid, max_points_per_box);
+  NeighborList nl, nl_aux;
+  build_neighbor_list(basis, bb, max_points_per_box, grid.quad_points.extent(0),
+                      nl);
+  build_neighbor_list(basis_aux, bb, max_points_per_box,
+                      grid.quad_points.extent(0), nl_aux);
+  auto aux_overlap_sym =
+      coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
+  auto half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
+
+  DeviceView2DLeft K = compute_exact_exchange_tiled(
+      space, mo_orbitals, mo_coeff, basis, basis_aux, grid, nl, half_inverse_X);
+  auto K_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, K);
+  REQUIRE_THAT(K_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
+}
+
+TEST_CASE("tiled Coulomb/exchange match sparse (multi-tile, tile=1)",
+          "[coulomb][exchange][tiled]") {
+  // Two H atoms, two s-STOs each -> N_bf = 4, so central boxes have several
+  // neighbors; tile_size = 1 forces the multi-tile / off-diagonal-block path.
+  Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}, {0., 0., 1.4}},
+               std::vector<unsigned>{1u, 1u});
+  auto grid = make_flat_grid<bk_type, ll_type>(mol, 60, 14);
+
+  STOBasisSet basis = make_manual_basis({
+      {1, 0, 0, 1.0, 0., 0., 0.},
+      {1, 0, 0, 1.6, 0., 0., 0.},
+      {1, 0, 0, 1.0, 0., 0., 1.4},
+      {1, 0, 0, 1.6, 0., 0., 1.4},
+  });
+  STOBasisSet basis_aux = make_manual_basis({
+      {1, 0, 0, 0.7, 0., 0., 0.},
+      {1, 0, 0, 2.0, 0., 0., 0.},
+      {1, 0, 0, 0.7, 0., 0., 1.4},
+      {1, 0, 0, 2.0, 0., 0., 1.4},
+  });
+
+  const int N_bf = basis.nbf();
+  DeviceView2DLeft mo_orbitals("Mo orbitals", N_bf, 1);
+  DeviceView1D mo_coeff("MO coeff", 1);
+  auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
+  auto coeff_h = Kokkos::create_mirror_view(mo_coeff);
+  orbitals_h(0, 0) = 0.6;
+  orbitals_h(1, 0) = 0.3;
+  orbitals_h(2, 0) = 0.6;
+  orbitals_h(3, 0) = 0.3;
+  coeff_h(0) = 1.0;
+  Kokkos::deep_copy(mo_orbitals, orbitals_h);
+  Kokkos::deep_copy(mo_coeff, coeff_h);
+
+  ExecSpace space;
+  int max_points_per_box = 32;
+  auto bb = create_bounding_boxes(grid, max_points_per_box);
+  NeighborList nl, nl_aux;
+  build_neighbor_list(basis, bb, max_points_per_box, grid.quad_points.extent(0),
+                      nl);
+  build_neighbor_list(basis_aux, bb, max_points_per_box,
+                      grid.quad_points.extent(0), nl_aux);
+  auto aux_overlap_sym =
+      coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
+  auto half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-6);
+
+  const int N_aux = basis_aux.nbf();
+
+  // --- Coulomb overlap metric (A|B): tiled(tile=1) vs sparse, element-wise ---
+  auto aux_overlap_tiled =
+      coulomb_overlap_integral_tiled(space, basis_aux, grid, nl_aux, 1);
+  auto So_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, aux_overlap_sym);
+  auto St_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, aux_overlap_tiled);
+  for (int a = 0; a < N_aux; ++a)
+    for (int b = 0; b < N_aux; ++b)
+      REQUIRE_THAT(St_h(a, b), Catch::Matchers::WithinAbs(So_h(a, b), 1e-9));
+
+  // --- Coulomb: tiled(tile=1) vs sparse, element-wise ---
+  auto J_sparse = compute_coulomb_sparse(space, mo_orbitals, mo_coeff, basis,
+                                         basis_aux, grid, nl, half_inverse_X);
+  auto J_tiled = compute_coulomb_tiled(space, mo_orbitals, mo_coeff, basis,
+                                       basis_aux, grid, nl, half_inverse_X, 1);
+  auto Js_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, J_sparse);
+  auto Jt_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, J_tiled);
+  for (int a = 0; a < N_bf; ++a)
+    for (int b = 0; b < N_bf; ++b)
+      REQUIRE_THAT(Jt_h(a, b), Catch::Matchers::WithinAbs(Js_h(a, b), 1e-9));
+
+  // --- Exchange: tiled(tile=1) vs sparse, element-wise ---
+  auto K_sparse = compute_exact_exchange_sparse(
+      space, mo_orbitals, mo_coeff, basis, basis_aux, grid, nl, half_inverse_X);
+  auto K_tiled = compute_exact_exchange_tiled(
+      space, mo_orbitals, mo_coeff, basis, basis_aux, grid, nl, half_inverse_X,
+      1);
+  auto Ks_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, K_sparse);
+  auto Kt_h = Kokkos::create_mirror_view_and_copy(HostSpace{}, K_tiled);
+  for (int a = 0; a < N_bf; ++a)
+    for (int b = 0; b < N_bf; ++b)
+      REQUIRE_THAT(Kt_h(a, b), Catch::Matchers::WithinAbs(Ks_h(a, b), 1e-9));
 }
 
 // ============================================================

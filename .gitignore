@@ -11,9 +11,42 @@ CTestTestfile.cmake
 _deps
 CMakeUserPresets.json
 
-build/
+build*/
 src/kokkos_config.hpp
 
+# Byte-compiled plotting/benchmark scripts
+__pycache__/
+*.py[cod]
+
+# W4-11 sweep artefacts (resumable run cache + emitted CSVs)
+w411_cache/
+benchmark_w411_*.csv
+
+spack.lock
+spack/cpu/.spack*/
+
+*-rep
+
+# OS / editor cruft
+.DS_Store
+.Rhistory
+
+# LaTeX build intermediates. Scoped to latex/ on purpose: a bare *.log would
+# also swallow the tracked basis-set generation logs under
+# input/zorabasis_cholesky/. The emitted PDFs stay tracked.
+latex/*.aux
+latex/*.bbl
+latex/*.bcf
+latex/*.blg
+latex/*.fdb_latexmk
+latex/*.fls
+latex/*.lof
+latex/*.log
+latex/*.lot
+latex/*.out
+latex/*.run.xml
+latex/*.synctex.gz
+latex/*.toc
 
 
 # CLion

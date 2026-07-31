@@ -1,0 +1,6 @@
+title:    Rhenium (QZ, all electron, 22S 17P 11D 6F)
+orbital:  22S 17P 11D 6F
+old FIT:  46S 22P 18D 15F 11G
+new FIT:  32S 32P 30D 24F 20G 15H 11I  (wrote Re.new)
+diagonal RI error (old): 2.604849e+03
+diagonal RI error (new): 1.603102e-04

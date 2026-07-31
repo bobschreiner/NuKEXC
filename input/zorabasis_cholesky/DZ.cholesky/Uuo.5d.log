@@ -1,0 +1,6 @@
+title:    Ununoctium (II, 5d frozen)
+orbital:  9S 8P 5D 4F
+old FIT:  28S 20P 16D 12F 9G
+new FIT:  22S 19P 19D 15F 14G 10H 8I  (wrote Uuo.5d.new)
+diagonal RI error (old): 1.911914e+01
+diagonal RI error (new): 5.666168e-05
