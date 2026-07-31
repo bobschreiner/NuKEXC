@@ -232,7 +232,7 @@ inline void create_histogram(std::vector<double> percentages, int num_bins,
       << "  ylabel={Count},\n"
       << "  xtick={" << ticks << "},\n" // <-- sparse, clean ticks
       << "  xticklabel={$\\pgfmathprintnumber"
-         "[fixed,precision=1]{\\tick}\\%%$},\n" // <-- math mode, no rotation
+         "[fixed,precision=1]{\\tick}\\%$},\n" // <-- math mode, no rotation
       << "  ymin=0,\n"
       << "  enlarge x limits=0.05,\n"
       << "  grid=major,\n"

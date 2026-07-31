@@ -62,7 +62,7 @@ XC_result compute_lda(const DeviceView2DLeft collocation_values,
 
   ExecSpace space;
 
-  // Make sure that the porovided xc functional is a LDA
+  // Make sure that the provided xc functional is a LDA
   if (func.info->family != XC_FAMILY_LDA) {
     throw std::runtime_error(
         "Provided funtional is not a part of the LDA family");
@@ -415,7 +415,7 @@ XC_result compute_gga(const DeviceView2DLeft collocation_values,
                       const DeviceView1D mo_coeff, const xc_func_type func) {
   ExecSpace space;
 
-  // Make sure that the porovided xc functional is a GGA
+  // Make sure that the provided xc functional is a GGA
   if (func.info->family != XC_FAMILY_GGA &&
       func.info->family != XC_FAMILY_HYB_GGA) {
     throw std::runtime_error(
@@ -535,7 +535,7 @@ compute_gga_lsda(const DeviceView2DLeft collocation_values,
                  const DeviceView1D occ_beta, const xc_func_type func) {
   ExecSpace space;
 
-  // Make sure that the porovided xc functional is a GGA
+  // Make sure that the provided xc functional is a GGA
   if (func.info->family != XC_FAMILY_GGA &&
       func.info->family != XC_FAMILY_HYB_GGA) {
     throw std::runtime_error(
@@ -718,7 +718,7 @@ compute_gga_lsda_sparse(const STOBasisSet basis, const FlatGrid grid,
                         const DeviceView1D occ_beta, const xc_func_type func) {
   ExecSpace space;
 
-  // Make sure that the porovided xc functional is a GGA
+  // Make sure that the provided xc functional is a GGA
   if (func.info->family != XC_FAMILY_GGA &&
       func.info->family != XC_FAMILY_HYB_GGA) {
     throw std::runtime_error(
@@ -961,12 +961,16 @@ compute_gga_lsda_sparse(const STOBasisSet basis, const FlatGrid grid,
   return XC_result_polarized{xc_energy, V_alpha, V_beta};
 }
 
-// TODO:: This function has not been tesed and probably contains bugs
+// EXPERIMENTAL -- meta-GGA quadrature. Not on any production path and not
+// reached by any test or driver; pairs with compute_density_and_sigma_and_tau()
+// in density.hpp. Kept as the starting point for whoever adds mGGA support
+// next.
+// TODO:: This function has not been tested and probably contains bugs
 XC_result compute_mgga(const STOBasisSet basis, const FlatGrid grid,
                        const DeviceView2DLeft mo_orbitals,
                        const DeviceView1D mo_coeff, const xc_func_type func) {
   ExecSpace space;
-  // Make sure that the porovided xc functional is a GGA
+  // Make sure that the provided xc functional is an MGGA
   if (func.info->family != XC_FAMILY_MGGA) {
     throw std::runtime_error(
         "Provided funtional is not a part of the MGGA family");

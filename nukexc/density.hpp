@@ -34,7 +34,6 @@
 #include <Kokkos_Core_fwd.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
 #include <Kokkos_Pair.hpp>
-#include <decl/Kokkos_Declare_OPENMP.hpp>
 
 namespace Nukexc {
 
@@ -97,7 +96,6 @@ DeviceView1D compute_density_sparse(const STOBasisSet basis,
   Kokkos::TeamPolicy<ExecSpace> policy_boxes(space, num_boxes, Kokkos::AUTO());
 
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
-  typedef ExecSpace::scratch_memory_space ScratchSpace;
   // Contract the basis in order to get the density
   Kokkos::parallel_for(
       "Contract Basis", policy_boxes,
@@ -261,7 +259,6 @@ void compute_density_and_sigma_sparse(
   Kokkos::TeamPolicy<ExecSpace> policy_boxes(space, num_boxes, Kokkos::AUTO());
 
   using member_type = Kokkos::TeamPolicy<ExecSpace>::member_type;
-  typedef ExecSpace::scratch_memory_space ScratchSpace;
   // Contract the basis in order to get the density and its gradient
   Kokkos::parallel_for(
       "Contract Basis", policy_boxes,
@@ -315,6 +312,10 @@ void compute_density_and_sigma_sparse(
       });
 };
 
+// EXPERIMENTAL -- meta-GGA groundwork. Not on any production path and not
+// exercised by any test; its only caller is compute_mgga() in xc_integrals.hpp,
+// which is equally experimental. Kept as the starting point for whoever adds
+// mGGA support next.
 // TODO: This function has not been tested and probably contains bugs
 void compute_density_and_sigma_and_tau(
     const DeviceView2DLeft collocation_values,

@@ -33,10 +33,8 @@
 #include <integratorxx/quadratures/radial.hpp>
 #include <integratorxx/quadratures/s2.hpp>
 
-#include "standards.hpp"
 #include <nukexc/coulomb.hpp>
 
-#include <map>
 #include <vector>
 
 #include <iostream>
@@ -69,7 +67,6 @@ TEST_CASE("Potential satisfies Poisson's equation", "[potential][poisson]") {
 
   const double zeta = 1.0;
 
-  int idx = 0;
   for (int n = 1; n < 4; ++n) {
     for (int l = 0; l < n; ++l) {
       for (int m = -l; m < l + 1; ++m) {
@@ -184,8 +181,6 @@ TEST_CASE("Potential satisfies Poisson's equation", "[potential][poisson]") {
                   << "  max_rel_err=" << max_rel_err);
         REQUIRE(max_abs_err < 1e-3);
         REQUIRE(max_rel_err < 5e-2);
-
-        idx += 1;
       }
     }
   }

@@ -44,40 +44,10 @@
 
 using namespace Nukexc;
 
-using bk_type = IntegratorXX::Becke<double, double>;
-using mk_type = IntegratorXX::MuraKnowles<double, double>;
-using mhl_type = IntegratorXX::MurrayHandyLaming<double, double>;
 using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
-
-using ah_type = IntegratorXX::AhrensBeylkin<double>;
-using de_type = IntegratorXX::Delley<double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
-using wo_type = IntegratorXX::Womersley<double>;
 
 TEST_CASE("H20", "[h20_weights]") {
-
-  using namespace IntegratorXX;
-
-  using radial_type = bk_type;
-  using angular_type = ll_type;
-  using angular_traits = quadrature_traits<angular_type>;
-
-  using spherical_type = SphericalQuadrature<radial_type, angular_type>;
-
-  size_t nrad = 100;
-  size_t nang = angular_traits::npts_by_algebraic_order(
-      angular_traits::next_algebraic_order(
-          26)); // Smallest possible angular grid
-
-  // Generate via runtime API
-  auto rad_spec = radial_from_type<radial_type>();
-  auto rad_traits = make_radial_traits(rad_spec, nrad, 1.0);
-  UnprunedSphericalGridSpecification unp(
-      rad_spec, *rad_traits, angular_from_type<angular_type>(), nang);
-
-  auto sph = SphericalGridFactory::generate_grid(unp);
-
-  const unsigned npts = sph->npts();
 
   // Generate water
   Molecule mol = make_water();
@@ -97,7 +67,6 @@ TEST_CASE("H20", "[h20_weights]") {
 
 TEST_CASE("Compute core Hamiltonian with screening",
           "[h2o][screening][coreH]") {
-  using namespace IntegratorXX;
   using radial_type = ta_type;
   using angular_type = ll_type;
 
@@ -109,7 +78,7 @@ TEST_CASE("Compute core Hamiltonian with screening",
   // Unscreened reference
   CoreHamiltonianResult Hcore_ref = compute_core_hamiltonian(basis, grid_ref);
 
-  // Create bounding boxes for screeing
+  // Create bounding boxes for screening
   const int total_points = grid.quad_points.extent(0);
   const int max_points_per_box = 512;
 
@@ -121,7 +90,7 @@ TEST_CASE("Compute core Hamiltonian with screening",
   build_neighbor_list(basis, bounding_boxes, max_points_per_box, total_points,
                       nl);
 
-  // Compute screened Hamilonian
+  // Compute screened Hamiltonian
   CoreHamiltonianResult Hcore_scr =
       compute_core_hamiltonian_screened_scratch(basis, grid, nl);
 
@@ -148,7 +117,6 @@ TEST_CASE("Compute core Hamiltonian with screening",
 
 TEST_CASE("Compute core Hamiltonian with screening (basis on the fly)",
           "[h2o][screening][on the fly basis][coreH]") {
-  using namespace IntegratorXX;
   using radial_type = ta_type;
   using angular_type = ll_type;
 
@@ -160,7 +128,7 @@ TEST_CASE("Compute core Hamiltonian with screening (basis on the fly)",
   // Unscreened reference
   CoreHamiltonianResult Hcore_ref = compute_core_hamiltonian(basis, grid_ref);
 
-  // Create bounding boxes for screeing
+  // Create bounding boxes for screening
   const int total_points = grid.quad_points.extent(0);
   const int max_points_per_box = 512;
 
@@ -172,7 +140,7 @@ TEST_CASE("Compute core Hamiltonian with screening (basis on the fly)",
   build_neighbor_list(basis, bounding_boxes, max_points_per_box, total_points,
                       nl);
 
-  // Compute screened Hamilonian
+  // Compute screened Hamiltonian
   CoreHamiltonianResult Hcore_scr =
       compute_core_hamiltonian_screened(basis, grid, nl);
 
@@ -199,7 +167,6 @@ TEST_CASE("Compute core Hamiltonian with screening (basis on the fly)",
 
 TEST_CASE("Compute core Hamiltonian with screening (basis tiled)",
           "[h2o][screening][tiled][coreH]") {
-  using namespace IntegratorXX;
   using radial_type = ta_type;
   using angular_type = ll_type;
 
@@ -211,7 +178,7 @@ TEST_CASE("Compute core Hamiltonian with screening (basis tiled)",
   // Unscreened reference
   CoreHamiltonianResult Hcore_ref = compute_core_hamiltonian(basis, grid_ref);
 
-  // Create bounding boxes for screeing
+  // Create bounding boxes for screening
   const int total_points = grid.quad_points.extent(0);
   const int max_points_per_box = 8;
 
@@ -223,7 +190,7 @@ TEST_CASE("Compute core Hamiltonian with screening (basis tiled)",
   build_neighbor_list(basis, bounding_boxes, max_points_per_box, total_points,
                       nl);
 
-  // Compute screened Hamilonian
+  // Compute screened Hamiltonian
   CoreHamiltonianResult Hcore_scr =
       compute_core_hamiltonian_screened_tiled(basis, grid, nl);
 
@@ -262,7 +229,6 @@ TEST_CASE("Compute core Hamiltonian with screening (basis tiled)",
 
 TEST_CASE("Compute core Hamiltonian with screening (basis sparse)",
           "[h2o][screening][sparse][coreH]") {
-  using namespace IntegratorXX;
   using radial_type = ta_type;
   using angular_type = ll_type;
 
@@ -274,7 +240,7 @@ TEST_CASE("Compute core Hamiltonian with screening (basis sparse)",
   // Unscreened reference
   CoreHamiltonianResult Hcore_ref = compute_core_hamiltonian(basis, grid_ref);
 
-  // Create bounding boxes for screeing
+  // Create bounding boxes for screening
   const int total_points = grid.quad_points.extent(0);
   const int max_points_per_box = 8;
 
@@ -286,7 +252,7 @@ TEST_CASE("Compute core Hamiltonian with screening (basis sparse)",
   build_neighbor_list(basis, bounding_boxes, max_points_per_box, total_points,
                       nl);
 
-  // Compute screened Hamilonian
+  // Compute screened Hamiltonian
   CoreHamiltonianResult Hcore_scr =
       compute_core_hamiltonian_screened_sparse(basis, grid, nl);
 

@@ -26,6 +26,8 @@
 \usepackage{algpseudocode}
 
 \usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
 
 \usepackage{booktabs}
 \usepackage{array}
@@ -2504,8 +2506,7 @@ where do our integration routines spend their time.
 
 For both questions we use the W4-11 test set of Karton, Daon and
 Martin~\cite{Karton11w411}, which collects $140$ total atomization
-energies of small molecules, consisting of first and second row
-elements. The reference values
+energies of small second row molecules. The reference values
 are zero-point exclusive, non-relativistic and defined at clamped
 nuclei. This is exactly the quantity that a difference of converged SCF
 total energies gives, so no thermochemical or relativistic corrections
@@ -2516,16 +2517,17 @@ which amounts to $608$ SCF calculations in total. All calculations use
 the Treutler-Ahlrichs (M4) radial grid with $100$ radial points,
 a Lebedev angular grid of order $L=35$ with the robust pruning scheme of
 Section~\ref{subsec:grid_construction}, and the dense algorithm. The
-SCF is converged to a DIIS error of $10^{-7}$, which we relax to
-$10^{-6}$ for open shell species because
-their partially filled degenerate shells leave a small residual gradient
-that DIIS cannot remove even when the energy is long converged. All
-timings were measured on a single GH200 GPU.
+SCF is converged to a DIIS error of $10^{-6}$. All
+timings were measured on a single GH200 GPGPU.
 
-A small number of open shell species does not
-converge. We exclude every reaction that contains such a species rather
+We had quite some trouble converging some of the open shell species.
+Changing our initial guess from the core-Hamiltonian one to
+the superposition of atomic potentials (SAP) \cite{} helped but still
+left us with a non-negligible amount of unconverged energies.
+Therefore we exclude every
+reaction that contains such a species rather
 than report an unconverged energy, which leaves $139$,
-$131$, $118$ and $121$ of the $140$ reactions for DZ, TZP, TZ2P and
+$117$, $99$ and $103$ of the $140$ reactions for DZ, TZP, TZ2P and
 QZ4P respectively; Table~\ref{tab:w411_species} lists the
 convergence status of every species in the set.
 
@@ -2545,18 +2547,18 @@ atomization energy error for each basis set, and
 Table~\ref{tab:w411_summary} collects the corresponding summary
 statistics. The distributions narrow and shift towards zero
 monotonically with growing basis size. The mean absolute deviation
-improves from $52.9$~kcal/mol at DZ to $8.9$~kcal/mol at TZP,
-$6.2$~kcal/mol at TZ2P and
-$5.1$~kcal/mol at QZ4P. The DZ basis carries no polarization
+improves from $53.1$~kcal/mol at DZ to $7.7$~kcal/mol at TZP,
+$4.3$~kcal/mol at TZ2P and
+$3.9$~kcal/mol at QZ4P. The DZ basis carries no polarization
 functions at all
 and underbinds so severely that it is of no quantitative use. Adding a
 single polarization shell at TZP is by far the largest single
 improvement, and the remaining progression to TZ2P and QZ4P is
 comparatively modest. The QZ4P distribution settles at a mean signed
-deviation of $-4.0$~kcal/mol rather than at zero. This residual is the
+deviation of $-2.7$~kcal/mol rather than at zero. This residual is the
 expected behavior of B3LYP itself and not a deficiency of our
 integration, since the functional is known to underbind atomization
-energies. We take the agreement of this progression with the published
+energies \cite{}. We take the agreement of this progression with the published
 behavior of B3LYP as evidence that the full pipeline of grid
 construction, density fitting and exchange-correlation quadrature works
 correctly on realistic chemistry.
@@ -2568,11 +2570,11 @@ correctly on realistic chemistry.
     atomization energies, one violin per Slater-type basis set, with the
     number of converged reactions given below each label. Method is
     unrestricted B3LYP (\texttt{Libxc}~\cite{Lehtola2018libxc}
-      \texttt{hyb\_gga\_xc\_b3lyp3}, the VWN3
+      \texttt{hyb\_gga\_xc\_b3lyp3} \cite{}, the VWN3
     parametrization) with the dense algorithm. The grid is TA-M4 radial
     with $n_\mathrm{rad}=100$ and Lebedev order $L=35$ with robust
     pruning and uniform radial sizing. The linear dependence threshold
-    of $10^{-4}$ is applied uniformly to all four basis sets. Reference
+    of $10^{-6}$ is applied uniformly to all four basis sets. Reference
     values are the zero-point exclusive, non-relativistic,
     clamped-nuclei atomization energies of Ref.\cite{Karton11w411}.
     Individual reactions are overlaid as jittered points and the
@@ -2595,7 +2597,7 @@ correctly on realistic chemistry.
     the individual converged species; the two therefore run over
     different populations. Timings from runs that did not converge are
     excluded throughout, since a stalled SCF burns an unbounded number
-    of Fock builds and would inflate the mean by up to $56\%$. Systems,
+    of Fock builds and would inflate the mean. Systems,
   method and grid as in Figure~\ref{fig:w411_violin}.}
   \label{tab:w411_summary}
   \input{Data/tables/w411_summary}
@@ -2767,6 +2769,29 @@ computational resources used for the experiments in this work.
 Lastly, I want to thank my friends and partners for their support
 outside of the working hours I spent on this thesis; without them I
 would not have been able to finish this work.
+
+\section*{AI transparency}\label{sec:AI tranparency}
+
+\begin{table}[H]
+  \centering
+  {\small
+    \begin{tabular}{@{}l l l l@{}}
+      \toprule
+      Task & Model & Scope & Remarks   \\
+      \midrule
+      Grammar and spelling  &  Claude &  Opus 5 & No Remarks \\
+      Assiting in writing & Claude & Opus 5 & Remarks \\
+  \end{tabular}}
+  \caption{Memory allocations in
+    \texttt{compute\_exact\_exchange\_tiled}. All device views use
+    \texttt{LayoutLeft}; $P_\text{max}=\texttt{max\_points\_per\_box}$
+    and $\texttt{tile}=\texttt{tile\_size}$ (default 32). The three
+    global device matrices are reused across the loop over occupied
+    orbitals; the per-team scratch footprint
+    $(2+\texttt{tile})\,P_\text{max}$ doubles plus $P_\text{max}$ points
+  is independent of the neighbor count.}
+  \label{tab:ai_transparency}
+\end{table}
 
 \appendix
 

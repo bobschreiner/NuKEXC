@@ -49,7 +49,6 @@
 using namespace Nukexc;
 
 using bk_type = IntegratorXX::Becke<double, double>;
-using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 
 // ============================================================
@@ -234,7 +233,6 @@ TEST_CASE("single-center 1s + 2p -- orthogonality, degeneracy, exact values",
   DeviceView2DLeft mo_coeffs("mo_coeffs", n_basis, n_basis);
   DeviceView1D mo_energies("mo_energies", n_basis);
 
-  auto H_h = Kokkos::create_mirror_view(H);
   auto mo_coeffs_h = Kokkos::create_mirror_view(mo_coeffs);
   auto mo_energies_h = Kokkos::create_mirror_view(mo_energies);
 
@@ -410,7 +408,6 @@ TEST_CASE("H2+ Energies", "[h2_plus][energies]") {
   // 1. Prepare Batched Views on Device
   DeviceView2DLeft H("Hamiltonian", n_basis, n_basis);
 
-  auto H_h = Kokkos::create_mirror_view(H);
   Kokkos::parallel_for(
       Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {n_basis, n_basis}),
       KOKKOS_LAMBDA(const int &i, const int &j) {
@@ -580,7 +577,7 @@ TEST_CASE("compute_coulomb -- hydrogen 1s self-repulsion", "[coulomb]") {
   const int N_quad = grid.quad_points.extent(0);
 
   DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
-  DeviceView2DLeft basis_aux_collocation("Auxillary Basis collocation",
+  DeviceView2DLeft basis_aux_collocation("Auxiliary Basis collocation",
                                          N_bf_aux, N_quad);
   DeviceView2DLeft potential_collocation_scaled("Potential collocation",
                                                 N_bf_aux, N_quad);
@@ -617,7 +614,7 @@ TEST_CASE("compute_coulomb -- hydrogen 1s self-repulsion", "[coulomb]") {
   REQUIRE_THAT(J_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
 }
 
-TEST_CASE("compute_coulomb sprse -- hydrogen 1s self-repulsion"
+TEST_CASE("compute_coulomb sparse -- hydrogen 1s self-repulsion",
           "[coulomb][sparse]") {
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
@@ -647,12 +644,6 @@ TEST_CASE("compute_coulomb sprse -- hydrogen 1s self-repulsion"
   Kokkos::deep_copy(mo_orbitals, orbitals_h);
   Kokkos::deep_copy(mo_coeff, coeff_h);
 
-  const int N_bf = basis.nbf();
-  const int N_bf_aux = basis_aux.nbf();
-  const int N_quad = grid.quad_points.extent(0);
-
-  DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
-
   ExecSpace space;
   int max_points_per_box = 32;
   auto bb = create_bounding_boxes(grid, max_points_per_box);
@@ -664,8 +655,7 @@ TEST_CASE("compute_coulomb sprse -- hydrogen 1s self-repulsion"
                       grid.quad_points.extent(0), nl_aux);
 
   // Compute (A|B)
-
-  aux_overlap_sym =
+  DeviceView2DLeft aux_overlap_sym =
       coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
   DeviceView2DLeft half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
 
@@ -713,7 +703,7 @@ TEST_CASE("compute_exchange -- hydrogen 1s self-exchange", "[exchange]") {
   const int N_quad = grid.quad_points.extent(0);
 
   DeviceView2DLeft basis_collocation("Basis collocation", N_bf, N_quad);
-  DeviceView2DLeft basis_aux_collocation("Auxillary Basis collocation",
+  DeviceView2DLeft basis_aux_collocation("Auxiliary Basis collocation",
                                          N_bf_aux, N_quad);
   DeviceView2DLeft potential_collocation_scaled("Potential collocation",
                                                 N_bf_aux, N_quad);
@@ -747,11 +737,11 @@ TEST_CASE("compute_exchange -- hydrogen 1s self-exchange", "[exchange]") {
   auto K_h = Kokkos::create_mirror_view(K);
   Kokkos::deep_copy(K_h, K);
 
-  // Analytical self-repulsion of hydrogen 1s: 5/8 hartree
+  // Analytical self-exchange of hydrogen 1s: 5/8 hartree
   REQUIRE_THAT(K_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
 }
 
-TEST_CASE("compute_exchange sprse -- hydrogen 1s self-exchange"
+TEST_CASE("compute_exchange sparse -- hydrogen 1s self-exchange",
           "[exchange][sparse]") {
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
@@ -781,18 +771,6 @@ TEST_CASE("compute_exchange sprse -- hydrogen 1s self-exchange"
   Kokkos::deep_copy(mo_orbitals, orbitals_h);
   Kokkos::deep_copy(mo_coeff, coeff_h);
 
-  const int N_bf = basis.nbf();
-  const int N_bf_aux = basis_aux.nbf();
-  const int N_quad = grid.quad_points.extent(0);
-
-  DeviceView2DLeft basis_aux_collocation("Auxillary Basis collocation",
-                                         N_bf_aux, N_quad);
-
-  DeviceView2DLeft potential_collocation_scaled("Potential collocation",
-                                                N_bf_aux, N_quad);
-  DeviceView2DLeft aux_overlap("Aux overlap", N_bf_aux, N_bf_aux);
-  DeviceView2DLeft aux_overlap_sym("Aux overlap sym", N_bf_aux, N_bf_aux);
-
   ExecSpace space;
   int max_points_per_box = 32;
   auto bb = create_bounding_boxes(grid, max_points_per_box);
@@ -804,8 +782,7 @@ TEST_CASE("compute_exchange sprse -- hydrogen 1s self-exchange"
                       grid.quad_points.extent(0), nl_aux);
 
   // Compute (A|B)
-
-  aux_overlap_sym =
+  DeviceView2DLeft aux_overlap_sym =
       coulomb_overlap_integral_sparse(space, basis_aux, grid, nl_aux);
   DeviceView2DLeft half_inverse_X = compute_half_inverse(aux_overlap_sym, 1e-4);
 
@@ -815,7 +792,7 @@ TEST_CASE("compute_exchange sprse -- hydrogen 1s self-exchange"
   auto K_h = Kokkos::create_mirror_view(K);
   Kokkos::deep_copy(K_h, K);
 
-  // Analytical self-repulsion of hydrogen 1s: 5/8 hartree
+  // Analytical self-exchange of hydrogen 1s: 5/8 hartree
   REQUIRE_THAT(K_h(0, 0), Catch::Matchers::WithinRel(5.0 / 8.0, 1e-10));
 }
 
@@ -864,7 +841,7 @@ TEST_CASE("compute_lda -- hydrogen 1s lda", "[lda]") {
 }
 
 TEST_CASE("compute_gga -- hydrogen 1s gga", "[gga]") {
-  // Analytical Slater Exchange LDA energy for a 1s STO (zeta = 1.0)
+  // Reference PBE exchange energy and potential for a 1s STO (zeta = 1.0)
   const double ref_energy = -0.253995708307881;
   const double ref_potential = -0.320733669386709;
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},

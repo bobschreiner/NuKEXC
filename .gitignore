@@ -27,6 +27,27 @@ spack/cpu/.spack*/
 
 *-rep
 
+# OS / editor cruft
+.DS_Store
+.Rhistory
+
+# LaTeX build intermediates. Scoped to latex/ on purpose: a bare *.log would
+# also swallow the tracked basis-set generation logs under
+# input/zorabasis_cholesky/. The emitted PDFs stay tracked.
+latex/*.aux
+latex/*.bbl
+latex/*.bcf
+latex/*.blg
+latex/*.fdb_latexmk
+latex/*.fls
+latex/*.lof
+latex/*.log
+latex/*.lot
+latex/*.out
+latex/*.run.xml
+latex/*.synctex.gz
+latex/*.toc
+
 
 # CLion
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

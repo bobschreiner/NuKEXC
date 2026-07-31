@@ -252,7 +252,6 @@ DeviceView2DLeft compute_coulomb_sparse(
   KokkosBlas::gemv(space, "N", 1.0, half_inverse_X, scaling_factor, 0.0,
                    expansion_coeff);
 
-  policy_boxes.set_scratch_size(0, Kokkos::PerTeam(scratch_size_team));
   Kokkos::parallel_for(
       "Sparse Kernel: J_{mu,nu} = sum_{alpha} (mu nu|alpha)", policy_boxes,
       KOKKOS_LAMBDA(const member_type &team_member) {

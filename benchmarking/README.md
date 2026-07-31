@@ -9,21 +9,28 @@ so **run them from `build/benchmarking/`**.
 
 | Binary | What it measures |
 |---|---|
-| `benchmark_scf` | End-to-end SCF wall time, with a per-section timing breakdown |
 | `benchmark_coreH` | Core-Hamiltonian assembly (T + V_ne + S) |
 | `benchmark_cutoff` | Effect of the collocation screening cutoff |
 | `benchmark_partition` | Becke partitioning weights |
 
 ```bash
 cd build/benchmarking
-./benchmark_scf
+./benchmark_coreH
+```
+
+End-to-end SCF wall time with a per-section breakdown comes from the
+`standalone` driver instead — it lives in `tests/` (see the layout note below):
+
+```bash
+cd build/tests
+./standalone
 ```
 
 Profiling with the Kokkos simple kernel timer:
 
 ```bash
 export KOKKOS_TOOLS_LIBS=/path/to/kokkos-tools/build/profiling/simple-kernel-timer/libkp_kernel_timer.so
-./benchmark_scf
+./standalone
 kp_reader *.dat
 ```
 

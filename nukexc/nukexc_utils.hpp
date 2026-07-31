@@ -33,17 +33,6 @@
 namespace Nukexc {
 
 KOKKOS_INLINE_FUNCTION
-double rad_dist(const Kokkos::View<double *, Kokkos::LayoutStride> &a,
-                const Kokkos::View<double *, Kokkos::LayoutStride> &b) {
-  double dist = 0;
-  for (int i = 0; i < a.extent(0); ++i) {
-    dist += Kokkos::pow(a(i) - b(i), 2);
-  }
-  dist = std::sqrt(dist);
-  return dist;
-}
-
-KOKKOS_INLINE_FUNCTION
 double dist(const Point a, const Point b) {
   double dist = 0;
   dist += Kokkos::pow(a[0] - b[0], 2);
@@ -192,31 +181,6 @@ double lower_gamma(const int n, const double x) {
   }
 }
 
-/*
-KOKKOS_INLINE_FUNCTION
-double lower_gamma(const int n, const double x) {
-  double result = 0.0;
-  for (int k = 0; k < n; ++k) {
-    result += int_pow(x, k) / factorial(k);
-  }
-  result *= Kokkos::exp(-x);
-  result = 1.0 - result;
-  result *= factorial(n - 1);
-  return result;
-}
-
-KOKKOS_INLINE_FUNCTION
-double upper_gamma(const int n, const double x) {
-  double result = 0.0;
-  for (int k = 0; k < n; ++k) {
-    result += int_pow(x, k) / factorial(k);
-  }
-  result *= Kokkos::exp(-x);
-  result *= factorial(n - 1);
-  return result;
-}
-*/
-
 DeviceView2DLeft compute_half_inverse(const DeviceView2DLeft &overlap_matrix,
                                       const double lin_dep_threshold = 1e-5) {
 
@@ -225,7 +189,7 @@ DeviceView2DLeft compute_half_inverse(const DeviceView2DLeft &overlap_matrix,
   DeviceView2DLeft VTs("VTs", N, N);
   DeviceView1D sigma("sigma", N);
   DeviceView2DLeft A("matrix A", N, N);
-  DeviceView1D D_N("Digaonal Preconditioner matrix", N);
+  DeviceView1D D_N("Diagonal Preconditioner matrix", N);
 
   Kokkos::parallel_for(
       "Compute preconditioner matrix", N, KOKKOS_LAMBDA(const int i) {
@@ -246,10 +210,6 @@ DeviceView2DLeft compute_half_inverse(const DeviceView2DLeft &overlap_matrix,
   Kokkos::parallel_reduce(
       "SwitchSigns", N,
       KOKKOS_LAMBDA(const int j, int &local_count) {
-        double dot = 0.0;
-        for (int k = 0; k < N; ++k) {
-          dot += Us(k, j) * VTs(j, k);
-        }
         if (-sigma(j) > lin_dep_threshold) {
           sigma(j) = -sigma(j);
           Kokkos::printf("Negative sigma %d : %.3e \n", j, sigma(j));
@@ -262,7 +222,7 @@ DeviceView2DLeft compute_half_inverse(const DeviceView2DLeft &overlap_matrix,
   // For now just throw a runtime error for safety
   if (negative_sigma > 0)
     throw std::runtime_error(
-        "Negative singluar values in core Hamiltonian detected");
+        "Negative singular values in core Hamiltonian detected");
 
   auto sigma_h =
       Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, sigma);

@@ -32,10 +32,14 @@
 
 using namespace Nukexc;
 
-TEST_CASE("NeighborList: benezene regression",
-          "[octree][benezene][regression]") {
-  // Checks that the neighbor list on a real molecule is strictly smaller
-  // than the dense N*num_boxes product (i.e. screening is actually happening).
+TEST_CASE("NeighborList: benzene regression",
+          "[octree][benzene][regression]") {
+  // Screening must actually discard basis functions: the neighbor list has to
+  // come out strictly smaller than the dense num_boxes * N product. Benzene at
+  // a 1e-6 cutoff currently drops ~18% of the pairs, which is too close to the
+  // noise to pin to a fixed percentage -- so the assertion is just "screening
+  // removed something" and the measured figure is printed for tracking. The
+  // taxol case below carries the hard sparsity floor.
   using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
   using ll_type = IntegratorXX::LebedevLaikov<double>;
 
@@ -45,7 +49,6 @@ TEST_CASE("NeighborList: benezene regression",
 
   const int points_per_box = 8;
 
-  //  auto bb = create_bounding_boxes(grid, points_per_box);
   auto bb = create_bounding_boxes(grid, points_per_box);
 
   NeighborList nl;
@@ -69,14 +72,21 @@ TEST_CASE("NeighborList: benezene regression",
             << "  sparsity : " << std::fixed << std::setprecision(1)
             << sparsity * 100 << "%\n";
 
+  // Screening removed work -- the property this regression test exists for.
+  CHECK(screened < dense);
+
+  // nl.offsets is a CSR prefix array, so it must be non-decreasing.
   for (int b = 0; b < num_boxes; ++b)
     CHECK(offsets_h(b + 1) >= offsets_h(b));
 }
 
 TEST_CASE("NeighborList: taxol regression",
           "[octree][neighborlist][regression]") {
-  // Checks that the neighbor list on a real molecule is strictly smaller
-  // than the dense N*num_boxes product (i.e. screening is actually happening).
+  // Same screening regression as the benzene case above, on a molecule large
+  // enough for a hard sparsity floor to be meaningful.
+  //
+  // NOTE: GPU-only. On a CPU build the whole body is preprocessed away and this
+  // test case passes without exercising anything.
 #if (defined(KOKKOS_ENABLE_HIP) || defined(KOKKOS_ENABLE_CUDA))
   using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
   using ll_type = IntegratorXX::LebedevLaikov<double>;
@@ -88,7 +98,6 @@ TEST_CASE("NeighborList: taxol regression",
   const int points_per_box = 8;
 
   auto bb = create_bounding_boxes(grid, points_per_box);
-  //  auto bb = create_bounding_boxes(grid, points_per_box);
   NeighborList nl;
   build_neighbor_list(basis, bb, points_per_box, grid.quad_points.extent(0),
                       nl, true, "taxol_histogram");
@@ -110,9 +119,10 @@ TEST_CASE("NeighborList: taxol regression",
             << "  sparsity : " << std::fixed << std::setprecision(1)
             << sparsity * 100 << "%\n";
 
-  // For a large molecule with 1e-8 cutoff we expect >50% sparsity.
+  // Taxol on TZP at a 1e-6 cutoff: expect at least 30% of the dense pairs gone.
   CHECK(sparsity > 0.3);
 
+  // nl.offsets is a CSR prefix array, so it must be non-decreasing.
   for (int b = 0; b < num_boxes; ++b)
     CHECK(offsets_h(b + 1) >= offsets_h(b));
 #endif

@@ -24,7 +24,6 @@
 #include <string_view>
 
 #include <catch2/catch_all.hpp>
-#include <integratorxx/composite_quadratures/pruned_spherical_quadrature.hpp>
 
 #include <integratorxx/composite_quadratures/pruned_spherical_quadrature.hpp>
 #include <integratorxx/composite_quadratures/spherical_quadrature.hpp>
@@ -39,8 +38,6 @@
 using namespace Nukexc;
 
 using bk_type = IntegratorXX::Becke<double, double>;
-using mk_type = IntegratorXX::MuraKnowles<double, double>;
-using mhl_type = IntegratorXX::MurrayHandyLaming<double, double>;
 using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
 
 using ah_type = IntegratorXX::AhrensBeylkin<double>;
@@ -48,19 +45,9 @@ using de_type = IntegratorXX::Delley<double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 using wo_type = IntegratorXX::Womersley<double>;
 
-using sph_test_types = std::tuple<
-    std::tuple<bk_type, ah_type>, std::tuple<bk_type, de_type>,
-    //               std::tuple<bk_type, ll_type>, std::tuple<bk_type, wo_type>,
-
-    //               std::tuple<mk_type, ah_type>, std::tuple<mk_type, de_type>,
-    //               std::tuple<mk_type, ll_type>, std::tuple<mk_type, wo_type>,
-
-    //               std::tuple<mhl_type, ah_type>, std::tuple<mhl_type,
-    //               de_type>, std::tuple<mhl_type, ll_type>,
-    //               std::tuple<mhl_type, wo_type>,
-
-    //               std::tuple<ta_type, ah_type>, std::tuple<ta_type, de_type>,
-    std::tuple<ta_type, ll_type>, std::tuple<ta_type, wo_type>>;
+using sph_test_types =
+    std::tuple<std::tuple<bk_type, ah_type>, std::tuple<bk_type, de_type>,
+               std::tuple<ta_type, ll_type>, std::tuple<ta_type, wo_type>>;
 
 TEMPLATE_LIST_TEST_CASE("Unpruned", "[sph-gen]", sph_test_types) {
 

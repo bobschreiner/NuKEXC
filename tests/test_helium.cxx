@@ -46,7 +46,6 @@
 
 using namespace Nukexc;
 using bk_type = IntegratorXX::Becke<double, double>;
-using ta_type = IntegratorXX::TreutlerAhlrichs<double, double>;
 using ll_type = IntegratorXX::LebedevLaikov<double>;
 
 TEST_CASE("compute_gga -- Helium 1s gga", "[gga]") {

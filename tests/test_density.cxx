@@ -88,17 +88,18 @@ void write_density_vtk(const std::string &filename, const FlatGrid &grid,
     out << weights_h(g) << "\n";
 }
 
-TEST_CASE("hydrogen 1s -- normalization, eigenvalues, virial",
-          "[hydrogen_1s]") {
+// compute_density on one occupied 1s orbital: the quadrature of rho must
+// recover the electron count.
+TEST_CASE("hydrogen 1s density -- integrates to one electron",
+          "[density][hydrogen_1s]") {
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},
                std::vector<unsigned>{1u});
   auto grid = make_flat_grid<bk_type, ll_type>(mol, 100, 40);
   STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}}); // 1s
-                                                                       //
+
   // For a single occupied orbital with coefficient 1.0,
   // the density matrix is a 1x1 identity (one basis function, fully occupied)
-  const int N_bf = basis.nbf();
   DeviceView2DLeft mo_orbitals("Mo orbitals", 1, 1);
   DeviceView1D mo_coeff("MO coeff", 1);
   auto orbitals_h = Kokkos::create_mirror_view(mo_orbitals);
@@ -107,8 +108,6 @@ TEST_CASE("hydrogen 1s -- normalization, eigenvalues, virial",
   coeff_h(0) = 1.0;
   Kokkos::deep_copy(mo_orbitals, orbitals_h);
   Kokkos::deep_copy(mo_coeff, coeff_h);
-
-  CoreHamiltonianResult result = compute_core_hamiltonian(basis, grid);
 
   DeviceView1D density = compute_density(basis, grid, mo_orbitals, mo_coeff);
 
@@ -126,8 +125,11 @@ TEST_CASE("hydrogen 1s -- normalization, eigenvalues, virial",
   REQUIRE(integrated_density == Catch::Approx(1.0).epsilon(1e-5));
 }
 
-TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
-          "[h2_plus]") {
+// Two-centre case: the normalized bonding MO built by hand from the overlap
+// must give a density that integrates to the single H2+ electron, i.e. the
+// quadrature reproduces Tr(DS) = 1 across both centres.
+TEST_CASE("H2+ bonding MO density -- integrates to one electron",
+          "[density][h2_plus]") {
   const double R = 1.0; // bond length in bohr
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}, {R, 0., 0.}},
@@ -143,8 +145,6 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
 
   CoreHamiltonianResult result = compute_core_hamiltonian(basis, grid);
   DeviceView2DLeft S = result.overlap;
-  DeviceView2DLeft T = result.kinetic;
-  DeviceView2DLeft V = result.nuclear;
 
   auto S_h = Kokkos::create_mirror_view(S);
   Kokkos::deep_copy(S_h, S);
@@ -180,8 +180,10 @@ TEST_CASE("H2+ overlap matrix -- symmetry and analytical off-diagonal",
   REQUIRE_THAT(integrated_density, Catch::Matchers::WithinRel(1.0, 1e-5));
 }
 
-TEST_CASE("H2+ Energies Fused Hamiltonian",
-          "[h2_plus][energies][fused hamiltonian]") {
+// Same normalization check, but on an MO that came out of the diagonalizer
+// against a real QZ4P basis rather than being constructed by hand.
+TEST_CASE("H2+ QZ4P lowest MO density -- integrates to one electron",
+          "[density][h2_plus][qz4p]") {
 
   const double R = 1.0; // bond length in bohr
 
@@ -198,7 +200,7 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
   CoreHamiltonianResult hamiltonian;
   hamiltonian = compute_core_hamiltonian(basis, grid);
 
-  // 1. Prepare Batched Views on Device
+  // Solve the core-Hamiltonian eigenproblem to get the occupied MO.
   Nukexc::Diagonalizer diagonalizer(n_basis);
   auto X = diagonalizer.compute_transformation(hamiltonian.overlap);
   const int K = X.extent(1);
@@ -207,12 +209,8 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
 
   diagonalizer.solve(hamiltonian.hamiltonian, mo_coeffs, mo_energies);
 
-  // =========================================================================
-  // Construct the Density Matrix for H2+ (1 electron in the lowest MO)
-  // Formula: D(i, j) = n_occ * C(i, 0) * C(j, 0)  where n_occ = 1.0
-  // =========================================================================
-  // =========================================================================
-
+  // Density matrix for H2+ (1 electron in the lowest MO):
+  //   D(i, j) = n_occ * C(i, 0) * C(j, 0),  n_occ = 1.0
   auto mo_occ_orbitals =
       Kokkos::subview(mo_coeffs, Kokkos::ALL(), std::make_pair(0, 1));
 
@@ -235,7 +233,8 @@ TEST_CASE("H2+ Energies Fused Hamiltonian",
   REQUIRE_THAT(integrated_density, Catch::Matchers::WithinRel(1.0, 1e-5));
 }
 
-TEST_CASE("compute_simga -- hydrogen 1s sigma", "[density][sigma]") {
+TEST_CASE("compute_density_and_sigma -- hydrogen 1s rho and sigma",
+          "[density][sigma]") {
 
   ExecSpace space;
   const double ref_integrated_sigma = 1.0 / (2.0 * M_PI);
@@ -245,7 +244,7 @@ TEST_CASE("compute_simga -- hydrogen 1s sigma", "[density][sigma]") {
   auto grid = make_flat_grid<bk_type, ll_type>(mol, 200, 20);
 
   const int N_quad = grid.quad_points.extent(0);
-  // Primary basis: single 1s STOf
+  // Primary basis: single 1s STO
   STOBasisSet basis = make_manual_basis({{1, 0, 0, 1.0, 0., 0., 0.}});
 
   const int N_bf = basis.nbf();
@@ -294,11 +293,12 @@ TEST_CASE("compute_simga -- hydrogen 1s sigma", "[density][sigma]") {
                Catch::Matchers::WithinRel(ref_integrated_sigma, 1e-10));
 }
 
-TEST_CASE("compute_densities -- Helium 1s sigma", "[density][He]") {
+TEST_CASE("compute_density_and_sigma -- helium 1s rho and sigma",
+          "[density][sigma][He]") {
 
   ExecSpace space;
   const double zeta = 1.6875;
-  // Exact analytical value for integrated Libxc sigma (4 / 8*pi)
+  // Exact analytical value for integrated Libxc sigma: 2*zeta^5/pi
   const double ref_integrated_sigma = 2 * std::pow(zeta, 5.) / M_PI;
 
   Molecule mol(std::vector<std::vector<double>>{{0., 0., 0.}},

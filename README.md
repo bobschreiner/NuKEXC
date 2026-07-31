@@ -173,17 +173,18 @@ The build tree mirrors the three source directories:
 Each of the two latter directories has its own README describing how to
 reproduce the figures it feeds.
 
-To run the SCF benchmark specifically:
+To run an end-to-end SCF with its per-section timing breakdown, use the
+`standalone` driver (run it from `build/`, so it finds the copied `input/`):
 
 ```bash
-./benchmarking/benchmark_scf
+./tests/standalone
 ```
 
 Profiling with the Kokkos simple kernel timer:
 
 ```bash
 export KOKKOS_TOOLS_LIBS=/path/to/kokkos-tools/build/profiling/simple-kernel-timer/libkp_kernel_timer.so
-./benchmarking/benchmark_scf
+./tests/standalone
 kp_reader *.dat
 ```
 

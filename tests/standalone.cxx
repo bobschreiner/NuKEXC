@@ -414,7 +414,7 @@ int main(int argc, char *argv[]) {
       TIME_SCOPE(startup_timing,
                  "Fill auxiliary basis collocation + potential");
       basis_aux_collocation =
-          DeviceView2DLeft("Auxillary Basis collocation", N_bf_aux, N_quad);
+          DeviceView2DLeft("Auxiliary Basis collocation", N_bf_aux, N_quad);
       potential_collocation_scaled =
           DeviceView2DLeft("Potential collocation", N_bf_aux, N_quad);
       fill_collocation(space, basis_aux, grid.quad_points,
