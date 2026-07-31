@@ -8,7 +8,7 @@
 
 % Set page size and margins
 % Replace `letterpaper' with `a4paper' for UK/EU standard size
-\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+\usepackage[a4paper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
 
 % Useful packages
 \usepackage{amsmath}
@@ -1561,7 +1561,7 @@ The contribution to the Kohn-Sham matrix reads
 \end{equation}
 
 where \(  V_{\mu \nu }^{\text{GGA}}\) is the GGA version of
-\(V^{xc}{\mu\nu}\) from Equation~\eqref{eq:xc-matrix} and
+\(V^{xc}_{\mu\nu}\) from Equation~\eqref{eq:xc-matrix} and
 
 \begin{equation}
   Z_\nu(\mathbf r) = \frac{1}{2} \chi_\nu(\mathbf r)
@@ -2322,7 +2322,7 @@ proposal.
     for three radial quadrature
     schemes: Becke, Treutler-Ahlrichs (M3) ($\alpha=0$) and (M4)
     ($\alpha=0.6$), both with element scaling $\xi(\mathrm{H})=0.8$.
-    As out basis set we chose QZ4P (ADF Slater-type).
+    As our basis set we chose QZ4P (ADF Slater-type).
     The angular grid is a Lebedev grid fixed
     at order $L=29$. The radial point count is swept over
     $n_\mathrm{rad}\in\{10,20,40,80,160,320,640\}$. The reference is the
@@ -2644,11 +2644,11 @@ Figure~\ref{fig:w411_breakdown} decomposes the runtime into the
 individual stages of the calculation, and the outcome is very clear.
 In the small DZ basis the exchange-correlation quadrature dominates
 with about three quarters of the total time. Its absolute cost however
-stays nearly constant across the four bases, at roughly $0.7$ to
-$1.0$~s per molecule, because it is bound by the size of the grid and
+stays nearly constant across the four bases, at roughly $0.55$ to
+$0.62$~s per molecule, because it is bound by the size of the grid and
 not by the size of the basis. The exact exchange build behaves in the
-opposite way. It grows from $0.1$~s per molecule at DZ to $6.9$~s at
-QZ4P, where it accounts for $84$ percent of the total runtime and
+opposite way. It grows from $0.1$~s per molecule at DZ to $4.23$~s at
+QZ4P, where it accounts for $82$ percent of the accounted runtime and
 leaves grid construction, collocation, the core Hamiltonian, the
 auxiliary overlap of the density fitting and the Coulomb build as minor
 contributions. This is the expected consequence of evaluating $K$
@@ -2690,8 +2690,8 @@ SCF libraries reproduce the published behavior of B3LYP on the
 atomization energies of the W4-11 set. We observe a systematic
 improvement towards the complete basis set limit going from DZ \( \to
 \) TZP \( \to \) TZ2P \( \to \) QZ4P, which lowers the mean absolute
-deviation from \( 52.9 \) to \( 5.1 \)~kcal/mol and leaves a residual
-mean signed deviation of \( -4.0 \)~kcal/mol that reflects the
+deviation from \( 53.1 \) to \( 390 \)~kcal/mol and leaves a residual
+mean signed deviation of \( -2.7 \)~kcal/mol that reflects the
 intrinsic underbinding of the functional rather than our integration.
 
 The timings reveal that the cost shifts into the exact exchange build
@@ -2770,7 +2770,7 @@ Lastly, I want to thank my friends and partners for their support
 outside of the working hours I spent on this thesis; without them I
 would not have been able to finish this work.
 
-\section*{AI transparency}\label{sec:AI tranparency}
+\section*{AI transparency}\label{sec:AI transparency}
 
 \begin{table}[H]
   \centering
@@ -2782,14 +2782,14 @@ would not have been able to finish this work.
       Grammar and spelling  &  Claude Opus 5 &  whole thesis & --- \\
       Content coherence   &  Claude Opus 5 &  whole thesis &
       Implemented relevant suggestions \\
-      Plotting of Figures & Claude  Opus 5 & all figures & Plotting
-      scripts in python manually polished \\
+      Plotting of Figures & Claude  Opus 5 & all figures &
+      Manually polished \\
       Tables & Claude  Opus 5 & all tables & Tables are generated
       from csv files  \\
-      Derivation of unrestriced xc gga kernel
+      Derivation of unrestricted xc gga kernel
       & Claude  Opus 5 & section \ref{subsubsec:dense_la_xc}  &
       Formulas were rederived by hand \\
-      Debugging of C++ code & Claude Opus 5 & all codes & --- \\
+      Debugging of C++ code & Claude Opus 4.8\&5 & all codes & --- \\
       \bottomrule
   \end{tabular}}
   \caption{Table containing all the tasks that were supported by
