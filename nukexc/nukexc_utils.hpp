@@ -250,10 +250,9 @@ DeviceView2DLeft compute_half_inverse(const DeviceView2DLeft &overlap_matrix,
         for (int k = 0; k < N; ++k) {
           dot += Us(k, j) * VTs(j, k);
         }
-        if (dot < 1e-18) {
+        if (-sigma(j) > lin_dep_threshold) {
           sigma(j) = -sigma(j);
-          Kokkos::printf("Negative sigma %d : %f \n", j, sigma(j));
-
+          Kokkos::printf("Negative sigma %d : %.3e \n", j, sigma(j));
           local_count += 1;
         }
       },
