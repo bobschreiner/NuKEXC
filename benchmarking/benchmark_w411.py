@@ -303,7 +303,7 @@ def main():
     )
 
     ap.add_argument("--alg", default="dense")
-    ap.add_argument("--xfunc", default="gga_xc_b3lyp3")
+    ap.add_argument("--xfunc", default="gga_xc_b3lyp")
     ap.add_argument("--nrad", type=int, default=100)
     ap.add_argument("--nang", type=int, default=35)
     ap.add_argument("--conv-thr", default="1e-6")

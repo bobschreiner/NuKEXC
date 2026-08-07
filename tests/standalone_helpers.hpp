@@ -46,6 +46,7 @@
 #include <string>
 #include <vector>
 
+
 namespace Nukexc {
 
 // ===========================================================================
@@ -183,9 +184,14 @@ inline FunctionalInfo lookup_functional(const std::string &name) {
     return {XC_GGA_X_B88, XCFamily::GGA, "gga_x_b88"};
   case fnv1a("gga_x_pw91"):
     return {XC_GGA_X_PW91, XCFamily::GGA, "gga_x_pw91"};
+  case fnv1a("gga_xc_b3lyp"):
+    return {XC_HYB_GGA_XC_B3LYP, XCFamily::GGA, "gga_xc_b3lyp"};
   case fnv1a("gga_xc_b3lyp3"):
-    // 394 is the standard Libxc ID for B3LYP with VWN3
-    return {394, XCFamily::GGA, "gga_xc_b3lyp3"};
+    return {XC_HYB_GGA_XC_B3LYP3, XCFamily::GGA, "gga_xc_b3lyp3"};
+  case fnv1a("gga_xc_b3lyp5"):
+    return {XC_HYB_GGA_XC_B3LYP5, XCFamily::GGA, "gga_xc_b3lyp5"};
+  case fnv1a("gga_xc_b3lyps"):
+    return {XC_HYB_GGA_XC_B3LYPS, XCFamily::GGA, "gga_xc_b3lyp5"};
 
   // ---- GGA correlation ------------------------------------------------
   case fnv1a("gga_c_pbe"):
