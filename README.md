@@ -311,4 +311,4 @@ Then pass `-DIntegratorXX_ROOT=/path/to/integratorxx` to CMake.
 
 ## License
 
-NuKEXC is free software distributed under the GNU General Public License v3 or later. See `LICENSE` for details.
+NuKEXC is free software distributed under the BSD 3-Clause License. See `LICENSE` for details.
