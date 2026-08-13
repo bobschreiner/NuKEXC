@@ -229,7 +229,7 @@ def _draw_violins(ax, present, data):
             xycoords=("data", "axes fraction"),
             ha="center",
             va="top",
-            fontsize=8.5,
+            fontsize=15.0,
             color=BASIS_STYLE[b]["color"],
         )
 
@@ -416,8 +416,7 @@ def plot_scaling(species, out, stem="benchmark_w411"):
                             pe.Stroke(linewidth=5.0, foreground="white"),
                             pe.Normal(),
                         ],
-                        label="%s, %d longest  ($p=%.1f$)"
-                        % (b, ASYMPTOTIC_FIT_N, pa),
+                        label="%s, %d longest  ($p=%.1f$)" % (b, ASYMPTOTIC_FIT_N, pa),
                     )
                     fitted.setdefault(ylabel, {})[
                         "%s (longest %d)" % (b, ASYMPTOTIC_FIT_N)
@@ -425,9 +424,7 @@ def plot_scaling(species, out, stem="benchmark_w411"):
                     # Unbiased comparison: same count, selected by problem size.
                     idx_n = np.argsort(x)[-ASYMPTOTIC_FIT_N:]
                     if np.ptp(np.log10(x[idx_n])) > 0.05:
-                        pn = np.polyfit(
-                            np.log10(x[idx_n]), np.log10(y[idx_n]), 1
-                        )[0]
+                        pn = np.polyfit(np.log10(x[idx_n]), np.log10(y[idx_n]), 1)[0]
                         fitted.setdefault(ylabel, {})[
                             "%s (largest %d by $N_{bf}$)" % (b, ASYMPTOTIC_FIT_N)
                         ] = (pn, idx_n.size)
@@ -533,7 +530,7 @@ def plot_breakdown(species, out, stem="benchmark_w411"):
     handles, labels = axes[0].get_legend_handles_labels()
     # Legend outside the axes: nine categories will not fit inside a bar chart.
     fig.legend(
-        handles[::-1], labels[::-1], loc="center right", framealpha=0.92, fontsize=9
+        handles[::-1], labels[::-1], loc="center right", framealpha=0.92, fontsize=12.5
     )
     fig.tight_layout(rect=(0, 0, 0.78, 1))
     fig.savefig(out / ("%s_breakdown.pdf" % stem))
@@ -556,10 +553,18 @@ def plot_breakdown(species, out, stem="benchmark_w411"):
 
 def ltx(text):
     """Escape a CSV field for LaTeX text mode."""
-    for a, b in (("\\", r"\textbackslash{}"), ("&", r"\&"), ("%", r"\%"),
-                 ("$", r"\$"), ("#", r"\#"), ("_", r"\_"),
-                 ("{", r"\{"), ("}", r"\}"), ("~", r"\textasciitilde{}"),
-                 ("^", r"\textasciicircum{}")):
+    for a, b in (
+        ("\\", r"\textbackslash{}"),
+        ("&", r"\&"),
+        ("%", r"\%"),
+        ("$", r"\$"),
+        ("#", r"\#"),
+        ("_", r"\_"),
+        ("{", r"\{"),
+        ("}", r"\}"),
+        ("~", r"\textasciitilde{}"),
+        ("^", r"\textasciicircum{}"),
+    ):
         text = text.replace(a, b)
     return text
 
@@ -623,38 +628,38 @@ def write_species_table(sp_all, rx_all, path):
     ncol = 2 + len(present)
     head = [
         r"    \toprule",
-        r"    Species & $2S+1$ & \multicolumn{%d}{c}{$E_\mathrm{SCF}$ (Ha)} \\"
+        r"    Species & $2S+1$ & \multicolumn{%d}{c}{$E_\mathrm{SCF}$ ($E_\mathrm h$)} \\"
         % len(present),
         r"    \cmidrule(l){3-%d}" % ncol,
         r"     &  & " + " & ".join(present) + r" \\",
         r"    \midrule",
     ]
-    lines = [
-        r"{\small",
-        r"\begin{longtable}{@{}lr" + "r" * len(present) + r"@{}}",
-        r"  \caption{Converged self-consistent field energies for every species "
-        r"of the W4-11 set, in each of the four Slater-type basis sets, with "
-        r"$2S+1$ the spin multiplicity. All species are neutral. Energies are "
-        r"given to $10^{-6}$~Ha; the archived CSV in \texttt{latex/Data/} "
-        r"carries the full ten decimals. A $\times$ marks a calculation that "
-        r"did not reach the convergence thresholds of "
-        r"Section~\ref{subsec:benchmarks}: such a run carries the solver's "
-        r"best-so-far rather than a variational energy, so no number is "
-        r"reported for it. Every reaction containing an unconverged species is "
-        r"excluded from the statistics of Table~\ref{tab:w411_summary}, which "
-        r"is how %d species account for the reaction counts at the foot of this "
-        r"table.}" % nbad,
-        r"  \label{tab:w411_species}\\",
-    ] + head + [
-        r"    \endfirsthead",
-        r"    \multicolumn{%d}{@{}l}{\emph{\tablename~\thetable\ (continued)}}\\" % ncol,
-    ] + head + [
-        r"    \endhead",
-        r"    \midrule",
-        r"    \multicolumn{%d}{r@{}}{\emph{continued on next page}}\\" % ncol,
-        r"    \endfoot",
-        r"    \midrule",
-    ]
+    lines = (
+        [
+            r"{\small",
+            r"\begin{longtable}{@{}lr" + "r" * len(present) + r"@{}}",
+            r"  \caption{Converged self-consistent field energies for every species "
+            r"of the W4-11 set, in each of the four Slater-type basis sets, with "
+            r"$2S+1$ the spin multiplicity. All species are neutral. Energies are "
+            r"given to $10^{-6}$~\( E_\mathrm h\); the archived CSV in \texttt{latex/Data/} "
+            r"carries the full ten decimals.}",
+            r"  \label{tab:w411_species}\\",
+        ]
+        + head
+        + [
+            r"    \endfirsthead",
+            r"    \multicolumn{%d}{@{}l}{\emph{\tablename~\thetable\ (continued)}}\\"
+            % ncol,
+        ]
+        + head
+        + [
+            r"    \endhead",
+            r"    \midrule",
+            r"    \multicolumn{%d}{r@{}}{\emph{continued on next page}}\\" % ncol,
+            r"    \endfoot",
+            r"    \midrule",
+        ]
+    )
     removed = [
         sum(1 for r in rx_all if r["basis"] == b and r.get("all_converged") != "1")
         for b in present
@@ -755,8 +760,8 @@ def main():
         "--scaling_only",
         action="store_true",
         help="write only the scaling figure and stop; for runs that have "
-             "species timings but no reaction energies (e.g. the sparse and "
-             "tiled algorithm sweeps)",
+        "species timings but no reaction energies (e.g. the sparse and "
+        "tiled algorithm sweeps)",
     )
     args = ap.parse_args()
 

@@ -93,7 +93,7 @@
   discussion of general atomic orbitals. With this work we provide
   the foundation for a reusable library, capable of harnessing the
   computational power of GPGPUs through the Kokkos ecosystem. The
-  library assembles Fock and Kohn-Sham matrices for general atomic
+  library assembles Fock and Kohn--Sham matrices for general atomic
   orbitals. The two-electron terms are evaluated via density fitting,
   and the exchange-correlation terms of the local density
   approximation (LDA) and the generalized gradient approximation (GGA)
@@ -113,7 +113,7 @@ In 1929 John Lennard-Jones formalized the idea to use a linear
 combination of atomic orbitals (LCAO) to construct molecular orbitals
 (MO).\cite{LennardJones1929}
 Twenty years later, in 1951, Clemens Roothaan used LCAO as a
-technique to solve the Hartree-Fock equations computationally for a
+technique to solve the Hartree--Fock equations computationally for a
 general molecule.\cite{Roothaan1951} From this point onward atomic
 orbital basis sets have formed the backbone of modern computational
 quantum chemistry programs. The computational cost of programs based
@@ -127,9 +127,9 @@ Gaussian product theorem~\cite{Boys1950} allows for analytic
 integration of the two-electron terms and a massive academic effort has been
 poured into their efficient evaluation.
 
-The Hohenberg-Kohn theorems were published in
-1964~\cite{Hohenberg1964}, followed shortly by Kohn-Sham density
-functional theory (DFT).\cite{Kohn1965} The assembly of the Kohn-Sham
+The Hohenberg--Kohn theorems were published in
+1964~\cite{Hohenberg1964}, followed shortly by Kohn--Sham density
+functional theory (DFT).\cite{Kohn1965} The assembly of the Kohn--Sham
 matrix requires the integration of a non-linear functional based on
 the electron density. Given the
 complexity of the integrand the computational chemistry community was
@@ -156,11 +156,11 @@ with GTOs.\cite{Obara1986, Ahlrichs2006}
 
 In recent years the computational landscape has started to
 change. Scientific computation has shifted away from personal
-computers and towards high-performance computing
+computers towards high-performance computing
 clusters.\cite{Gavini2023} With the
 recent rise of general-purpose graphics processing units (GPGPU) and
 the advent of the exascale computing era, computational codes that
-were once regarded as state-of-the-art are dwarfed by other programs that can
+were once regarded as state-of-the-art are dwarfed by programs that can
 harness the computational power of
 GPGPUs.\cite{GalvezVallejo2023, Stocks_2025, WilliamsYoung2021} In
 light of this paradigm
@@ -172,7 +172,7 @@ programs in use today, partly for reasons of optimization, but also
 because the source code of many industry-grade programs is not freely
 available. In 2023 Susi Lehtola published a
 paper called \emph{A call to arms: Making the case for more reusable
-libraries}~\cite{Lehtola2023c}, in which they argue that open source
+libraries}~\cite{Lehtola2023c}, in which he argue that open source
 reusable libraries are necessary to avoid aging and unmaintainable
 code bases. Open source codes help researchers reproduce literature
 results, and they allow the community to grow and optimize libraries
@@ -183,14 +183,14 @@ library for the evaluation of the one- and two-electron integrals
 constituting the Fock matrix. We also provide the infrastructure to
 compute exchange-correlation integrals based on the local density
 approximation (LDA) and the generalized gradient
-approximation (GGA) necessary to build Kohn-Sham matrices. Our aim is
+approximation (GGA) necessary to build Kohn--Sham matrices. Our aim is
 to make the library as reusable as possible across different basis
 sets and hardware providers. We especially target algorithms that are
 efficient on modern GPGPUs, but which can also run on local CPUs with
 lower accuracy.
 
 This work is organized as follows. Section~\ref{sec:theory}
-includes the necessary theory to understand how Fock and Kohn-Sham
+includes the necessary theory to understand how Fock and Kohn--Sham
 matrices are assembled as well as reviewing atomic orbital basis
 sets. Section~\ref{sec:comp_methods} reviews the
 computational methods that enable us to turn theory into computation,
@@ -213,10 +213,10 @@ We will assume a non-relativistic framework, in which the Schrödinger
 equation governs the dynamics of the system. A system consists of
 $N_{\text{nuc}}$ nuclei, each of which has a charge $Z_I$, and
 $N_{\text{el}}$ electrons, each of which has charge $-1$.
-Furthermore, we apply the Born-Oppenheimer approximation, which lets
+Furthermore, we apply the Born--Oppenheimer approximation, which lets
 us separate the Schrödinger equation into an electronic and a
 nuclear part. In the remainder we will focus only on the electronic
-Schrödinger equation and assume that the nuclei are point-like
+Schrödinger equation and assume that the nuclei are point
 particles, fixed in space. Their coordinates are given by the set
 $\{\mathbf R_1, \cdots ,\mathbf{R}_{N_{\text{nuc}}}\}$.
 
@@ -234,10 +234,10 @@ many-electron wave function, $E$ the electronic energy, and the set
 $\{\mathbf r_1, \cdots ,\mathbf{r}_{N_{\text{el}}}\}$ the coordinates
 of the electrons.
 
-\subsection{Hartree-Fock Theory}\label{subsec:HF}
+\subsection{Hartree--Fock Theory}\label{subsec:HF}
 
 Following the procedure of Roothaan and Hall \cite{Roothaan1951,
-Hall1951} to solve the Hartree-Fock equations, we approximate the
+Hall1951} to solve the Hartree--Fock equations, we approximate the
 electronic wave function $\Psi$ with the anti-symmetrized product of
 one-electron functions $\varphi$, called molecular orbitals (MO)
 
@@ -257,7 +257,7 @@ We further approximate the molecular orbitals of spin $\sigma \in
   \label{eq:AO}
 \end{equation}
 
-and obtain a Generalized Eigenvalue Problem for each value of $\sigma$
+and obtain a generalized eigenvalue problem for each value of $\sigma$
 \begin{equation}
   \mathbf F^\sigma  \mathbf C^\sigma =\mathbf S \mathbf
   C^\sigma \mathbf \epsilon^\sigma,
@@ -267,14 +267,14 @@ where $\mathbf{F}$ is the Fock matrix, $\mathbf{C}$ holds the MO
 coefficients, $\mathbf{S}$ is the overlap matrix and
 $\mathbf{\epsilon}$ is a diagonal matrix holding the orbital energies.
 Since \( \mathbf F^\sigma \) depends on \( \mathbf C^\sigma \) the
-Generalized Eigenvalue problem is non-linear and does not allow for a
+generalized eigenvalue problem is non-linear and does not allow for a
 closed form solution. The
-standard practice of solving this equation is through an
-iterative solver, updating the matrix \( \mathbf C^\sigma  \) until
+standard practice of solving this equation is through updating the
+matrix \( \mathbf C^\sigma  \) until
 self-consistency is reached. The design of
 self-consistent field (SCF) solvers is an ongoing research topic,
 which is outside of the scope of this work, since we rely on
-available reusable implementations.
+available reusable implementations. TODO: cite
 
 The Fock matrix can be decomposed into one and two-electron components
 \begin{equation}
@@ -286,17 +286,19 @@ where
 
 \begin{equation}
   T_{\mu\nu} = -\frac{1}{2} \bra{\mu} \nabla^2 \ket{\nu} =
-  \frac{1}{2}\int \nabla\chi_\mu(\mathbf r) \cdot
-  \nabla\chi_\nu (\mathbf r)d\mathbf r
+  \frac{1}{2}\int \nabla\chi_\mu^*(\mathbf r) \cdot
+  \nabla\chi_\nu (\mathbf r) \mathrm d ^3\mathbf r
   \label{eq:kinetic}
 \end{equation}
 
 \begin{equation}
-  V^{\text{nuc}}_{\mu\nu} = -\bra{\mu}
+  V^{\text{nuc}}_{\mu\nu}
+  = -\left \langle \mu \middle |
   \sum_{I=1}^{N_{\text{nuc}}} \frac{Z_I}{|\mathbf{r}-\mathbf
-  R_I|} \ket{\nu} =\sum_{I=1}^{N_{\text{nuc}}}  -Z_I\int
-  \frac{\chi_\mu(\mathbf r) \chi_\nu (\mathbf r)}{|\mathbf r -
-  \mathbf R_I|}d\mathbf r
+  R_I|} \middle | \nu \right \rangle
+  =\sum_{I=1}^{N_{\text{nuc}}}  -Z_I\int
+  \frac{\chi_\mu^*(\mathbf r) \chi_\nu (\mathbf r)}{|\mathbf r -
+  \mathbf R_I|} \mathrm d ^3\mathbf r
   \label{eq:nuc}
 \end{equation}
 are the one-electron contributions and
@@ -305,9 +307,9 @@ are the one-electron contributions and
   J_{\mu\nu} =
   \sum_{\lambda\tau}D^\text{tot}_{\lambda\tau}(\mu \nu |
   \lambda \tau) =\sum_{\lambda\tau}D^\text{tot}_{\lambda\tau}
-  \iint \frac{\chi_\mu(\mathbf r) \chi_\nu (\mathbf r)
+  \iint \frac{\chi_\mu^*(\mathbf r) \chi_\nu^* (\mathbf r)
   \chi_\lambda(\mathbf r') \chi_\tau   (\mathbf r')}{|\mathbf r
-  - \mathbf{r}'| } d\mathbf r' d\mathbf r
+  - \mathbf{r}'| }  \mathrm d ^3\mathbf r'  \mathrm d ^3\mathbf r
   \label{eq:coulomb}
 \end{equation}
 
@@ -315,9 +317,9 @@ are the one-electron contributions and
   K^\sigma_{\mu\nu} =
   \sum_{\lambda\tau}D^\sigma_{\lambda\tau}(\mu \lambda | \nu
   \tau   ) =\sum_{\lambda\tau   }D^\sigma_{\lambda\tau   }
-  \iint \frac{\chi_\mu(\mathbf r) \chi_\lambda (\mathbf r)
+  \iint \frac{\chi_\mu^*(\mathbf r) \chi_\lambda^* (\mathbf r)
   \chi_\nu(\mathbf r') \chi_\tau   (\mathbf r')}{|\mathbf r -
-  \mathbf{r}'| } d\mathbf r' d\mathbf r
+  \mathbf{r}'| } \mathrm d^3\mathbf r' \mathrm d^3\mathbf r
   \label{eq:exchange}
 \end{equation}
 
@@ -335,22 +337,22 @@ $D^\text{tot}_{\lambda\tau} = D^\uparrow_{\lambda\tau} +
 D^\downarrow_{\lambda\tau}$.
 
 \begin{equation}
-  S_{\mu\nu} =  \braket{\mu | \nu} = \int \chi_\mu(\mathbf r)
-  \chi_\nu (\mathbf r)d\mathbf r
+  S_{\mu\nu} =  \braket{\mu | \nu} = \int \chi_\mu^*(\mathbf r)
+  \chi_\nu (\mathbf r) \mathrm d ^3 \mathbf r
   \label{eq:overlap}
 \end{equation}
 is the overlap between the basis functions $\chi_\mu$ and $\chi_\nu$.
 
 \subsection{Density Functional Theory}\label{subsec:DFT}
 
-Within Kohn-Sham DFT, the two-electron exchange term of
+Within Kohn--Sham DFT, the two-electron exchange term of
 \eqref{eq:exchange} is replaced by an exchange-correlation (xc)
 energy functional $E_{xc}[\rho^\sigma]$, evaluated on the density
 $\rho^\sigma(\mathbf r)$ defined by
 
 \begin{equation}
   \rho^\sigma(\mathbf r) =
-  \sum_{\mu\nu}D^\sigma_{\mu\nu}\chi_\mu(\mathbf r) \chi_\nu(\mathbf r).
+  \sum_{\mu\nu}D^\sigma_{\mu\nu}\chi_\mu^*(\mathbf r) \chi_\nu(\mathbf r).
   \label{eq:density}
 \end{equation}
 
@@ -358,10 +360,10 @@ Unlike the Coulomb and exact exchange integrals, $E_{xc}[\rho]$ is in
 general a nonlinear functional of the density and therefore admits no
 analogous two-electron integral representation.
 
-The contribution of the xc term to the Kohn-Sham Fock matrix is
+The contribution of the xc term to the Kohn--Sham Fock matrix is
 \begin{equation}
-  V^{xc}_{\mu\nu} = \int \chi_\mu(\mathbf r)\, v_{xc}(\mathbf
-  r)\, \chi_\nu(\mathbf r)\, d\mathbf r,
+  V^{xc}_{\mu\nu} = \int \chi_\mu^*(\mathbf r)\, v_{xc}(\mathbf
+  r)\, \chi_\nu(\mathbf r)\, \mathrm d^3 \mathbf r,
   \label{eq:xc-matrix}
 \end{equation}
 where $v_{xc}(\mathbf r)$ is the xc potential, obtained from the
@@ -373,7 +375,7 @@ functional derivative of $E_{xc}$ with respect to the density,
 \end{equation}
 
 For hybrid functionals, $E_{xc}$ additionally contains a fraction
-$c_x$ of exact Hartree-Fock exchange,
+$c_x$ of exact Hartree--Fock exchange,
 \begin{equation}
   E_{xc}^{\text{hyb}} = c_x E_x^{\text{HF}} + (1-c_x) E_x^{\text{DFT}}
   + E_c^{\text{DFT}},
@@ -381,15 +383,15 @@ $c_x$ of exact Hartree-Fock exchange,
 \end{equation}
 where $E_x^{\text{HF}}$ is built from $K^\sigma_{\mu\nu}$.
 
-Collecting these contributions, the Kohn-Sham matrix assembled during
+Collecting these contributions, the Kohn--Sham matrix assembled during
 each SCF cycle reads
 \begin{equation}
   F^\sigma_{\mu\nu} = T_{\mu\nu} + V^{\text{nuc}}_{\mu\nu} + J_{\mu\nu}
   + V^{xc}_{\mu\nu} - c_x K^\sigma_{\mu\nu},
   \label{eq:ks-matrix}
 \end{equation}
-which reduces to the Hartree-Fock matrix \eqref{eq:FockComponents} for
-$c_x = 1$ and $V^{xc}_{\mu\nu} = 0$, and to a pure Kohn-Sham matrix for
+which reduces to the Hartree--Fock matrix \eqref{eq:FockComponents} for
+$c_x = 1$ and $V^{xc}_{\mu\nu} = 0$, and to a pure Kohn--Sham matrix for
 $c_x = 0$.
 
 \subsection{Basis Sets}\label{subsec:basis_sets}
@@ -414,8 +416,8 @@ Normalized Slater-type orbitals (STOs) can be defined as
 where $\zeta$ is a positive real number, $n$ is their principal quantum
 number, $l$ is their angular momentum and $m$ is their magnetic
 quantum number. The restrictions on the quantum numbers are
-$n>l\geq0$ and $l\geq m \geq -l$. $Y_{lm}(\theta,\phi)$ are the real
-spherical harmonics and are defined as
+$n>l\geq0$ and $-l\leq m \leq l$. $Y_{lm}(\theta,\phi)$ are the real
+spherical harmonics defined as
 \begin{equation}
   Y_{lm}(\theta,\phi) =
   \left(\frac{(2l+1)(l-|m|)!}{2\pi(l+|m|)!}\right)^{1/2} \times
@@ -428,7 +430,7 @@ spherical harmonics and are defined as
 \end{equation}
 
 $P^m_l$ are the associated Legendre
-functions.\cite{Cohen2002,Chong2004, Chong*2005}
+functions.\cite{Cohen2002,Chong2004, Chong2005}
 
 STOs are arguably the most straightforward guess for a basis set
 when doing molecular calculations in the LCAO framework, because STOs
@@ -440,10 +442,11 @@ the numerical evaluation of the two-electron integrals is
 computationally very expensive for
 STOs,~\cite{Weniger2009, FernandezRico1998} researchers have
 focused their attention on other basis sets that are not plagued by
-the same inefficiencies, namely Gaussian Type Orbitals.\cite{Hill2012, Boys1950}
+the same inefficiencies, namely Gaussian-type
+orbitals (GTOs).\cite{Hill2012, Boys1950}
 
 \subsubsection{Gaussian-Type Orbitals}\label{subsubsec:gto}
-Normalized Gaussian-type orbitals (GTOs) can be defined as
+Normalized GTOs can be defined as
 \begin{equation}
   \mathcal G_\mu(\mathbf r ) = \mathcal G(\alpha, l,m;r,\theta,\phi)
   = \sqrt{\frac{2^{l+2} (2\alpha)^{l+\frac{3}{2}}}{(2l+1)!! \sqrt{\pi}}}
@@ -452,18 +455,19 @@ Normalized Gaussian-type orbitals (GTOs) can be defined as
 
 where $\alpha$ is a positive real number, $l$ is their angular momentum and
 $m$ is their magnetic quantum number. The restrictions on the quantum
-numbers are $l \geq 0$ and $l\geq m \geq -l$. $Y_{lm}(\theta,\phi)$
-are the real spherical harmonics and are defined in equation
+numbers are $l \geq 0$ and $-l\leq m \leq l$. $Y_{lm}(\theta,\phi)$
+are the real spherical harmonics defined in equation
 \eqref{eq:spherical_harm}.\cite{Hill2012}
 
 GTOs are the most popular atom-centered basis set expansion in the
-computational quantum chemistry community,\cite{Hill2012} mainly
-because of the Gaussian product theorem.\cite{Boys1950} The Gaussian
-product theorem states that the product of two Gaussian functions is
+quantum chemistry community,\cite{Hill2012} mainly
+because of the Gaussian product theorem.\cite{Boys1950} The theorem
+states that the product of two Gaussian functions is
 also a Gaussian function, and therefore allows for the analytical
-integration of the two-electron integrals \eqref{eq:coulomb} and
+integration of the two-electron integrals defined in equations
+\eqref{eq:coulomb} and
 \eqref{eq:exchange}. The Gaussian product theorem, combined with
-efficient recursive evaluation strategies, such as the Obara-Saika
+efficient recursive evaluation strategies, such as the Obara--Saika
 scheme, has made the evaluation of the two-electron integrals
 \eqref{eq:coulomb} and \eqref{eq:exchange} tractable and
 efficient.\cite{Obara1986, Ahlrichs2006}
@@ -494,8 +498,8 @@ Numerical atom-centered orbitals (NAOs) can be defined as
 \end{equation}
 where $n$ is their principal quantum number, $l$ is their angular
 momentum and $m$ is their magnetic quantum number. The restrictions on
-the quantum numbers are $n>l\geq0$ and $l\geq m \geq -l$.
-$Y_{lm}(\theta,\phi)$ are the real spherical harmonics and are
+the quantum numbers are $n>l\geq0$ and $-l\leq m \leq l$.
+$Y_{lm}(\theta,\phi)$ are the real spherical harmonics
 defined in equation \eqref{eq:spherical_harm}.\cite{Lehtola2019}
 
 NAOs can be considered a generalization of STOs and GTOs, since we
@@ -504,9 +508,10 @@ a particular basis that way.\cite{Lehtola2019b} Using an analytical
 expression for $B(r)$ would defy the purpose of using NAOs in the
 first place though, so NAOs are usually not defined analytically,
 but, as the name suggests, are only available numerically. Generating
-NAO basis sets is usually done by solving a simplified radial ODE
-for an individual atom, utilizing numerical methods such as Finite
-Element Methods (FEM) and storing the results
+NAO basis sets is usually done by solving a simplified radial
+differential equation
+for an individual atom, utilizing numerical methods such as the finite
+element method (FEM) and storing the results
 numerically.\cite{Blum_2009,Lehtola2019,Lehtola2019a,Lehtola2023b} In
 the case of HelFEM the radial part $B_n(r)$ consists of a linear
 combination of Lagrange Interpolating Polynomials
@@ -528,12 +533,12 @@ weights. The integral can then be approximated by a weighted sum over
 function evaluations
 
 \begin{equation}
-  I = \int_\Omega F(\mathbf r) d\mathbf r \approx
+  I = \int_\Omega F(\mathbf r) \mathrm d^3 \mathbf r \approx
   \sum_{q=1}^{N_{\text{quad}}}F(\mathbf r_q)w_q \quad.
   \label{eq:global_quadrature}
 \end{equation}
 
-How the quadrature points and quadrature weights are generated can
+The generation of quadrature points and quadrature weights can
 differ drastically from one scheme to another and there isn't a
 one-size-fits-all solution. It is common that a given quadrature
 scheme is specifically designed for a family of integrands $F$ or a
@@ -548,7 +553,7 @@ programs today.\cite{Becke_1988, Franchini2013}
 Becke's molecular partitioning scheme,\cite{Becke_1988} also known as
 fuzzy Voronoi partitioning, is a method in which the integral we want
 to compute is split into a weighted sum of sub-integrals. Each
-sub-integral is then evaluated in polar spherical coordinates,
+sub-integral is evaluated in polar spherical coordinates,
 centered at a nucleus, by means of traditional quadrature schemes.
 
 The goal of this scheme is to find relative weight functions $p_n$,
@@ -587,18 +592,15 @@ the nuclei in the system
 where
 
 \begin{equation}
-  I_n = \int F_n(\mathbf r)d\mathbf r.
+  I_n = \int F_n(\mathbf r)\mathrm d^3\mathbf r.
   \label{eq:partial-integral_definition}
 \end{equation}
-
-Each partial integral $I_n$ can then be evaluated in spherical polar
-coordinates using standard numerical quadrature schemes.
 
 Given a set of $N_\text{nuc}$ spherical quadrature grids, each with
 $n_\text{quad}$ points,
 $\{\{(\mathbf r_{nq},
 w_{nq})\}_{q=1}^{n_{\text{quad}}}\}_{n=1}^{N_{\text{nuc}}}$, where we
-denote $(\mathbf r_{nq},w_{nq})$ the $q$-th quadrature point
+denote $(\mathbf r_{nq},w_{nq})$ the $q$-th quadrature element
 generated by the $n$-th quadrature grid, we construct the
 partitioning weights by computing the confocal elliptic coordinate
 $\mu$ defined as
@@ -635,7 +637,7 @@ Franchini2013}. The result is then linearly mapped into the interval $[0,1]$ by
 Finally we construct the normalized molecular partitioning weights $p_n$
 \begin{align}
   P_n(\mathbf r) &= \prod_{j \neq n} s_k(\mu_{nj}) \\
-  p_n(\mathbf r) &= P_n(\mathbf r) / \sum_m P_m(\mathbf r).
+  p_n(\mathbf r) &= \frac{P_n(\mathbf r) }{ \sum_m P_m(\mathbf r)}.
   \label{eq:partition_weight_def}
 \end{align}
 
@@ -658,11 +660,10 @@ so that our final integral evaluation reads
 The construction of the relative weight functions is not unique
 though and improvements have been made over Becke's original
 proposal.
-Laqua et al. introduced a construction that is very close to the
+Laqua et al. introduced a construction that is close to the
 original proposal of Becke, but yields more robust results and has
-better screening properties.\cite{Laqua2018}
-
-In their construction $\mu_{ij}$ in equation \eqref{eq:mu_ij} is modified to
+better screening properties.\cite{Laqua2018} In their construction
+$\mu_{ij}$ in equation \eqref{eq:mu_ij} is modified to
 
 \begin{align}
   \mu_{ij}^{\text{mod}} &= \frac{r_i -
@@ -684,14 +685,16 @@ provided optimal results in their tests.
 Now that we know how to generate the partitioning weights $p_n$ from
 a set of quadrature grids $\{\{(\mathbf r_{nq},
 w_{nq})\}_{q=1}^{n_{\text{quad}}}\}_{n=1}^{N_{\text{nuc}}}$, we
-examine how exactly the quadrature grids are generated.
+examine how the quadrature grids are generated.
 Assuming that we are given the position of the center $\mathbf r_n$,
 in our case this would be the position of a nucleus, we can rewrite
 the single center sub-integral \eqref{eq:partial-integral_definition}
 in spherical polar coordinates
 
 \begin{equation}
-  I_n = \iiint F_n(r,\theta,\phi)r^2 \sin \theta drd\theta d\phi.
+  I_n = \int_{0}^{2\pi} \int_{0}^{\pi} \int_{0}^\infty
+  F_n(r,\theta,\phi)r^2 \sin \theta \,\mathrm dr \, \mathrm d\theta
+  \,\mathrm d\phi.
   \label{eq:I_polar}
 \end{equation}
 
@@ -700,16 +703,16 @@ two-dimensional integration on the surface of the unit sphere, we can
 rewrite the integral as
 
 \begin{equation}
-  I_n = \iint F_n(r,\Omega)r^2  drd\Omega,
+  I_n = \int_{S^2}\int_0^{\infty} F_n(r,\Omega)r^2  \mathrm dr \, \mathrm d\Omega,
   \label{eq:I_solid}
 \end{equation}
-where $\Omega$ denotes solid angle.
+where $\Omega$ denotes solid angle and $S^2$ is the unit sphere.
 
 The standard approach is then to use separate quadrature schemes for
 the angular and radial components. The most commonly employed angular
 quadrature grids are the ones derived by Lebedev, since they
 integrate the spherical harmonics exactly up to a given order $l$,
-just as the Gauss-Legendre quadrature integrates
+just as the Gauss--Legendre quadrature integrates
 polynomials up to a given order $n$ exactly.\cite{Lebedev1976, Lebedev1977}
 
 The case is not so clear-cut for the radial quadrature schemes,
@@ -721,7 +724,7 @@ proposed by Becke in his original work, and the arguably most used
 radial quadrature grid proposed by Treutler and Ahlrichs.
 \cite{Becke_1988, Treutler1995}
 
-Becke proposed to use the Gauss-Chebyshev quadrature points in the
+Becke proposed to use the Gauss--Chebyshev quadrature points in the
 interval $x\in [-1,1]$ and use the radial transformation
 
 \begin{equation}
@@ -729,7 +732,7 @@ interval $x\in [-1,1]$ and use the radial transformation
   \label{eq:Becke_radial}
 \end{equation}
 
-where $\xi_n$ stands for half of the Bragg-Slater radius of the
+where $\xi_n$ stands for half of the Bragg--Slater radius of the
 respective nucleus, except for hydrogen, where Becke did not apply
 the factor $1/2$.
 
@@ -843,11 +846,12 @@ The 3-center integrals can then be expanded as follows
 
 \begin{align}
   (\mu\nu|\alpha) =
-  \iint \frac{\chi_\mu(\mathbf r) \chi_\nu (\mathbf r)
+  \iint \frac{\chi_\mu^*(\mathbf r) \chi_\nu^* (\mathbf r)
   \tilde\chi_\alpha(\mathbf r')}{|\mathbf r - \mathbf{r}'| }
-  d\mathbf r' d\mathbf r
-  = \int \chi_\mu(\mathbf{r})\chi_\nu(\mathbf{r}) \tilde V_\alpha(\mathbf{r})
-  d\mathbf{r},
+  \mathrm d^3\mathbf r' \mathrm d^3\mathbf r
+  = \int \chi_\mu^*(\mathbf{r})\chi_\nu^*(\mathbf{r}) \tilde
+  V_\alpha(\mathbf{r})
+  \mathrm d^3\mathbf{r},
   \label{eq:3-center-ri}
 \end{align}
 
@@ -856,7 +860,7 @@ where we defined $\tilde V_\alpha(\mathbf r)$ as
 \begin{align}
   \tilde V_\alpha(\mathbf r) =
   \int \frac{\tilde\chi_\alpha(\mathbf r')}{|\mathbf r -
-  \mathbf{r}'| } d\mathbf r',
+  \mathbf{r}'| } \mathrm d^3\mathbf r',
   \label{eq:potential-chi}
 \end{align}
 i.e. the potential of $\tilde\chi_\alpha$. Note that $\tilde V_\alpha$ is
@@ -866,10 +870,10 @@ Similarly we can rewrite $(\alpha|\beta)$ as
 
 \begin{align}
   (\alpha|\beta) =
-  \iint \frac{\tilde\chi_\alpha(\mathbf
+  \iint \frac{\tilde\chi_\alpha^*(\mathbf
   r)\tilde\chi_\beta(\mathbf r')}{|\mathbf r - \mathbf{r}'| }
-  d\mathbf r' d\mathbf r = \int
-  \tilde\chi_\alpha(\mathbf{r}) \tilde V_\beta(\mathbf{r}) d\mathbf{r}.
+  \mathrm d ^3\mathbf r' \mathrm d^3\mathbf r = \int
+  \tilde\chi_\alpha^*(\mathbf{r}) \tilde V_\beta(\mathbf{r}) d\mathbf{r}.
   \label{eq:2-center-ri}
 \end{align}
 
@@ -884,7 +888,7 @@ then be approximated by the quadrature scheme explained in the previous section.
 This section provides a detailed explanation of our implementations
 of the computational methods outlined in section
 \ref{sec:comp_methods}. Since we aim to build a reusable library, we
-have to be very careful when choosing the framework, which we want to
+have to be careful when choosing the framework, which we want to
 build our library upon. First and foremost we should check if a
 similar reusable library already exists and can be extended to our needs.
 
@@ -906,7 +910,7 @@ kernel, it needs to be rewritten and re-optimized in HIP and
 vice versa. While there exist tools like hipify, which promise to
 take care of this task, they only work for simple kernels,
 where a one to one correspondence between functions exists. For
-complex tasks the functionalities, which CUDA and HIP provide, are
+complex tasks the functionalities that CUDA and HIP provide are
 drastically different and the hard truth is that in research codes a
 kernel will actually only be implemented in one framework and the
 other one will be ignored. We came to the conclusion that in order to build a
@@ -919,7 +923,7 @@ hardware agnostic.
 The Kokkos ecosystem provides a performance portable solution to
 write modern C++ in a hardware agnostic way. The ecosystem consists
 of three main parts, Kokkos Core \cite{CarterEdwards2014, Trott2022},
-Kokkos Kernels \cite{Rajamanickam2021} and Kokkos Tools
+Kokkos Kernels, \cite{Rajamanickam2021} and Kokkos Tools
 \cite{Hammond2018}. Kokkos Core provides the base functionality to
 write parallel algorithms in C++. During the compilation step, Kokkos
 can then map an algorithm onto the desired target architectures
@@ -928,7 +932,7 @@ Kokkos Kernels is a highly optimized software library for linear
 algebra and graph algorithms. The library provides native Kokkos
 kernels as well as the option to use third party implementations.
 Kokkos Tools is a software interface consisting of profiling and
-debugging tools. The tools are very lightweight and are meant to
+debugging tools. The tools are lightweight and are meant to
 cause minimal friction with Kokkos applications while providing
 valuable insights into the Kokkos kernels.
 
@@ -995,7 +999,7 @@ create a \texttt{Kokkos::View} called
 \textit{owner} of size $N_\text{nuc}\cdot
 n_\text{quad}$.
 
-Now that we have fixed the position of the quadrature points, we can move on to
+Now that we have fixed the positions of the quadrature points, we can move on to
 step two of our grid construction and compute the partitioning
 weights. To compute Becke's partitioning scheme we make use of
 Kokkos' Data Parallelism
@@ -1144,17 +1148,17 @@ partitioning weight, according to
 Throughout this section \( n_\text{quad} \) denotes the number of
 quadrature points generated per nucleus. The total number of quadrature
 points, used in the remainder of this work, is therefore
-\( N_\text{quad} = n_\text{quad}\times N_\text{nuc} \).
+\( N_\text{quad} = n_\text{quad} \cdot N_\text{nuc} \).
 
 \subsection{Integral Routines}\label{subsec:integral_routines}
 
-The integral routines computing the three and two center integrals of
+The integral routines computing the three- and two-center integrals of
 the form $(\mu \nu|\alpha)$ and $(\alpha | \beta )$ are arguably
-the most important implementations. For each term contributing to the
-Fock/Kohn-Sham matrix we implemented two different versions. The
-first one relies
+the most important implementations. We implemented two different
+versions of each term contributing to the
+Fock/Kohn--Sham matrix. The first relies
 solely on dense linear algebra kernels and is therefore perfectly suited for
-running on GPUs. The second one relies on locally dense linear algebra
+running on GPUs. The second relies on locally dense linear algebra
 kernels and takes advantage of the local support of atom centered
 orbitals. Each version comes with its specific advantages and
 drawbacks, which we will analyze in the following subsections.
@@ -1163,8 +1167,8 @@ drawbacks, which we will analyze in the following subsections.
 schemes}\label{subsubsec:dense_la_rij_rik}
 
 The dense linear algebra kernel relies on the idea that GPUs are
-extremely good at doing dense GEneral Matrix-Matrix (GEMM) and dense
-GEneral Matrix-Vector (GEMV) multiplications. Indeed, when applying
+extremely good at doing dense general matrix-matrix (GEMM) and dense
+general matrix-vector (GEMV) multiplications. Indeed, when applying
 our quadrature rule given by \eqref{eq:global_quadrature} to
 equations $\eqref{eq:coulomb-RI}$ and $\eqref{eq:exchange-RI}$ we can
 rewrite them entirely with matrix-matrix multiplications. The schemes
@@ -1187,8 +1191,8 @@ Coulomb metric
 
 \begin{align}
   (\alpha | \beta )
-  &= \int \tilde \chi _ {\alpha }(\mathbf r)
-  \tilde{V}_\beta(\mathbf r)d\mathbf r \\
+  &= \int \tilde \chi _ {\alpha }^*(\mathbf r)
+  \tilde{V}_\beta(\mathbf r)\mathrm d^3\mathbf r \\
   &= \sum_g w_g \tilde \chi _ {\alpha }(\mathbf r_g)
   \tilde{V}_\beta(\mathbf r_g) \\
   &= \sum_g w_g \tilde \Phi_{\alpha g}
@@ -1283,9 +1287,9 @@ g} \) with \( (\rho_g w_g ) \).
   &= \int \sum_{\lambda \tau}
   \chi_\lambda(\mathbf{r})\chi_\tau(\mathbf{r})
   D^{\text{tot}}_{\lambda\tau} \tilde V_\beta(\mathbf{r})
-  d\mathbf{r}\\
+  \mathrm d^3\mathbf{r}\\
   &= \int \rho(\mathbf r) \tilde V_\beta(\mathbf{r})
-  d\mathbf{r}\\
+  \mathrm d^3\mathbf{r}\\
   &\approx   \sum_{g}\tilde{V}_\beta(\mathbf r_g) w
   (\mathbf r_g)\rho(\mathbf r_g) \\
   &= \sum_{g}\tilde{V}_{\beta g} w_g \rho_g
@@ -1309,7 +1313,7 @@ doing a GEMM of the scaled and the unscaled collocation matrices.
   \tilde{J}_{\mu  \nu }
   &= \sum_{\alpha } (\mu \nu |\alpha ) z_\alpha \\
   &= \int \chi_\mu(\mathbf r) \chi_\nu(\mathbf r) \sum_{\alpha }
-  \tilde V_\alpha(\mathbf r) z_\alpha d \mathbf r \\
+  \tilde V_\alpha(\mathbf r) z_\alpha \mathrm d^3 \mathbf r \\
   &\approx   \sum_{g}\chi_\mu(\mathbf{r}_g)
   \chi_\nu(\mathbf{r}_g) w(\mathbf{r}_g)  v(\mathbf{r}_g)\\
   &= \sum_g \Phi_{\mu g} w_g v_g \Phi_{\nu g}
@@ -1352,10 +1356,10 @@ The explicit computation of \( T^i_{\nu k } \) looks as follows
   &=  \sum_\alpha (X^{-\frac{1}{2}})_{\alpha k}\, (\nu i | \alpha ) \\
   &=  \sum_\alpha (X^{-\frac{1}{2}})_{\alpha k}\, \int \chi_\nu(\mathbf r)
   \left(\sum_\lambda \chi_\lambda(\mathbf r)C_{\lambda}^i \right)
-  \tilde V_\alpha(\mathbf r) d \mathbf r \\ 
+  \tilde V_\alpha(\mathbf r) \mathrm d^3 \mathbf r \\ 
   &= \sum_\alpha (X^{-\frac{1}{2}})_{\alpha k}\, \int
   \chi_\nu(\mathbf r) c^i(\mathbf r)
-  \tilde V_\alpha(\mathbf r) d \mathbf r \\
+  \tilde V_\alpha(\mathbf r) \mathrm d^3 \mathbf r \\
   &\approx \sum_\alpha (X^{-\frac{1}{2}})_{\alpha k}\, \sum_g
   \Phi_{\nu g} w_ g c^{i}_{g}
   \tilde V_{\alpha g}
@@ -1417,7 +1421,7 @@ SCF cycle, is summarized schematically in Figure
         gemvbox/.style={box, fill=green!12, draw=green!45!black},
         arr/.style={-{Latex[length=2mm]}, thick},
         branchlabel/.style={font=\large\bfseries, text=black},
-        looplabel/.style={font=\small\itshape, text=gray!70!black}
+        looplabel/.style={font=\large, text=black!70!black}
       ]
       % --- Startup phase: its own column, top-left ---
       \node[databox] (colloc)
@@ -1497,7 +1501,7 @@ SCF cycle, is summarized schematically in Figure
         convergence}}] (scf) {};
         \node[draw, dashed, rounded corners, draw=gray!60, inner sep=3mm,
           fit=(cig)(mia)(tik),
-        label={[looplabel]right:{for each occupied orbital $i$}}] {};
+        label={[looplabel, xshift=12mm]below:{for all $i$}}] {};
       \end{scope}
 
       % --- Startup quantities reused each cycle. Routed down the left margin
@@ -1505,7 +1509,7 @@ SCF cycle, is summarized schematically in Figure
       % instead of on top of the SVD box. ---
       \coordinate (reuse) at ($(za.south)!0.5!(vg.north)$);
       \draw[arr, dashed] (svd.south) |- (scf.west |- reuse)
-      node[pos=1, anchor=south east, xshift=-1.5mm, looplabel]
+      node[pos=1, anchor=south east, yshift =-8mm , xshift=-1.5mm, looplabel]
       {$\Phi,\ \tilde V,\ X^{-\frac12}$ reused};
   \end{tikzpicture}}
 
@@ -1526,7 +1530,7 @@ SCF cycle, is summarized schematically in Figure
 \subsubsection{Dense Linear Algebra XC integrals}\label{subsubsec:dense_la_xc}
 
 In order to do a DFT calculation we also need to compute the contributions
-of the exchange-correlation (xc) functional to the Kohn-Sham matrix.
+of the exchange-correlation (xc) functional to the Kohn--Sham matrix.
 We will focus the discussion on our implementation of the functionals
 that belong to the generalized gradient approximation level of theory;
 the local density approximation is recovered as the special case of a
@@ -1538,7 +1542,7 @@ algorithm described by Stocks and Barca~\cite{Stocks_2025}.
 We write the xc energy as an integral over an energy density,
 \begin{equation}
   E_\text{xc}^\text{GGA} = \int \varepsilon_\text{xc}^\text{GGA}
-  \big(\rho(\mathbf r), \gamma(\mathbf r)\big)\, d\mathbf r,
+  \big(\rho(\mathbf r), \gamma(\mathbf r)\big)\,\mathrm d ^3 \mathbf r,
   \qquad \gamma(\mathbf r) = |\nabla \rho(\mathbf r)|^2,
   \label{eq:E_xc_gga}
 \end{equation}
@@ -1551,12 +1555,12 @@ abbreviations
 \partial \gamma \), used throughout this section, are precisely the two
 quantities a functional library returns.
 
-The contribution to the Kohn-Sham matrix reads
+The contribution to the Kohn--Sham matrix reads \cite{Stocks_2025}
 \begin{equation}
   V_{\mu \nu }^{\text{GGA}} = \frac{\partial
   E_\text{xc}^{\text{GGA}}}{\partial D_{\mu \nu }} =
   \int \Big( \chi_\mu(\mathbf r) Z_\nu(\mathbf r) + \chi_\nu(\mathbf r)
-  Z_\mu(\mathbf r) \Big)\, d\mathbf r,
+  Z_\mu(\mathbf r) \Big)\, \mathrm d ^3 \mathbf r,
   \label{eq:V_xc_gga}
 \end{equation}
 
@@ -1580,7 +1584,7 @@ compute one term and symmetrize the result afterwards,
 where
 \begin{equation}
   \bar V_{\mu \nu }^{\text{GGA}} = \int \chi_\mu(\mathbf r)
-  Z_\nu(\mathbf r)\, d\mathbf r.
+  Z_\nu(\mathbf r)\,  \mathrm d ^3 \mathbf r.
 \end{equation}
 
 Applying our quadrature schemes we obtain the following equations,
@@ -1595,13 +1599,13 @@ First we evaluate \( \rho \), \( \nabla\rho \) and \( \gamma  \) on the
 grid. Differentiating \( \rho(\mathbf r) = \sum_{\lambda \tau}
 D_{\lambda \tau}\chi_\lambda(\mathbf r)\chi_\tau(\mathbf r) \) produces
 two terms that are equal by the symmetry of \( D \), which is where the
-factor of two originates,
+factor of two originates in equation \eqref{eq:diff_rho},
 
 \begin{align}
   \rho_g &= \sum_{\lambda  \tau } \Phi_{\lambda g} \Phi_{\tau g}
   D_{\lambda  \tau}  \\
   \nabla_k\rho_g &= 2\sum_{\lambda  \tau } \nabla_k\Phi_{\lambda g}
-  \Phi_{\tau g} D_{\lambda  \tau}, \qquad k \in \{x,y,z\} \\
+  \Phi_{\tau g} D_{\lambda  \tau}, \qquad k \in \{x,y,z\} \label{eq:diff_rho} \\
   \gamma_g &= \nabla\rho_g \cdot \nabla\rho_g .
 \end{align}
 
@@ -1650,18 +1654,14 @@ Finally we perform one GEMM to compute
 
 and symmetrize the result, \( V = \bar V + \bar V^T \).
 
-The algorithm of Stocks and Barca~\cite{Stocks_2025} is formulated for
-the spin-restricted case. Since every benchmark of
-Section~\ref{subsec:benchmarks} is unrestricted, we derive the
-generalization here.
-
 A spin-unrestricted GGA functional depends on the two spin densities
 \( \rho^\sigma \) and on the gradient invariants that can be built from
 them,
 
 \begin{equation}
   E_\text{xc}^\text{GGA} = \int \varepsilon_\text{xc}^\text{GGA}
-  \big( \{\rho^\sigma\}, \{\gamma^{\sigma \sigma'}\} \big)\, d\mathbf r,
+  \big( \{\rho^\sigma\}, \{\gamma^{\sigma \sigma'}\} \big)\, \mathrm
+  d^3 \mathbf r,
   \qquad
   \gamma^{\sigma \sigma'}(\mathbf r) = \nabla\rho^\sigma(\mathbf r)
   \cdot \nabla\rho^{\sigma'}(\mathbf r).
@@ -1691,7 +1691,7 @@ spin density \( \rho^{\sigma'} \) does not depend on
     \frac{\partial \gamma^{\sigma \sigma}}{\partial D^{\sigma}_{\mu \nu}}
     + \varepsilon_{\gamma^{\sigma \sigma'}}
     \frac{\partial \gamma^{\sigma \sigma'}}{\partial D^{\sigma}_{\mu \nu}}
-  \bigg)\, d\mathbf r,
+  \bigg)\, \mathrm d^3 \mathbf r,
   \label{eq:V_xc_chain_polarized}
 \end{equation}
 
@@ -1736,7 +1736,7 @@ gives
 \begin{equation}
   V^{\sigma}_{\mu \nu} = \int \Big( \varepsilon_{\rho^\sigma}
     \chi_\mu \chi_\nu + \mathbf v^\sigma \cdot
-  \nabla(\chi_\mu \chi_\nu) \Big)\, d\mathbf r,
+  \nabla(\chi_\mu \chi_\nu) \Big)\, \mathrm d^3 \mathbf r,
 \end{equation}
 
 which has exactly the structure of the restricted expression and can be
@@ -1791,7 +1791,7 @@ Table~\ref{tab:gga_lsda_memory}.
         teambox/.style={box, fill=green!12, draw=green!45!black},
         arr/.style={-{Latex[length=2mm]}, thick},
         branchlabel/.style={font=\large\bfseries, text=black},
-        looplabel/.style={font=\small\itshape, text=gray!70!black}
+        looplabel/.style={font=\large, text=black!70!black}
       ]
       % --- Startup data, shared by both channels ---
       \node[databox] (colloc)
@@ -1974,8 +1974,7 @@ The locally dense linear algebra implementation of the RI-J and RI-K
 schemes tries to overcome the drawbacks of the dense schemes by not
 pre-computing the collocation matrices but instead recomputing them
 during each SCF cycle. Recomputing the collocation matrices allows us
-to take advantage of a different feature that atomic orbitals
-exhibit, namely their locality.
+to take advantage of atomic orbitals locality.
 
 Atomic orbitals are almost always designed in a way that their radial
 function decays at least exponentially far away from their originating
@@ -2052,7 +2051,7 @@ Figure~\ref{fig:tiled_rik_flow} and Table~\ref{tab:tiled_rik_memory}.
         threadbox/.style={box, fill=orange!10, draw=orange!65!black},
         teambox/.style={box, fill=green!12, draw=green!45!black},
         arr/.style={-{Latex[length=2mm]}, thick},
-        looplabel/.style={font=\small\itshape, text=gray!70!black}
+        looplabel/.style={font=\large, text=black!70!black}
       ]
       \node[databox] (dbuild)
       {Build density\\$D_{\mu\nu}=\sum_i f_i C_{\mu i}C_{\nu i}$};
@@ -2167,7 +2166,7 @@ Figure~\ref{fig:tiled_rik_flow} and Table~\ref{tab:tiled_rik_memory}.
         threadbox/.style={box, fill=orange!10, draw=orange!65!black},
         teambox/.style={box, fill=green!12, draw=green!45!black},
         arr/.style={-{Latex[length=2mm]}, thick},
-        looplabel/.style={font=\small\itshape, text=gray!70!black}
+        looplabel/.style={font=\large, text=black!70!black}
       ]
       \node[hostbox] (mirror) {Mirror $f_i$ to host};
       \node[hostbox, below=12mm of mirror] (zero) {Zero\\$(\nu i|\alpha)$};
@@ -2253,19 +2252,19 @@ Figure~\ref{fig:tiled_rik_flow} and Table~\ref{tab:tiled_rik_memory}.
 
 We should note that although this implementation takes advantage of
 the locality that atomic orbitals provide, the repeated evaluation of
-the basis function becomes a massive computational cost. Another
+the basis functions becomes a massive computational cost. Another
 thing to keep in mind when comparing the two implementations is that
 due to the collocations being pre-computed in the dense linear
 algebra version, we could in theory also offload the pre-computation
 to another library, whereas in the locally dense version, we need to
-be able to evaluate the basis functions during the kernel.
+be able to evaluate the basis functions within the kernel.
 
 \section{Results}\label{sec:results}
 
-This section contains the results of our implementations.
+This section contains the results obtained with our implementations.
 We analyze convergence as well as timing results, starting with
 preliminary studies on small example systems and then
-later performing full benchmarks on the W4-11 set of Karton, Daon and
+later perform full benchmarks on the W4-11 set of Karton, Daon and
 Martin~\cite{Karton11w411}.
 
 \subsection{Convergence}\label{subsec:convergence}
@@ -2274,10 +2273,11 @@ We first need to understand how the choice of the underlying
 quadrature grid affects our experiments. We therefore make an
 incremental study of how the resolution and geometry of a chosen
 quadrature grid affect the HF energies. We start with the hydrogen
-atom, then move on to the dihydrogen cation and lastly
+atom, then move on to the dihydrogen cation and last
 perform SCF computations on the water molecule. Where an exact value is
 available in closed form we use it: the hydrogen atom is measured
-against the analytic $1s$ energy $E_\mathrm{exact}=-0.5$~Ha and the
+against the analytic $1s$ energy $E_\mathrm{exact}=-0.5$~\( E_\mathrm
+h \) and the
 H$_2^+$ overlap against its analytic value. Everywhere else the energy
 errors reported in this section are measured against a shared
 self-reference, evaluated on a grid far finer than any grid in the
@@ -2298,13 +2298,15 @@ We first test how well the radial grids presented in
 Section~\ref{subsec:quadratures} compare against each other.
 Figure~\ref{fig:conv_radial_h} shows that all three schemes converge
 monotonically, with the (M4) grid being the most accurate at every
-radial resolution and reaching \( 1.0 \times 10^{-15} \)~Ha. The (M3)
+radial resolution and reaching \( 1.0 \times 10^{-15} \)~\( E_\mathrm
+h \). The (M3)
 grid is the slowest of the three and still sits at \( 6.4 \times
-10^{-12} \)~Ha on the finest grid of the sweep. Because the reference
+10^{-12} \)~\( E_\mathrm h \) on the finest grid of the sweep.
+Because the reference
 here is the analytic $1s$ energy rather than a self-reference, the (M4)
 curve keeps descending across the whole sweep and only flattens once it
 reaches the double-precision noise floor of the energy itself, at
-roughly \( 10^{-15} \)~Ha. The full data is tabulated in
+roughly \( 10^{-15} \)~\( E_\mathrm h \). The full data is tabulated in
 Table~\ref{tab:data_radial_h}.
 
 Becke's proposed radial mapping is the least accurate of the three on
@@ -2327,7 +2329,7 @@ proposal.
     at order $L=29$. The radial point count is swept over
     $n_\mathrm{rad}\in\{10,20,40,80,160,320,640\}$. The reference is the
     exact non-relativistic $1s$ energy of the hydrogen atom,
-    $E_\mathrm{exact}=-0.5$~Ha, so the ordinate
+    $E_\mathrm{exact}=-0.5$~\( E_\mathrm h \), so the ordinate
   $|E-E_\mathrm{exact}|$ is pure quadrature error.}
   \label{fig:conv_radial_h}
 \end{figure}
@@ -2360,8 +2362,8 @@ is tabulated in Table~\ref{tab:data_h2plus}.
     $S_{AB}$ of H$_2^+$ towards its exact analytic value
     $S_\mathrm{exact}=\frac{7}{3}e^{-1}=0.858385362733$. The system is two
     $1s$ Slater functions with $\zeta=1$, one on each proton, at a
-    separation of $R=1$~bohr. Radial scheme: Treutler-Ahlrichs; angular
-    scheme: Lebedev-Laikov. Left: radial sweep at a fixed angular order
+    separation of $R=1$~bohr. Radial scheme: Treutler--Ahlrichs; angular
+    scheme: Lebedev. Left: radial sweep at a fixed angular order
     $L=59$. Right: angular sweep at a fixed radial resolution
     $n_\mathrm{rad}=200$. Unlike the other convergence studies in this
     section, the reference here is exact rather than a self-reference. The
@@ -2393,8 +2395,9 @@ increasing the radial grid resolution. Hence we can only expect the
 (M4) radial mapping to yield superior results for a high enough
 angular quadrature grid. The error is moreover not monotone in \( L \)
 at fixed \( n_\mathrm{rad} \): at \( n_\mathrm{rad}=40 \) the (M4) error
-grows from \( 7.4 \times 10^{-9} \)~Ha at \( L=17 \) to \( 1.7 \times
-10^{-8} \)~Ha at \( L=23 \), which we attribute to a partial
+grows from \( 7.4 \times 10^{-9} \)~\( E_\mathrm h \) at \( L=17 \)
+to \( 1.7 \times
+10^{-8} \)~\( E_\mathrm h \) at \( L=23 \), which we attribute to a partial
 cancellation between the radial and angular quadrature errors that is
 undone as the angular grid is refined. We decided to use the (M4) grid
 for all further experiments, since we observed a faster convergence rate
@@ -2405,7 +2408,7 @@ and expect the (M4) grid to be the most cost-efficient choice.
   \includegraphics[width=\textwidth]{Visualisations/convergence_2d.pdf}
   \caption{Two-dimensional (radial $\times$ angular) grid convergence of
     the H$_2^+$ core-Hamiltonian ground-state (lowest-MO) energy,
-    comparing the Becke and Treutler-Ahlrichs (M4) radial schemes on a
+    comparing the Becke and Treutler--Ahlrichs (M4) radial schemes on a
     shared Lebedev angular grid. Molecule: H$_2^+$ with protons
     at $x=0$ and $x=1$~bohr; basis: QZ4P. Top left: radial convergence at
     the finest angular order in the sweep ($L=29$). Top right: angular
@@ -2415,8 +2418,9 @@ and expect the (M4) grid to be the most cost-efficient choice.
     each radial curve plateaus at a floor set by the angular order (and
     vice versa). The reference is the mean of the two schemes on the
     finest grid ($n_\mathrm{rad}=640$, $L=41$),
-    $E_\mathrm{ref}=-1.45175161440473$~Ha (shared self-reference; the two
-    schemes agree there to $7\times10^{-13}$~Ha). The ordinate is
+    $E_\mathrm{ref}=-1.45175161440473$~\( E_\mathrm h \) (shared
+      self-reference; the two
+    schemes agree there to $7\times10^{-13}$~\( E_\mathrm h \)). The ordinate is
   $|E-E_\mathrm{ref}|$.}
   \label{fig:conv_2d}
 \end{figure}
@@ -2424,7 +2428,7 @@ and expect the (M4) grid to be the most cost-efficient choice.
 \subsubsection{Self-Consistent Field Calculations}\label{subsubsec:scf_calc}
 Now that we have a clear grasp on how the quadrature grids affect the
 convergence of simple systems, we are ready to perform the first full
-SCF calculations. We analyze how the unrestricted Hartree-Fock
+SCF calculations. We analyze how the unrestricted Hartree--Fock
 energy of water (H$_2$O) converges as the radial resolution and the
 angular order are increased together. We ran the SCF cycles on an
 unpruned grid, with Treutler angular grid pruning~\cite{Treutler1995}
@@ -2441,9 +2445,9 @@ figures at every grid level, while using roughly \( 30\% \) fewer
 quadrature points
 (\( 965\,422 \) instead of \( 1\,383\,454 \) points on the finest
 grid). It therefore reduces the cost of the quadrature with no
-discernible drawback. The Treutler pruning scheme, in contrast, seems
+discernible drawback. The Treutler pruning scheme, in contrast, appears
 too aggressive in its pruning, as its total error plateaus above \(
-10^{-5} \)~Ha.
+10^{-5} \)~ \( E_\mathrm h \).
 
 The per-term decomposition in Figure~\ref{fig:conv_pruning_terms}
 explains both this accuracy floor and the non-monotonicity of the total
@@ -2458,7 +2462,7 @@ the grid size.
   \centering
   \includegraphics[width=0.72\textwidth]{Visualisations/convergence_pruning_total.pdf}
   \caption{Angular pruning-scheme comparison on water (H$_2$O):
-    convergence of the \emph{total} unrestricted Hartree-Fock energy,
+    convergence of the \emph{total} unrestricted Hartree--Fock energy,
     plotted as accuracy per grid point. Schemes: \emph{Unpruned} (full
     Lebedev order on every radial shell), \emph{Treutler} (inner/middle
     shells fixed at Lebedev orders $7/11$) and \emph{Robust} (inner
@@ -2469,7 +2473,8 @@ the grid size.
     $(n_\mathrm{rad},L)\in\{(40,17),(60,21),(90,28),(130,29),(200,35),
     (300,41),(600,45)\}$. The shared self-reference is a uniform
     unpruned grid with $n_\mathrm{rad}=1000$, $L=50$ ($2\,917\,774$
-    points), $E_\mathrm{scf}=-76.0667767173$~Ha. Note that the total
+    points), $E_\mathrm{scf}=-76.0667767173$~ \( E_\mathrm h \). Note
+    that the total
     error is not monotone: it results from the cancellation of the
     individual energy terms shown in
     Figure~\ref{fig:conv_pruning_terms}. The full data set is listed in
@@ -2484,11 +2489,13 @@ the grid size.
     comparison of Figure~\ref{fig:conv_pruning_total}: absolute errors
     of the kinetic ($E_\mathrm{kin}$), nuclear-attraction
     ($E_\mathrm{ne}$), Coulomb ($E_J$) and exact-exchange ($E_K$)
-    contributions to the unrestricted Hartree-Fock energy, against the
+    contributions to the unrestricted Hartree--Fock energy, against the
     total number of grid points. Systems, schemes, grids and reference
     as in Figure~\ref{fig:conv_pruning_total}; the reference values are
-    $E_\mathrm{kin}=75.9976267410$, $E_\mathrm{ne}=-199.0472994426$,
-    $E_J=46.7402184304$ and $E_K=-8.9450726577$~Ha. The two
+    $E_\mathrm{kin}=75.9976267410$~\( E_\mathrm h \),
+    $E_\mathrm{ne}=-199.0472994426 $~\( E_\mathrm h \),
+    $E_J=46.7402184304$~\( E_\mathrm h \) and $E_K=-8.9450726577$~\(
+    E_\mathrm h \). The two
     one-electron terms converge one to two orders of magnitude more
     slowly than the two-electron terms and therefore limit the overall
     accuracy. The full data set is listed in
@@ -2499,9 +2506,10 @@ the grid size.
 \subsection{Benchmarks}\label{subsec:benchmarks}
 
 In the previous section we established that our quadrature converges to
-the level of a few $\mu$Ha. We now want to benchmark the complete code
-on a realistic workload. We ask two questions: The first one being, how
-well we can reproduce chemical quantities. The second one being,
+the level of a few $\mu$\( E_\mathrm h \). We now want to benchmark
+the complete code
+on a realistic workload. We ask two questions: how
+well we can reproduce chemical quantities, and
 where do our integration routines spend their time.
 
 For both questions we use the W4-11 test set of Karton, Daon and
@@ -2641,7 +2649,7 @@ Figure~\ref{fig:w411_breakdown} decomposes the runtime into the
 individual stages of the calculation, and the outcome is very clear.
 In the small DZ basis the exchange-correlation quadrature dominates
 with about three quarters of the accounted time. Its absolute cost however
-stays nearly constant across the four bases, at roughly $0.55$ to
+stays nearly constant across the four basis sets, at roughly $0.55$ to
 $0.62$~s per molecule, because it is bound by the size of the grid and
 not by the size of the basis. The exact exchange build behaves in the
 opposite way. It grows from $0.1$~s per molecule at DZ to $4.2$~s at
@@ -2664,7 +2672,7 @@ exchange kernel as the component where optimization would pay off most.
     the accounted time, which makes the shift of work into the exact
     exchange build with growing basis size explicit. The first five
     categories are incurred once during start-up and the four labeled
-    \emph{SCF} once per Fock-matrix build. Systems, method and grid as in
+    SCF once per Fock-matrix build. Systems, method and grid as in
   Figure~\ref{fig:w411_violin}. All timings use the dense algorithm.}
   \label{fig:w411_breakdown}
 \end{figure}
@@ -2672,10 +2680,10 @@ exchange kernel as the component where optimization would pay off most.
 \section{Conclusion} \label{sec:conclusion}
 
 We found that the (M4) radial grid mapping has better convergence
-properties than the (M3) and (Becke) radial mappings. When performing
-Hartree-Fock SCF calculations the error converges to within a few \(
-\mu\)Ha, with the one-electron terms posing the accuracy
-bottleneck; the two-electron terms converge to sub-\(\mu\)Ha
+properties than the (M3) and (Becke) radial mappings. In
+Hartree--Fock calculations the error converges to within a few \(
+\mu E_\mathrm h\), with the one-electron terms posing the accuracy
+bottleneck; the two-electron terms converge to sub-\(\mu E_\mathrm h\)
 levels for sufficiently dense quadrature grids.
 Regarding pruning schemes we found that the Treutler pruning scheme
 plateaus above \( 10^{-5} \)~Ha, whereas the Psi4-Robust pruning
@@ -2707,7 +2715,7 @@ Nevertheless, the reusability of the dense implementations should not
 be understated. The integration kernels solely rely on a handful
 of precomputed quantities, such as the collocation matrix, which can
 be provided by the calling program. Our library opens access to
-modern GPGPU computational power for Fock and Kohn-Sham
+modern GPGPU computational power for Fock and Kohn--Sham
 matrix assembly. The entire source code is publicly available on
 \href{https://www.github.com/bobschreiner/NuKEXC}{https://www.github.com/bobschreiner/NuKEXC}
 under the
@@ -2759,7 +2767,7 @@ overall computational cost.
 
 I want to thank Prof. Dr. Markus Reiher for enabling me to conduct my
 thesis externally at the University of Helsinki. My thanks go to
-Dr. Susi Lehtola for proposing the thesis project and for their
+Dr. Susi Lehtola for proposing the thesis project and for his
 continued support and mentorship
 throughout the writing of this thesis. I am grateful to Philip, Milan,
 Hugo, Jonde, Kilian and Luukas for the moral support and positive
@@ -2782,7 +2790,7 @@ would not have been able to finish this work.
       Grammar and spelling  &  Claude Opus 5 &  whole thesis & --- \\
       Content coherence   &  Claude Opus 5 &  whole thesis &
       Implemented relevant suggestions \\
-      Plotting of Figures & Claude  Opus 5 & all figures &
+      Plotting of figures & Claude  Opus 5 & all figures &
       Manually polished \\
       Tables & Claude  Opus 5 & all tables & Tables are generated
       from csv files  \\

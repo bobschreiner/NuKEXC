@@ -19,6 +19,7 @@ replaces them with full-precision files including the raw energies (this
 script accepts both formats).
 """
 
+import matplotlib.pyplot as plt
 import csv
 import math
 import re
@@ -27,7 +28,6 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 HERE = Path(__file__).resolve().parent
 DATA = HERE / "Data"
@@ -120,7 +120,7 @@ def radial_h():
         xs, ys = series(rows, "scheme", s, "nrad", "abs_error")
         ax.loglog(xs, ys, label=s, **style(i))
     ax.set_xlabel(r"radial points $n_\mathrm{rad}$")
-    ax.set_ylabel(r"$|E - E_\mathrm{exact}|$  (Ha)")
+    ax.set_ylabel(r"$|E - E_\mathrm{exact}|$  ($E_\mathrm{h}$)")
     ax.grid(True, which="both")
     ax.legend(title="radial scheme")
     save_fig(fig, "convergence_radial_h.pdf")
@@ -152,7 +152,7 @@ def radial_h():
         "(Figure~\\ref{fig:conv_radial_h}). Absolute error of the "
         "core-Hamiltonian lowest-MO energy per radial scheme, measured "
         "against the exact non-relativistic $1s$ energy "
-        "$E_\\mathrm{exact}=-0.5$~Ha.}",
+        "$E_\\mathrm{exact}=-0.5$~$E_\\mathrm{h}$.}",
         "  \\label{tab:data_radial_h}",
         "\\end{table}",
     ]
@@ -253,10 +253,10 @@ def conv2d():
             **style(i),
         )
     ax[0, 0].set_xlabel(r"radial points $n_\mathrm{rad}$")
-    ax[0, 0].set_ylabel(r"$|E - E_\mathrm{ref}|$  (Ha)")
+    ax[0, 0].set_ylabel(r"$|E - E_\mathrm{ref}|$ ($E_\mathrm{h}$)")
     ax[0, 0].legend(title=f"radial scheme  (angular order $L={nang_hi}$)")
     ax[0, 1].set_xlabel(r"angular order $L$")
-    ax[0, 1].set_ylabel(r"$|E - E_\mathrm{ref}|$  (Ha)")
+    ax[0, 1].set_ylabel(r"$|E - E_\mathrm{ref}|$ ($E_\mathrm{h}$) ")
     ax[0, 1].legend(title=f"radial scheme  ($n_\\mathrm{{rad}}={nrad_hi}$)")
     for a in (ax[0, 0], ax[0, 1]):
         a.grid(True, which="both")
@@ -278,7 +278,7 @@ def conv2d():
         # Becke/M4 are radial mappings, so the scheme qualifies the radial
         # axis, not the legend (whose entries are angular orders).
         axp.set_xlabel(r"radial points $n_\mathrm{rad}$  (" + s + " scheme)")
-        axp.set_ylabel(r"$|E - E_\mathrm{ref}|$  (Ha)")
+        axp.set_ylabel(r"$|E - E_\mathrm{ref}|$ ($E_\mathrm{h}$)")
         axp.grid(True, which="both")
         axp.set_ylim(ylim)
         axp.legend(title="angular order $L$", fontsize=8, ncol=2, loc="lower left")
@@ -314,7 +314,7 @@ def conv2d():
             "  \\end{tabular}",
             f"  \\caption{{H$_2^+$ two-dimensional grid-convergence data, "
             f"{s} radial scheme (Figure~\\ref{{fig:conv_2d}}): "
-            "$|E-E_\\mathrm{ref}|$ in Ha for every combination of "
+            "$|E-E_\\mathrm{ref}|$ in $E_\\mathrm{h}$ for every combination of "
             "$n_\\mathrm{rad}$ and angular order $L$.}",
             f"  \\label{{tab:data_2d_{s.lower().replace('-', '_')}}}",
             "\\end{table}",
@@ -326,12 +326,18 @@ def conv2d():
 # The total is shown on its own (it is the headline quantity, and its
 # non-monotonicity is an error-cancellation artefact of the four terms below);
 # the individual terms get a separate 2x2 matrix.
-TOTAL_PANEL = ("err_total", r"total  $|E-E^\mathrm{ref}|$  (Ha)")
+TOTAL_PANEL = ("err_total", r"total  $|E-E^\mathrm{ref}|$ ($E_\mathrm{h}$)")
 TERM_PANELS = [
-    ("err_kin", r"kinetic  $|E_\mathrm{kin}-E_\mathrm{kin}^\mathrm{ref}|$  (Ha)"),
-    ("err_ne", r"nuclear attr.  $|E_\mathrm{ne}-E_\mathrm{ne}^\mathrm{ref}|$  (Ha)"),
-    ("err_J", r"Coulomb  $|E_J-E_J^\mathrm{ref}|$  (Ha)"),
-    ("err_K", r"exchange  $|E_K-E_K^\mathrm{ref}|$  (Ha)"),
+    (
+        "err_kin",
+        r"kinetic  $|E_\mathrm{kin}-E_\mathrm{kin}^\mathrm{ref}|$ ($E_\mathrm{h}$)",
+    ),
+    (
+        "err_ne",
+        r"nuclear attr.  $|E_\mathrm{ne}-E_\mathrm{ne}^\mathrm{ref}|$  ($E_\mathrm{h}$)",
+    ),
+    ("err_J", r"Coulomb  $|E_J-E_J^\mathrm{ref}|$ ($E_\mathrm{h}$)"),
+    ("err_K", r"exchange  $|E_K-E_K^\mathrm{ref}|$ ($E_\mathrm{h}$)"),
 ]
 TERM_HEADS = [
     "$|\\Delta E_\\mathrm{kin}|$",
@@ -413,11 +419,11 @@ def water_table(rows, header_text, group_key, order, name, study, figrefs):
         "Hartree--Fock energies. Reference: uniform unpruned grid with "
         f"$n_\\mathrm{{rad}}={nrad_ref}$, $L={nang_ref}$ "
         f"({npts_ref:,} points), "
-        f"$E_\\mathrm{{kin}}={ref['E_kin_ref']:.10f}$, "
-        f"$E_\\mathrm{{ne}}={ref['E_ne_ref']:.10f}$, "
-        f"$E_J={ref['E_J_ref']:.10f}$, "
-        f"$E_K={ref['E_K_ref']:.10f}$, "
-        f"$E_\\mathrm{{scf}}={ref['E_scf_ref']:.10f}$~Ha."
+        f"$E_\\mathrm{{kin}}={ref['E_kin_ref']:.10f}$~$E_\\mathrm{{h}}$, "
+        f"$E_\\mathrm{{ne}}={ref['E_ne_ref']:.10f}$~$E_\\mathrm{{h}}$, "
+        f"$E_J={ref['E_J_ref']:.10f}$~$E_\\mathrm{{h}}$, "
+        f"$E_K={ref['E_K_ref']:.10f}$~$E_\\mathrm{{h}}$, "
+        f"$E_\\mathrm{{scf}}={ref['E_scf_ref']:.10f}$~$E_\\mathrm{{h}}$."
     )
     lines += [
         "    \\bottomrule",
@@ -432,13 +438,21 @@ def water_table(rows, header_text, group_key, order, name, study, figrefs):
 def pruning():
     rows, header = load(DATA / "convergence_pruning.csv")
     order = ["Unpruned", "Treutler", "Robust"]
-    water_total_figure(rows, "scheme", order,
-                       "convergence_pruning_total.pdf", "pruning scheme")
-    water_terms_figure(rows, "scheme", order,
-                       "convergence_pruning_terms.pdf", "pruning scheme")
-    water_table(rows, header, "scheme", order, "pruning", "angular-pruning",
-                "Figures~\\ref{fig:conv_pruning_total} "
-                "and~\\ref{fig:conv_pruning_terms}")
+    water_total_figure(
+        rows, "scheme", order, "convergence_pruning_total.pdf", "pruning scheme"
+    )
+    water_terms_figure(
+        rows, "scheme", order, "convergence_pruning_terms.pdf", "pruning scheme"
+    )
+    water_table(
+        rows,
+        header,
+        "scheme",
+        order,
+        "pruning",
+        "angular-pruning",
+        "Figures~\\ref{fig:conv_pruning_total} and~\\ref{fig:conv_pruning_terms}",
+    )
 
 
 if __name__ == "__main__":
