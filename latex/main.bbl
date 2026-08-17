@@ -12,8 +12,23 @@ C.~C.~J. Roothaan.
 
 \bibitem{Boys1950}
 S.~F. Boys.
-\newblock Electronic wave functions - i. a general method of calculation for the stationary states of any molecular system.
+\newblock Electronic wave functions - {I}. a general method of calculation for the stationary states of any molecular system.
 \newblock {\em Proceedings of the Royal Society of London. Series A. Mathematical and Physical Sciences}, 200(1063):542--554, February 1950.
+
+\bibitem{King1976}
+Harry~F. King and Michel Dupuis.
+\newblock Numerical integration using {Rys} polynomials.
+\newblock {\em Journal of Computational Physics}, 21(2):144--165, 1976.
+
+\bibitem{McMurchie1978}
+Larry~E McMurchie and Ernest~R Davidson.
+\newblock One- and two-electron integrals over cartesian gaussian functions.
+\newblock {\em Journal of Computational Physics}, 26(2):218--231, February 1978.
+
+\bibitem{Obara1986}
+S.~Obara and A.~Saika.
+\newblock Efficient recursive computation of molecular integrals over { Cartesian} {Gaussian} functions.
+\newblock {\em The Journal of Chemical Physics}, 84(7):3963--3974, April 1986.
 
 \bibitem{Hohenberg1964}
 P.~Hohenberg and W.~Kohn.
@@ -32,36 +47,31 @@ A.~D. Becke.
 
 \bibitem{Cohen2002}
 Aron~J. Cohen and Nicholas~C. Handy.
-\newblock Density functional generalized gradient calculations using slater basis sets.
+\newblock Density functional generalized gradient calculations using { Slater} basis sets.
 \newblock {\em The Journal of Chemical Physics}, 117(4):1470--1478, July 2002.
 
 \bibitem{Watson2003}
 Mark~A. Watson, Nicholas~C. Handy, and Aron~J. Cohen.
-\newblock Density functional calculations, using slater basis sets, with exact exchange.
+\newblock Density functional calculations, using {Slater} basis sets, with exact exchange.
 \newblock {\em The Journal of Chemical Physics}, 119(13):6475--6481, October 2003.
 
 \bibitem{VanLenthe2003}
 E.~Van~Lenthe and E.~J. Baerends.
-\newblock Optimized slater‐type basis sets for the elements 1–118.
+\newblock Optimized {Slater}‐type basis sets for the elements 1–118.
 \newblock {\em Journal of Computational Chemistry}, 24(9):1142--1156, May 2003.
 
 \bibitem{Franchini2013}
 Mirko Franchini, Pierre Herman~Theodoor Philipsen, and Lucas Visscher.
-\newblock The becke fuzzy cells integration scheme in the amsterdam density functional program suite.
+\newblock The {Becke} fuzzy cells integration scheme in the {Amsterdam} density functional program suite.
 \newblock {\em Journal of Computational Chemistry}, 34(21):1819--1827, May 2013.
-
-\bibitem{Obara1986}
-S.~Obara and A.~Saika.
-\newblock Efficient recursive computation of molecular integrals over cartesian gaussian functions.
-\newblock {\em The Journal of Chemical Physics}, 84(7):3963--3974, April 1986.
 
 \bibitem{Ahlrichs2006}
 Reinhart Ahlrichs.
-\newblock A simple algebraic derivation of the obara–saika scheme for general two-electron interaction potentials.
+\newblock A simple algebraic derivation of the {Obara}–{Saika} scheme for general two-electron interaction potentials.
 \newblock {\em Phys. Chem. Chem. Phys.}, 8(26):3072--3077, 2006.
 
 \bibitem{Gavini2023}
-Vikram Gavini, Stefano Baroni, Volker Blum, David~R Bowler, Alexander Buccheri, James~R Chelikowsky, Sambit Das, William Dawson, Pietro Delugas, Mehmet Dogan, Claudia Draxl, Giulia Galli, Luigi Genovese, Paolo Giannozzi, Matteo Giantomassi, Xavier Gonze, Marco Govoni, François Gygi, Andris Gulans, John~M Herbert, Sebastian Kokott, Thomas~D Kühne, Kai-Hsin Liou, Tsuyoshi Miyazaki, Phani Motamarri, Ayako Nakata, John~E Pask, Christian Plessl, Laura~E Ratcliff, Ryan~M Richard, Mariana Rossi, Robert Schade, Matthias Scheffler, Ole Schütt, Phanish Suryanarayana, Marc Torrent, Lionel Truflandier, Theresa~L Windus, Qimen Xu, Victor W-Z Yu, and D~Perez.
+Vikram Gavini, Stefano Baroni, Volker Blum, David~R. Bowler, Alexander Buccheri, James~R. Chelikowsky, Sambit Das, William Dawson, Pietro Delugas, Mehmet Dogan, Claudia Draxl, Giulia Galli, Luigi Genovese, Paolo Giannozzi, Matteo Giantomassi, Xavier Gonze, Marco Govoni, François Gygi, Andris Gulans, John~M. Herbert, Sebastian Kokott, Thomas~D. Kühne, Kai-Hsin Liou, Tsuyoshi Miyazaki, Phani Motamarri, Ayako Nakata, John~E. Pask, Christian Plessl, Laura~E. Ratcliff, Ryan~M. Richard, Mariana Rossi, Robert Schade, Matthias Scheffler, Ole Schütt, Phanish Suryanarayana, Marc Torrent, Lionel Truflandier, Theresa~L. Windus, Qimen Xu, Victor W.-Z. Yu, and D.~Perez.
 \newblock Roadmap on electronic structure codes in the exascale era.
 \newblock {\em Modelling and Simulation in Materials Science and Engineering}, 31(6):063301, August 2023.
 
@@ -72,12 +82,12 @@ Jorge~L. Galvez~Vallejo, Calum Snowdon, Ryan Stocks, Fazeleh Kazemian, Fiona~Chu
 
 \bibitem{Stocks_2025}
 Ryan Stocks and Giuseppe M.~J. Barca.
-\newblock Efficient algorithms for gpu accelerated evaluation of the dft exchange-correlation functional.
+\newblock Efficient algorithms for {GPU} accelerated evaluation of the { DFT} exchange-correlation functional.
 \newblock {\em Journal of Chemical Theory and Computation}, 21(20):10263--10280, October 2025.
 
 \bibitem{WilliamsYoung2021}
 David~B. Williams-Young, Abhishek Bagusetty, Wibe~A. de~Jong, Douglas Doerfler, Hubertus~J.J. van Dam, Álvaro Vázquez-Mayagoitia, Theresa~L. Windus, and Chao Yang.
-\newblock Achieving performance portability in gaussian basis set density functional theory on accelerator based architectures in nwchemex.
+\newblock Achieving performance portability in {Gaussian} basis set density functional theory on accelerator based architectures in {NWChemEx}.
 \newblock {\em Parallel Computing}, 108:102829, December 2021.
 
 \bibitem{Lehtola2023c}
@@ -87,22 +97,27 @@ Susi Lehtola.
 
 \bibitem{Karton11w411}
 Amir Karton, Shauli Daon, and Jan M.~L. Martin.
-\newblock W4-11: A high-confidence benchmark dataset for computational thermochemistry derived from first-principles w4 data.
+\newblock W4-11: A high-confidence benchmark dataset for computational thermochemistry derived from first-principles {W4} data.
 \newblock {\em Chemical Physics Letters}, 510(4--6):165--178, 2011.
 
 \bibitem{Hall1951}
 G.~G. Hall.
-\newblock The molecular orbital theory of chemical valency viii. a method of calculating ionization potentials.
+\newblock The molecular orbital theory of chemical valency {VIII}. a method of calculating ionization potentials.
 \newblock {\em Proceedings of the Royal Society of London. Series A. Mathematical and Physical Sciences}, 205(1083):541--552, March 1951.
+
+\bibitem{Lehtola2025}
+Susi Lehtola and Lori~A. Burns.
+\newblock {OpenOrbitalOptimizer} -- a reusable open source library for self-consistent field calculations.
+\newblock {\em The Journal of Physical Chemistry A}, 129(25):5651--5664, June 2025.
 
 \bibitem{Chong2004}
 Delano~P. Chong, Erik Van~Lenthe, Stan Van~Gisbergen, and Evert~Jan Baerends.
-\newblock Even‐tempered slater‐type orbitals revisited: From hydrogen to krypton.
+\newblock Even‐tempered {Slater}‐type orbitals revisited: From hydrogen to krypton.
 \newblock {\em Journal of Computational Chemistry}, 25(8):1030--1036, March 2004.
 
 \bibitem{Chong2005}
-D.P. Chong.
-\newblock Augmenting basis set for time-dependent density functional theory calculation of excitation energies: Slater-type orbitals for hydrogen to krypton.
+D.~P. Chong.
+\newblock Augmenting basis set for time-dependent density functional theory calculation of excitation energies: {Slater}-type orbitals for hydrogen to krypton.
 \newblock {\em Molecular Physics}, 103(6–8):749--761, March 2005.
 
 \bibitem{Slater1930}
@@ -117,7 +132,7 @@ Ernst~Joachim Weniger.
 
 \bibitem{FernandezRico1998}
 J.~Fern{\'a}ndez~Rico, R.~L{\'o}pez, A.~Aguado, I.~Ema, and G.~Ram{\'i}rez.
-\newblock Reference program for molecular calculations with slater-type orbitals.
+\newblock Reference program for molecular calculations with {Slater}-type orbitals.
 \newblock {\em Journal of Computational Chemistry}, 19(11):1284--1293, August 1998.
 
 \bibitem{Hill2012}
@@ -132,17 +147,17 @@ Tosio Kato.
 
 \bibitem{Ditchfield1971}
 R.~Ditchfield, W.~J. Hehre, and J.~A. Pople.
-\newblock Self-consistent molecular-orbital methods. ix. an extended gaussian-type basis for molecular-orbital studies of organic molecules.
+\newblock Self-consistent molecular-orbital methods. {IX}. an extended { Gaussian}-type basis for molecular-orbital studies of organic molecules.
 \newblock {\em The Journal of Chemical Physics}, 54(2):724--728, January 1971.
 
 \bibitem{Dunning1989}
 Thom~H. Dunning.
-\newblock Gaussian basis sets for use in correlated molecular calculations. i. the atoms boron through neon and hydrogen.
+\newblock Gaussian basis sets for use in correlated molecular calculations. {I}. the atoms boron through neon and hydrogen.
 \newblock {\em The Journal of Chemical Physics}, 90(2):1007--1023, January 1989.
 
 \bibitem{Lehtola2019}
 Susi Lehtola.
-\newblock Fully numerical hartree‐fock and density functional calculations. i. atoms.
+\newblock Fully numerical {Hartree}‐{Fock} and density functional calculations. {I}. atoms.
 \newblock {\em International Journal of Quantum Chemistry}, 119(19), April 2019.
 
 \bibitem{Lehtola2019b}
@@ -157,12 +172,12 @@ Volker Blum, Ralf Gehrke, Felix Hanke, Paula Havu, Ville Havu, Xinguo Ren, Karst
 
 \bibitem{Lehtola2019a}
 Susi Lehtola.
-\newblock Fully numerical hartree‐fock and density functional calculations. ii. diatomic molecules.
+\newblock Fully numerical {Hartree}‐{Fock} and density functional calculations. {II}. {Diatomic} molecules.
 \newblock {\em International Journal of Quantum Chemistry}, 119(19), April 2019.
 
 \bibitem{Lehtola2023b}
 Susi Lehtola.
-\newblock Atomic electronic structure calculations with hermite interpolating polynomials.
+\newblock Atomic electronic structure calculations with {Hermite} interpolating polynomials.
 \newblock {\em The Journal of Physical Chemistry A}, 127(18):4180--4193, April 2023.
 
 \bibitem{Laqua2018}
@@ -171,7 +186,7 @@ Henryk Laqua, Jörg Kussmann, and Christian Ochsenfeld.
 \newblock {\em The Journal of Chemical Physics}, 149(20), November 2018.
 
 \bibitem{Lebedev1976}
-V.I. Lebedev.
+V.~I. Lebedev.
 \newblock Quadratures on a sphere.
 \newblock {\em USSR Computational Mathematics and Mathematical Physics}, 16(2):10--24, January 1976.
 
@@ -186,7 +201,7 @@ Oliver Treutler and Reinhart Ahlrichs.
 \newblock {\em The Journal of Chemical Physics}, 102(1):346--354, January 1995.
 
 \bibitem{Gill1993}
-Peter~M.W Gill, Benny~G Johnson, and John~A Pople.
+Peter M.~W. Gill, Benny~G. Johnson, and John~A. Pople.
 \newblock A standard grid for density functional calculations.
 \newblock {\em Chemical Physics Letters}, 209(5–6):506--512, July 1993.
 
@@ -227,7 +242,7 @@ Andreas~M. Köster, Roberto Flores-Moreno, and J.~Ulises Reveles.
 
 \bibitem{Johnson_1993}
 Benny~G. Johnson and Michael~J. Frisch.
-\newblock Analytic second derivatives of the gradient-corrected density functional energy. effect of quadrature weight derivatives.
+\newblock Analytic second derivatives of the gradient-corrected density functional energy. {Effect} of quadrature weight derivatives.
 \newblock {\em Chemical Physics Letters}, 216(1–2):133--140, December 1993.
 
 \bibitem{Baker1994}
@@ -237,12 +252,12 @@ Jon Baker, Jan Andzelm, Andrew Scheiner, and Bernard Delley.
 
 \bibitem{Papas2006}
 Brian~N. Papas and Henry~F. Schaefer.
-\newblock Concerning the precision of standard density functional programs: Gaussian, molpro, nwchem, q-chem, and gamess.
+\newblock Concerning the precision of standard density functional programs: {Gaussian}, {Molpro}, {NWChem}, {Q-Chem}, and {Gamess}.
 \newblock {\em Journal of Molecular Structure: THEOCHEM}, 768(1–3):175--181, August 2006.
 
 \bibitem{WilliamsYoung2020}
 David Williams-Young.
-\newblock Gauxc v0.1.0, 2020.
+\newblock {GauXC} v0.1.0, 2020.
 
 \bibitem{CarterEdwards2014}
 H.~Carter~Edwards, Christian~R. Trott, and Daniel Sunderland.
@@ -261,7 +276,7 @@ Sivasankaran Rajamanickam, Seher Acer, Luc Berger-Vergiat, Vinh Dang, Nathan Ell
 
 \bibitem{Hammond2018}
 Simon~D. Hammond, Christian~R. Trott, Daniel Ibanez, and Daniel Sunderland.
-\newblock {\em Profiling and Debugging Support for the Kokkos Programming Model}, pages 743--754.
+\newblock {\em Profiling and Debugging Support for the {Kokkos} Programming Model}, pages 743--754.
 \newblock Springer International Publishing, 2018.
 
 \bibitem{IntegratorXX}
@@ -270,11 +285,6 @@ David~B. Williams-Young.
 \newblock \url{https://github.com/wavefunction91/IntegratorXX}.
 \newblock Accessed: 2026-07-27.
 
-\bibitem{Lehtola2025}
-Susi Lehtola and Lori~A. Burns.
-\newblock Openorbitaloptimizer -- a reusable open source library for self-consistent field calculations.
-\newblock {\em The Journal of Physical Chemistry A}, 129(25):5651--5664, June 2025.
-
 \bibitem{Lehtola2018libxc}
 Susi Lehtola, Conrad Steigemann, Micael J.~T. Oliveira, and Miguel A.~L. Marques.
 \newblock Recent developments in libxc --- a comprehensive library of functionals for density functional theory.
@@ -282,12 +292,12 @@ Susi Lehtola, Conrad Steigemann, Micael J.~T. Oliveira, and Miguel A.~L. Marques
 
 \bibitem{LebrunGrandie2020}
 D.~Lebrun-Grandié, A.~Prokopenko, B.~Turcksin, and S.~R. Slattery.
-\newblock Arborx: A performance portable geometric search library.
+\newblock {ArborX}: A performance portable geometric search library.
 \newblock {\em ACM Transactions on Mathematical Software}, 47(1):1--15, December 2020.
 
 \bibitem{Prokopenko2025}
 Andrey Prokopenko, Daniel Arndt, Damien Lebrun-Grandié, and Bruno Turcksin.
-\newblock The arborx library: Version 2.0.
+\newblock The {ArborX} library: Version 2.0.
 \newblock {\em ACM Transactions on Mathematical Software}, 51(4):1--10, December 2025.
 
 \bibitem{Smith2020}
@@ -297,12 +307,27 @@ Daniel G.~A. Smith, Lori~A. Burns, Andrew~C. Simmonett, Robert~M. Parrish, Matth
 
 \bibitem{Becke93b3lyp}
 Axel~D. Becke.
-\newblock A new mixing of hartree--fock and local density-functional theories.
+\newblock A new mixing of {Hartree}--{Fock} and local density-functional theories.
 \newblock {\em The Journal of Chemical Physics}, 98(2):1372--1377, 1993.
+
+\bibitem{Stephens1994}
+P.~J. Stephens, F.~J. Devlin, C.~F. Chabalowski, and M.~J. Frisch.
+\newblock Ab initio calculation of vibrational absorption and circular dichroism spectra using density functional force fields.
+\newblock {\em The Journal of Physical Chemistry}, 98(45):11623--11627, November 1994.
+
+\bibitem{Lehtola2019c}
+Susi Lehtola.
+\newblock Assessment of initial guesses for self-consistent field calculations. {Superposition} of atomic potentials: Simple yet efficient.
+\newblock {\em Journal of Chemical Theory and Computation}, 15(3):1593--1604, January 2019.
 
 \bibitem{Lehtola2020}
 Susi Lehtola, Lucas Visscher, and Eberhard Engel.
-\newblock Efficient implementation of the superposition of atomic potentials initial guess for electronic structure calculations in gaussian basis sets.
+\newblock Efficient implementation of the superposition of atomic potentials initial guess for electronic structure calculations in {Gaussian} basis sets.
 \newblock {\em The Journal of Chemical Physics}, 152(14), April 2020.
+
+\bibitem{Bauschlicher1995}
+Charles~W. Bauschlicher and Harry Partridge.
+\newblock The sensitivity of {B3LYP} atomization energies to the basis set and a comparison of basis set requirements for {CCSD(T)} and {B3LYP}.
+\newblock {\em Chemical Physics Letters}, 240(5-6):533--540, 1995.
 
 \end{thebibliography}
