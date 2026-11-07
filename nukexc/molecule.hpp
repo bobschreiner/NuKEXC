@@ -124,4 +124,10 @@ inline void read_xyz(const std::string &filename, Molecule &mol) {
   mol = mol_tmp;
 }
 
+inline Molecule create_molecule_from_xyz(const std::string &filename) {
+  Molecule mol;
+  read_xyz(filename, mol);
+  return mol;
+}
+
 } // namespace Nukexc

@@ -17,6 +17,7 @@ add_executable(test_libxc test_libxc.cxx)
 add_executable(test_helium test_helium.cxx)
 
 add_executable(standalone standards.cxx standalone.cxx test_io.cxx)
+add_executable(minimal_example standards.cxx minimal_example.cxx)
 
 add_custom_target(copy_test_inputs
     COMMAND  ${CMAKE_COMMAND} -E copy_directory
@@ -41,6 +42,7 @@ set(ALL_TEST_TARGETS
     test_helium
 
     standalone
+    minimal_example
 
 )
 
