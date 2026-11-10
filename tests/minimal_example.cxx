@@ -139,15 +139,8 @@ run_uhf_scf_energy(ExecSpace &space, const Molecule &mol,
 
   const double E_nuc = compute_nuclear_repulsion(mol);
 
-  // ---- GWH initial guess ---------------------------------------------------
-  arma::mat F_gwh(N_bf, N_bf, arma::fill::zeros);
-  const double K_gwh = 1.75;
-  for (int i = 0; i < N_bf; ++i)
-    for (int j = 0; j < N_bf; ++j)
-      F_gwh(i, j) =
-          (i == j) ? h_core(i, i)
-                   : 0.5 * K_gwh * (h_core(i, i) + h_core(j, j)) * S_arma(i, j);
-  arma::mat F_gwh_orth = X_arma.t() * F_gwh * X_arma;
+  // ---- Core Hamiltonian initial guess -----------------------------
+  arma::mat F_orth = X_arma.t() * h_core * X_arma;
 
   // Filled by the last (converged) Fock build so the caller gets the energy
   // decomposition without a separate re-evaluation.
@@ -221,7 +214,7 @@ run_uhf_scf_energy(ExecSpace &space, const Molecule &mol,
       block_descriptions);
   solver.convergence_threshold(conv_thr);
   solver.verbosity(0);
-  solver.initialize_with_fock({F_gwh_orth, F_gwh_orth});
+  solver.initialize_with_fock({F_orth, F_orth});
   solver.run();
 
   return conv;

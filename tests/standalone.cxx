@@ -86,10 +86,10 @@ struct Config {
   int tile_size = 32; // neighbor tile (--tile=, only used by --alg=tiled)
   std::string xfunc = "lda_x";
   std::string cfunc = "lda_c_pw";
-  double dens_thr = 1e-10; // libxc density threshold (runtime --dens-thr=)
-  std::string pruning = "none";   // grid angular pruning: none/robust/treutler
+  double dens_thr = 1e-10;      // libxc density threshold (runtime --dens-thr=)
+  std::string pruning = "none"; // grid angular pruning: none/robust/treutler
   std::string radial = "uniform"; // per-element radial sizing: uniform/pyscf
-  std::string guess = "gwh";      // initial guess: gwh/core/sap
+  std::string guess = "core";     // initial guess: core/gwh/sap
   std::string sap_dir = "";       // SAP potential dir (empty: built-in default)
   bool nl_histogram = false;      // runtime via --nl-histogram
 };
@@ -136,7 +136,7 @@ Config parse_args(int argc, char *argv[]) {
           << "(default: " << cfg.pruning << ")\n"
           << "  --radial=<name>       Radial sizing uniform/pyscf   (default: "
           << cfg.radial << ")\n"
-          << "  --guess=<name>        Initial guess gwh/core/sap    (default: "
+          << "  --guess=<name>        Initial guess core/gwh/sap    (default: "
           << cfg.guess << ")  [core is more robust for near-linearly\n"
           << "                        dependent Slater sets; sap is the "
           << "superposition of atomic potentials]\n"
@@ -220,9 +220,9 @@ void print_config(const Config &cfg) {
   rows.push_back({"Conv. threshold", cfg_val(cfg.conv_thr)});
   rows.push_back({"Initial guess", cfg.guess});
   if (cfg.guess == "sap")
-    rows.push_back({"SAP potentials",
-                    cfg.sap_dir.empty() ? "input/potentials/nr/LDAX/"
-                                        : cfg.sap_dir});
+    rows.push_back({"SAP potentials", cfg.sap_dir.empty()
+                                          ? "input/potentials/nr/LDAX/"
+                                          : cfg.sap_dir});
   rows.push_back({"Charge", cfg_val(cfg.charge)});
   rows.push_back({"Multiplicity", cfg_val(cfg.multiplicity)});
   if (cfg.method == "dft") {
@@ -364,7 +364,8 @@ int main(int argc, char *argv[]) {
     const int N_quad = grid.quad_points.extent(0);
 
     // Emitted in a fixed, greppable form so batch drivers (e.g.
-    // benchmarking/benchmark_w411.py) can recover the problem size for scaling plots.
+    // benchmarking/benchmark_w411.py) can recover the problem size for scaling
+    // plots.
     std::cout << "Basis functions (primary): " << N_bf << "\n";
     std::cout << "Basis functions (aux)    : " << N_bf_aux << "\n";
     std::cout << "Quadrature points        : " << N_quad << "\n";
@@ -482,8 +483,8 @@ int main(int argc, char *argv[]) {
     arma::mat h_sap;
     if (cfg.guess == "sap") {
       TIME_SCOPE(startup_timing, "SAP guess Hamiltonian (T + V_SAP)");
-      auto hsap = compute_core_hamiltonian(basis, grid, /*use_SAP=*/true,
-                                           cfg.sap_dir);
+      auto hsap =
+          compute_core_hamiltonian(basis, grid, /*use_SAP=*/true, cfg.sap_dir);
       h_sap = kokkos_to_arma(hsap.hamiltonian);
     }
 
