@@ -15,6 +15,10 @@ add_executable(test_potential test_potential.cxx)
 add_executable(test_density test_density.cxx)
 add_executable(test_libxc test_libxc.cxx)
 add_executable(test_helium test_helium.cxx)
+add_executable(test_gto_basis test_gto_basis.cxx)
+add_executable(test_sto_contracted test_sto_contracted.cxx)
+add_executable(test_gto_eval test_gto_eval.cxx)
+add_executable(test_gto_overlap test_gto_overlap.cxx)
 
 add_executable(standalone standards.cxx standalone.cxx test_io.cxx)
 add_executable(minimal_example standards.cxx minimal_example.cxx)
@@ -40,6 +44,10 @@ set(ALL_TEST_TARGETS
     test_density
     test_libxc
     test_helium
+    test_gto_basis
+    test_sto_contracted
+    test_gto_eval
+    test_gto_overlap
 
     standalone
     minimal_example
@@ -67,3 +75,9 @@ add_test( NAME POTENTIAL_TEST COMMAND $<TARGET_FILE:test_potential> )
 add_test( NAME DENSITY_TEST COMMAND $<TARGET_FILE:test_density> )
 add_test( NAME LIBXC_TEST COMMAND $<TARGET_FILE:test_libxc> )
 add_test( NAME HELIUM_TEST COMMAND $<TARGET_FILE:test_helium> )
+add_test( NAME GTO_BASIS_TEST COMMAND $<TARGET_FILE:test_gto_basis> )
+add_test( NAME STO_CONTRACTED_TEST COMMAND $<TARGET_FILE:test_sto_contracted> )
+add_test( NAME GTO_EVAL_TEST COMMAND $<TARGET_FILE:test_gto_eval> )
+add_test( NAME GTO_OVERLAP_TEST COMMAND $<TARGET_FILE:test_gto_overlap> )
+# test_arborx was built but never registered, so nothing ran it.
+add_test( NAME ARBORX_TEST COMMAND $<TARGET_FILE:test_arborx> )
